@@ -1,0 +1,5 @@
+node_modules/
+.next/
+sulco.db
+.env.local
+.env

@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #3d3d3d;
+  --ink-mute: #8a8a8a;
+  --paper: #f7f4ed;
+  --paper-raised: #fbf9f3;
+  --line: #d9d4c7;
+  --line-soft: #e8e4d8;
+  --accent: #a4332a;
+  --accent-soft: #c77a74;
+  --ok: #3d5c3a;
+  --warn: #8a6d2e;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'EB Garamond', 'Times New Roman', serif;
+  font-feature-settings: "liga", "kern", "onum";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+input, select, textarea, button { font-family: inherit; }
+
+/* Utility classes usados em toda a UI */
+.font-serif { font-family: 'EB Garamond', 'Times New Roman', serif; }
+.font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+.eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-mute);
+}
+
+.label-tech {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-mute);
+}
+
+.title-display {
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+/* Capa fake com efeito de vinil */
+.cover {
+  background: linear-gradient(135deg, #2d2923 0%, #4a4438 50%, #6b6352 100%);
+  position: relative;
+  border-radius: 2px;
+}
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 28%, rgba(0,0,0,0.35) 28.5%, rgba(0,0,0,0.35) 29%, transparent 29.5%),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 60%);
+  border-radius: 2px;
+}
