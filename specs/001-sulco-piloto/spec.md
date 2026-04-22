@@ -27,6 +27,11 @@ briefing, playlists."
 - Q: Fluxo de resolução de conflitos de faixa → A: Na lista de conflitos, cada faixa tem "Manter no Sulco" (remove marca de conflito) e "Descartar" (deleta faixa + relações em setTracks); nenhuma resolução automática
 - Q: Reordenação de faixas no set → A: Drag-and-drop como mecanismo primário + fallback por teclado (setas ↑/↓ movem o item focado) para atender acessibilidade
 - Q: Persistência do estado da tela de montagem → A: Filtros persistem por set no banco (`sets.montarFiltersJson`); reabrir `/sets/[id]/montar` restaura o último estado aplicado
+- Q: Semântica de filtro em campos multivalorados (moods, contexts, genres) → A: AND (todos os termos selecionados devem estar presentes) como padrão fixo; sem toggle AND/OR no piloto
+- Q: Transições de status de um Set → A: Status totalmente derivado de `eventDate` — `draft` quando `eventDate` é nulo, `scheduled` quando `eventDate` está no futuro, `done` quando no passado; status não é editável manualmente
+- Q: Proteção contra spam no botão "Reimportar este disco" → A: Cooldown de 60s por disco — botão desabilita após reimport bem-sucedido exibindo contagem regressiva/mensagem "Aguarde 60s"
+- Q: Fuso horário e formato do `eventDate` → A: Armazenado em UTC (ISO 8601); exibido e comparado contra `now` em `America/Sao_Paulo`; input via datetime-local do navegador (converte para UTC ao salvar)
+- Q: Faixa de valores válida para `bpm` → A: Inteiro de 0 a 250 (opcional)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -123,9 +128,10 @@ suas `shelfLocation`.
 
 **Acceptance Scenarios**:
 
-1. **Given** o DJ está autenticado, **When** acessa `/sets/novo` e preenche nome, data do
-   evento, local e briefing, **Then** o set é criado com `status = draft` e o DJ é
-   redirecionado para a tela de montagem.
+1. **Given** o DJ está autenticado, **When** acessa `/sets/novo` e preenche nome,
+   (opcionalmente) data do evento, local e briefing, **Then** o set é criado e o DJ é
+   redirecionado para a tela de montagem. O status exibido é `draft` se `eventDate`
+   ficou vazio, ou `scheduled` se uma data futura foi preenchida.
 2. **Given** a tela de montagem está aberta, **When** o DJ aplica filtros combinados (BPM,
    tom, energia, mood, contexto, Bomba, texto livre), **Then** a lista de faixas-candidatas
    atualiza mostrando apenas faixas com `selected = true` pertencentes a discos com `status
@@ -140,9 +146,10 @@ suas `shelfLocation`.
    **Then** o emoji 💣 aparece ao lado das faixas `isBomb = true`.
 6. **Given** o DJ ajusta a ordem das faixas no set, **When** salva, **Then** a nova ordem
    persiste e a tela do set reflete.
-7. **Given** o evento aconteceu, **When** o DJ muda o status do set para `done`, **Then** o
-   set permanece na lista `/sets` marcado como realizado; as faixas e a bag continuam
-   acessíveis para referência futura.
+7. **Given** o evento aconteceu (ou seja, `eventDate` ficou no passado), **When** o DJ
+   abre `/sets` ou `/sets/[id]`, **Then** o set aparece com status derivado `done`
+   automaticamente; as faixas, briefing e bag continuam acessíveis para referência
+   futura sem ação manual do DJ.
 
 ---
 
@@ -208,8 +215,8 @@ permanecer intacto.
   atualizados silenciosamente; campos autorais NEVER sobrescritos (Princípio I da
   Constitution). Conflitos semânticos (faixa removida do Discogs que estava `selected`) são
   sinalizados, nunca descartados.
-- **Set sem faixas**: bag física mostra estado vazio; set pode ser salvo como `draft` sem
-  faixas.
+- **Set sem faixas**: bag física mostra estado vazio; set pode existir sem faixas
+  (aparece com status derivado conforme `eventDate`).
 - **Faixa removida pelo DJ do set**: não afeta o estado `selected` original da faixa nem sua
   flag Bomba; apenas a retira da lista do set.
 - **Duas sessões simultâneas do mesmo usuário**: assume-se que o DJ usa um dispositivo por
@@ -279,7 +286,8 @@ permanecer intacto.
   artista, título, ano, selo, gêneros, status e `shelfLocation` quando disponível.
 - **FR-006**: Sistema MUST permitir filtrar a listagem por: status (`unrated`, `active`,
   `discarded`, `all`), gênero, texto livre (artista/título), e presença de faixas com
-  Bomba.
+  Bomba. Quando o DJ seleciona múltiplos gêneros, a semântica é AND (o disco só
+  aparece se tiver TODOS os gêneros selecionados), consistente com FR-024.
 - **FR-007**: Sistema MUST oferecer link "Curadoria →" em cada item da listagem que leva a
   `/curadoria` pré-selecionando aquele disco.
 
@@ -319,6 +327,11 @@ permanecer intacto.
   (`^(?:[1-9]|1[0-2])[AB]$`). O input MUST oferecer um picker visual (wheel Camelot)
   além do campo texto; entradas em notação tradicional MUST ser rejeitadas com
   mensagem orientando o DJ a usar o picker.
+- **FR-017c**: Para `bpm`, sistema MUST aceitar apenas inteiros no intervalo
+  fechado `[0, 250]`. O campo é opcional (pode ficar nulo). Valores fora do
+  intervalo MUST ser rejeitados na validação da Server Action com mensagem clara
+  ("BPM deve ser um inteiro entre 0 e 250"). O filtro de range em FR-024 opera
+  sobre o mesmo intervalo.
 - **FR-018**: Sistema MUST suportar flag `isBomb` booleana por faixa, independente de
   `energy`, ativada/desativada por toggle explícito.
 - **FR-019**: Sistema MUST exibir o emoji 💣 ao lado de posição/título da faixa em toda
@@ -330,15 +343,20 @@ permanecer intacto.
 #### Sets
 
 - **FR-021**: Sistema MUST expor rota `/sets` listando todos os sets do usuário com nome,
-  data do evento, local e status (`draft | scheduled | done`).
+  data do evento, local e status derivado (`draft | scheduled | done`, calculado a
+  partir de `eventDate` conforme FR-028).
 - **FR-022**: Sistema MUST permitir criar um novo set via `/sets/novo` com nome, data do
-  evento, local e briefing (texto livre).
+  evento (opcional na criação; pode ser preenchida depois), local e briefing (texto
+  livre).
 - **FR-023**: Sistema MUST expor rota `/sets/[id]/montar` que lista faixas-candidatas
   derivadas de: `tracks` com `selected = true` pertencentes a `records` com `status =
   active`.
 - **FR-024**: Sistema MUST permitir filtrar candidatos combinando: BPM (range), tom
   (musicalKey), energia (1–5), moods, contextos, Bomba (on/off), e texto livre
-  (artista/título/faixa).
+  (artista/título/faixa). Para campos multivalorados (moods, contextos, genres),
+  a semântica MUST ser AND: uma faixa só aparece se possuir TODOS os termos
+  selecionados pelo DJ. Campos escalares (BPM range, energia, tom, Bomba) continuam
+  sendo combinados com os demais via AND (interseção geral dos filtros ativos).
 - **FR-024a**: Sistema MUST persistir o estado atual dos filtros da tela
   `/sets/[id]/montar` em um campo JSON `montarFiltersJson` na entidade `sets`; ao
   reabrir a tela do mesmo set (mesmo dispositivo ou outro), o estado MUST ser
@@ -354,8 +372,15 @@ permanecer intacto.
 - **FR-027**: Sistema MUST expor rota `/sets/[id]` exibindo: lista ordenada de faixas com
   indicador 💣 quando aplicável, briefing, e bag física derivada (discos únicos com
   `shelfLocation`).
-- **FR-028**: Sistema MUST permitir alterar o status do set entre `draft | scheduled |
-  done`.
+- **FR-028**: O status do set MUST ser derivado automaticamente de `eventDate`, não
+  editado manualmente: `draft` quando `eventDate` é nulo/vazio; `scheduled` quando
+  `eventDate` é uma data/hora no futuro; `done` quando `eventDate` está no passado.
+  `eventDate` MUST ser armazenado em UTC (ISO 8601), mas TODA comparação com "agora"
+  e TODA exibição ao DJ MUST ocorrer no fuso `America/Sao_Paulo`. O input de
+  `eventDate` na UI usa `<input type="datetime-local">` (que o navegador
+  interpreta no timezone do cliente) e o servidor converte para UTC ao persistir.
+  O DJ altera o status exclusivamente ajustando ou limpando `eventDate`. A UI MUST
+  exibir o status calculado em FR-021 e FR-027.
 - **FR-029**: Remover uma faixa de um set NEVER MUST alterar `selected` ou `isBomb` da
   faixa original.
 
@@ -372,6 +397,11 @@ permanecer intacto.
   manual.
 - **FR-034**: Sistema MUST oferecer botão "Reimportar este disco" na página `/disco/[id]`
   para atualizar metadados Discogs de um disco individual.
+- **FR-034a**: Após um reimport bem-sucedido de um disco, o botão "Reimportar este
+  disco" daquele disco específico MUST permanecer desabilitado por 60 segundos,
+  exibindo uma mensagem/contagem regressiva ("Aguarde XXs"); transcorrido o
+  cooldown, o botão volta a ficar ativo. O cooldown é por `(userId, recordId)` e
+  NÃO afeta reimports de outros discos nem o sync automático.
 - **FR-035**: Sync e reimport MUST atualizar apenas campos originários do Discogs
   (`discogsId`, `artist`, `title`, `year`, `label`, `country`, `format`, `genres`,
   `styles`, `coverUrl`, e `position`/`title`/`duration` de faixas) e NEVER sobrescrever
@@ -421,14 +451,17 @@ permanecer intacto.
   release, o Sulco guarda apenas 1 registro; múltiplas cópias físicas são descritas
   pelo DJ em `shelfLocation`/`notes`.
 - **Faixa (`tracks`)**: Uma track dentro de um disco. Campos do Discogs: `position`,
-  `title`, `duration`. Campos autorais soberanos: `selected`, `bpm`, `musicalKey`
-  (notação Camelot `^(?:[1-9]|1[0-2])[AB]$`), `energy` (1–5), `moods[]` (vocabulário
-  híbrido aberto), `contexts[]` (vocabulário híbrido aberto), `fineGenre`,
-  `references`, `comment`, **`isBomb` (novo, booleano independente de `energy`)**.
+  `title`, `duration`. Campos autorais soberanos: `selected`, `bpm` (inteiro `[0,250]`
+  opcional), `musicalKey` (notação Camelot `^(?:[1-9]|1[0-2])[AB]$`), `energy`
+  (1–5), `moods[]` (vocabulário híbrido aberto), `contexts[]` (vocabulário híbrido
+  aberto), `fineGenre`, `references`, `comment`, **`isBomb` (novo, booleano
+  independente de `energy`)**.
 - **Set**: Coletânea ordenada de faixas preparada para um evento. Atributos: `id`, `name`,
-  `eventDate`, `location`, `briefing`, `status` (`draft | scheduled | done`),
+  `eventDate` (pode ser nulo), `location`, `briefing`,
   `montarFiltersJson` (estado dos filtros da tela de montagem, persistido por set).
-  Relação N:N com faixas via `setTracks` (com `order`).
+  Relação N:N com faixas via `setTracks` (com `order`). **Status é derivado** de
+  `eventDate`: `draft` (nulo), `scheduled` (futuro), `done` (passado); não é uma
+  coluna persistida nem editável diretamente.
 - **Bag física** (derivada, não entidade persistida): Lista de discos únicos cujas faixas
   pertencem a um set, exibindo `shelfLocation` de cada um.
 - **Conflito de sync** (estado marcado em `records`/`tracks`): Sinalização de que um item
@@ -511,3 +544,6 @@ permanecer intacto.
   erro, formato de data `dd/MM/yyyy`, idioma dos emails da Clerk em pt-BR quando
   disponível). Sem camada de i18n/dicionário no piloto; adicionar outro idioma no
   futuro é refactor localizado na camada de UI.
+- **Fuso horário**: Timestamps (inclusive `eventDate`) armazenados em UTC; TODA
+  exibição e TODA comparação com "agora" ocorrem em `America/Sao_Paulo`. Se no
+  futuro o DJ tocar em outro fuso, ajuste é de configuração, não de schema.
