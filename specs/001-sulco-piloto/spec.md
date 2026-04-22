@@ -32,6 +32,7 @@ briefing, playlists."
 - Q: Proteção contra spam no botão "Reimportar este disco" → A: Cooldown de 60s por disco — botão desabilita após reimport bem-sucedido exibindo contagem regressiva/mensagem "Aguarde 60s"
 - Q: Fuso horário e formato do `eventDate` → A: Armazenado em UTC (ISO 8601); exibido e comparado contra `now` em `America/Sao_Paulo`; input via datetime-local do navegador (converte para UTC ao salvar)
 - Q: Faixa de valores válida para `bpm` → A: Inteiro de 0 a 250 (opcional)
+- Q: Semântica do filtro Bomba na montagem → A: Tri-estado `qualquer` (default) / `apenas Bomba` / `sem Bomba`; um controle cicla os três
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -286,8 +287,10 @@ permanecer intacto.
   artista, título, ano, selo, gêneros, status e `shelfLocation` quando disponível.
 - **FR-006**: Sistema MUST permitir filtrar a listagem por: status (`unrated`, `active`,
   `discarded`, `all`), gênero, texto livre (artista/título), e presença de faixas com
-  Bomba. Quando o DJ seleciona múltiplos gêneros, a semântica é AND (o disco só
-  aparece se tiver TODOS os gêneros selecionados), consistente com FR-024.
+  Bomba (tri-estado: `qualquer` / `apenas discos com Bomba` / `apenas discos sem
+  Bomba`, default `qualquer`, consistente com FR-024). Quando o DJ seleciona múltiplos
+  gêneros, a semântica é AND (o disco só aparece se tiver TODOS os gêneros
+  selecionados), consistente com FR-024.
 - **FR-007**: Sistema MUST oferecer link "Curadoria →" em cada item da listagem que leva a
   `/curadoria` pré-selecionando aquele disco.
 
@@ -352,11 +355,14 @@ permanecer intacto.
   derivadas de: `tracks` com `selected = true` pertencentes a `records` com `status =
   active`.
 - **FR-024**: Sistema MUST permitir filtrar candidatos combinando: BPM (range), tom
-  (musicalKey), energia (1–5), moods, contextos, Bomba (on/off), e texto livre
+  (musicalKey), energia (1–5), moods, contextos, Bomba (tri-estado: `qualquer` /
+  `apenas Bomba` / `sem Bomba`, com `qualquer` como default), e texto livre
   (artista/título/faixa). Para campos multivalorados (moods, contextos, genres),
   a semântica MUST ser AND: uma faixa só aparece se possuir TODOS os termos
   selecionados pelo DJ. Campos escalares (BPM range, energia, tom, Bomba) continuam
   sendo combinados com os demais via AND (interseção geral dos filtros ativos).
+  O controle visual do filtro Bomba MUST ser um cicler (ex: chip/toggle 3-way) que
+  alterna entre os três estados em clique.
 - **FR-024a**: Sistema MUST persistir o estado atual dos filtros da tela
   `/sets/[id]/montar` em um campo JSON `montarFiltersJson` na entidade `sets`; ao
   reabrir a tela do mesmo set (mesmo dispositivo ou outro), o estado MUST ser
