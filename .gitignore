@@ -3,3 +3,6 @@ node_modules/
 sulco.db
 .env.local
 .env
+
+# agent workspace — pode conter tokens/credenciais locais
+.claude/
