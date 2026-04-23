@@ -9,6 +9,9 @@ import {
   SignUpButton,
 } from '@clerk/nextjs';
 import { ptBR } from '@clerk/localizations';
+import { DiscogsCredentialBanner } from '@/components/discogs-credential-banner';
+import { ArchivedRecordsBanner } from '@/components/archived-records-banner';
+import { SyncBadge } from '@/components/sync-badge';
 
 export const metadata: Metadata = {
   title: 'Sulco — curadoria de vinil para DJs',
@@ -21,9 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ClerkProvider localization={ptBR}>
           <Header />
-          {/* Banners globais — implementação plena virá em US4 (T094, T094a) */}
-          <CredentialBannerPlaceholder />
-          <ArchivedBannerPlaceholder />
+          {/* Banners globais (FR-045, FR-036) — RSC lê DB a cada request */}
+          <DiscogsCredentialBanner />
+          <ArchivedRecordsBanner />
           <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
           <footer className="border-t border-line py-6">
             <div className="max-w-[1240px] mx-auto px-8">
@@ -52,6 +55,9 @@ function Header() {
           </Show>
         </nav>
         <span className="label-tech flex items-center gap-3">
+          {/* SyncBadge é RSC e verifica sessão internamente; renderiza null
+              quando deslogado ou sem alertas. */}
+          <SyncBadge />
           <Show when="signed-in">
             <Link href="/conta" className="hover:text-ink transition-colors">
               Conta
@@ -79,11 +85,3 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   );
 }
 
-// Placeholders — serão substituídos pelos componentes reais em US4.
-function CredentialBannerPlaceholder() {
-  return null;
-}
-
-function ArchivedBannerPlaceholder() {
-  return null;
-}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { CollectionRow } from '@/lib/queries/collection';
 import { CoverPlaceholder } from './cover-placeholder';
+import { BombaBadge, BombaInline } from './bomba-badge';
 
 /**
  * Card de grade (visualização por capa). Compacto e visual,
@@ -33,11 +34,8 @@ export function RecordGridCard({ record }: { record: CollectionRow }) {
           <CoverPlaceholder artist={record.artist} />
         )}
         {record.hasBomb ? (
-          <span
-            className="absolute top-2 right-2 bg-paper/90 px-2 py-1 text-base leading-none rounded"
-            aria-label="Contém faixa Bomba"
-          >
-            💣
+          <span className="absolute top-2 right-2 bg-paper/95 rounded-sm px-1.5 py-0.5 shadow-sm">
+            <BombaInline />
           </span>
         ) : null}
         <span
@@ -85,15 +83,7 @@ export function RecordGridCard({ record }: { record: CollectionRow }) {
               '—'
             )}
           </span>
-          {record.hasBomb ? (
-            <span
-              className="inline-flex items-center gap-0.5 text-accent border border-accent/40 px-1.5 rounded-sm text-[9px]"
-              title="Contém faixa Bomba"
-            >
-              <span aria-hidden>💣</span>
-              <span>Bomba</span>
-            </span>
-          ) : null}
+          {record.hasBomb ? <BombaBadge size="sm" /> : null}
           {record.shelfLocation ? <span>· {record.shelfLocation}</span> : null}
         </p>
       </div>

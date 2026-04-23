@@ -185,6 +185,20 @@ export async function getImportProgress(): Promise<ImportProgress> {
   }
 
   const row = latest[0];
+
+  // Runs zumbis (processo morreu sem finalizar) não devem aparecer como
+  // "erro" visível ao DJ — esse é um estado transiente que o fallback em
+  // `/` retoma. Trata como `idle` para o ImportProgressCard se comportar
+  // como "nenhum import visível" e permitir o fallback disparar novo run.
+  const isZombieResidual =
+    (row.outcome === 'erro' || row.outcome === 'parcial') &&
+    typeof row.errorMessage === 'string' &&
+    /(run zumbi|killed on restart)/i.test(row.errorMessage);
+
+  if (isZombieResidual) {
+    return { running: false, x, y: x, outcome: 'idle', errorMessage: null };
+  }
+
   let y = x;
   if (row.snapshotJson) {
     try {
@@ -402,13 +416,484 @@ export async function updateRecordAuthorFields(
   return { ok: true };
 }
 
-// Placeholders serão substituídos conforme as tasks:
-// T059 updateTrackCuration
-// T062 listUserVocabulary
-// T064 updateRecordAuthorFields
-// T070 createSet / updateSet
-// T073 saveMontarFilters
-// T076 addTrackToSet / removeTrackFromSet
+/* ============================================================
+   createSet / updateSet — FR-022, FR-027, FR-028 (T070)
+   eventDate armazenado em UTC; conversão vem do input datetime-local
+   do cliente (que já envia ISO UTC via new Date().toISOString()).
+   ============================================================ */
+
+import { sets as setsTable } from '@/db/schema';
+
+const eventDateSchema = z
+  .string()
+  .datetime({ offset: true })
+  .or(z.string().length(0))
+  .nullable()
+  .optional();
+
+const createSetSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  eventDate: eventDateSchema,
+  location: z.string().max(200).trim().nullable().optional(),
+  briefing: z.string().max(5000).trim().nullable().optional(),
+});
+
+export async function createSet(
+  input: z.infer<typeof createSetSchema>,
+): Promise<ActionResult<{ setId: number }>> {
+  const user = await requireCurrentUser();
+  const parsed = createSetSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+
+  const eventDate = normalizeDate(parsed.data.eventDate);
+  const inserted = await db
+    .insert(setsTable)
+    .values({
+      userId: user.id,
+      name: parsed.data.name,
+      eventDate,
+      location: parsed.data.location?.trim() || null,
+      briefing: parsed.data.briefing?.trim() || null,
+    })
+    .returning({ id: setsTable.id });
+
+  revalidatePath('/sets');
+  return { ok: true, data: { setId: inserted[0].id } };
+}
+
+const updateSetSchema = z.object({
+  setId: z.number().int().positive(),
+  name: z.string().trim().min(1).max(200).optional(),
+  eventDate: eventDateSchema,
+  location: z.string().max(200).trim().nullable().optional(),
+  briefing: z.string().max(5000).trim().nullable().optional(),
+});
+
+export async function updateSet(
+  input: z.infer<typeof updateSetSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = updateSetSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+
+  const payload: Partial<typeof setsTable.$inferInsert> & { updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
+  if (parsed.data.name !== undefined) payload.name = parsed.data.name;
+  if (parsed.data.eventDate !== undefined) payload.eventDate = normalizeDate(parsed.data.eventDate);
+  if (parsed.data.location !== undefined) payload.location = parsed.data.location?.trim() || null;
+  if (parsed.data.briefing !== undefined) payload.briefing = parsed.data.briefing?.trim() || null;
+
+  const updated = await db
+    .update(setsTable)
+    .set(payload)
+    .where(and(eq(setsTable.id, parsed.data.setId), eq(setsTable.userId, user.id)))
+    .returning({ id: setsTable.id });
+
+  if (updated.length === 0) {
+    return { ok: false, error: 'Set não encontrado.' };
+  }
+  revalidatePath('/sets');
+  revalidatePath(`/sets/${parsed.data.setId}`);
+  revalidatePath(`/sets/${parsed.data.setId}/montar`);
+  return { ok: true };
+}
+
+function normalizeDate(value: string | null | undefined): Date | null {
+  if (!value || value.length === 0) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/* ============================================================
+   saveMontarFilters — FR-024a (T073)
+   Persiste o estado dos filtros por set em `sets.montarFiltersJson`.
+   ============================================================ */
+
+import { setTracks as setTracksTable } from '@/db/schema';
+
+const montarFiltersSchema = z.object({
+  setId: z.number().int().positive(),
+  filters: z.object({
+    bpm: z
+      .object({
+        min: z.number().int().min(0).max(250).optional(),
+        max: z.number().int().min(0).max(250).optional(),
+      })
+      .optional(),
+    musicalKey: z
+      .array(z.string().regex(/^(?:[1-9]|1[0-2])[AB]$/))
+      .optional(),
+    energy: z
+      .object({
+        min: z.number().int().min(1).max(5).optional(),
+        max: z.number().int().min(1).max(5).optional(),
+      })
+      .optional(),
+    rating: z
+      .object({
+        min: z.number().int().min(1).max(3).optional(),
+        max: z.number().int().min(1).max(3).optional(),
+      })
+      .optional(),
+    moods: z.array(z.string()).optional(),
+    contexts: z.array(z.string()).optional(),
+    bomba: z.enum(['any', 'only', 'none']).optional(),
+    text: z.string().max(200).optional(),
+  }),
+});
+
+export async function saveMontarFilters(
+  input: z.infer<typeof montarFiltersSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = montarFiltersSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+  const updated = await db
+    .update(setsTable)
+    .set({
+      montarFiltersJson: JSON.stringify(parsed.data.filters),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(setsTable.id, parsed.data.setId), eq(setsTable.userId, user.id)))
+    .returning({ id: setsTable.id });
+
+  if (updated.length === 0) return { ok: false, error: 'Set não encontrado.' };
+  // Sem revalidatePath aqui: a UI usa client state + router.replace com searchParams.
+  return { ok: true };
+}
+
+/* ============================================================
+   addTrackToSet / removeTrackFromSet — FR-025, FR-029, FR-029a (T076)
+   ============================================================ */
+
+const setTrackSchema = z.object({
+  setId: z.number().int().positive(),
+  trackId: z.number().int().positive(),
+});
+
+export async function addTrackToSet(
+  input: z.infer<typeof setTrackSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = setTrackSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input inválido.' };
+
+  // Ownership check: set pertence ao user; track pertence a record do user.
+  const ownership = await db
+    .select({ setId: setsTable.id })
+    .from(setsTable)
+    .where(and(eq(setsTable.id, parsed.data.setId), eq(setsTable.userId, user.id)))
+    .limit(1);
+  if (ownership.length === 0) return { ok: false, error: 'Set não encontrado.' };
+
+  const trackOk = await db
+    .select({ id: tracksTable.id })
+    .from(tracksTable)
+    .innerJoin(records, eq(tracksTable.recordId, records.id))
+    .where(and(eq(tracksTable.id, parsed.data.trackId), eq(records.userId, user.id)))
+    .limit(1);
+  if (trackOk.length === 0) return { ok: false, error: 'Faixa não encontrada.' };
+
+  // FR-029a: verifica limite 300
+  const countRows = await db
+    .select({ c: sql<number>`COUNT(*)` })
+    .from(setTracksTable)
+    .where(eq(setTracksTable.setId, parsed.data.setId));
+  const currentCount = Number(countRows[0]?.c ?? 0);
+  if (currentCount >= 300) {
+    return { ok: false, error: 'Limite de 300 faixas por set atingido.' };
+  }
+
+  // Próximo order
+  const maxOrderRows = await db
+    .select({ m: sql<number>`COALESCE(MAX(${setTracksTable.order}), -1)` })
+    .from(setTracksTable)
+    .where(eq(setTracksTable.setId, parsed.data.setId));
+  const nextOrder = Number(maxOrderRows[0]?.m ?? -1) + 1;
+
+  await db
+    .insert(setTracksTable)
+    .values({ setId: parsed.data.setId, trackId: parsed.data.trackId, order: nextOrder })
+    .onConflictDoNothing({
+      target: [setTracksTable.setId, setTracksTable.trackId],
+    });
+
+  revalidatePath(`/sets/${parsed.data.setId}`);
+  revalidatePath(`/sets/${parsed.data.setId}/montar`);
+  return { ok: true };
+}
+
+// (add: revalidatePath da rota montar é necessário para que PhysicalBag/
+// SetSidePanel RSC recalculem contagem e bag ao vivo quando o DJ clica +
+// num candidato. O bug de "Cannot update Router while rendering" acontecia
+// apenas no reorder onde o handler estava dentro de um startTransition mal
+// posicionado; add/remove normais não sofrem disso.)
+
+export async function removeTrackFromSet(
+  input: z.infer<typeof setTrackSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = setTrackSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input inválido.' };
+
+  // Ownership (só deleta se o set pertence ao user)
+  const ownership = await db
+    .select({ setId: setsTable.id })
+    .from(setsTable)
+    .where(and(eq(setsTable.id, parsed.data.setId), eq(setsTable.userId, user.id)))
+    .limit(1);
+  if (ownership.length === 0) return { ok: false, error: 'Set não encontrado.' };
+
+  // FR-029: NEVER toca selected/isBomb da track original. Apenas deleta a junção.
+  await db
+    .delete(setTracksTable)
+    .where(
+      and(
+        eq(setTracksTable.setId, parsed.data.setId),
+        eq(setTracksTable.trackId, parsed.data.trackId),
+      ),
+    );
+
+  revalidatePath(`/sets/${parsed.data.setId}`);
+  revalidatePath(`/sets/${parsed.data.setId}/montar`);
+  return { ok: true };
+}
+
+/* ============================================================
+   reorderSetTracks — FR-026 (T079)
+   Grava a nova ordem das faixas do set. trackIds devem ser exatamente
+   as faixas atualmente no set (caller garante).
+   ============================================================ */
+
+const reorderSchema = z.object({
+  setId: z.number().int().positive(),
+  trackIds: z.array(z.number().int().positive()).min(1).max(300),
+});
+
+export async function reorderSetTracks(
+  input: z.infer<typeof reorderSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = reorderSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input inválido.' };
+
+  // Ownership
+  const ownership = await db
+    .select({ id: setsTable.id })
+    .from(setsTable)
+    .where(and(eq(setsTable.id, parsed.data.setId), eq(setsTable.userId, user.id)))
+    .limit(1);
+  if (ownership.length === 0) return { ok: false, error: 'Set não encontrado.' };
+
+  // Verifica que todos os trackIds pertencem ao set
+  const current = await db
+    .select({ trackId: setTracksTable.trackId })
+    .from(setTracksTable)
+    .where(eq(setTracksTable.setId, parsed.data.setId));
+  const currentIds = new Set(current.map((r) => r.trackId));
+  if (
+    parsed.data.trackIds.length !== currentIds.size ||
+    !parsed.data.trackIds.every((id) => currentIds.has(id))
+  ) {
+    return {
+      ok: false,
+      error: 'Lista de faixas difere do set atual. Recarregue e tente novamente.',
+    };
+  }
+
+  // Atualiza order de cada trackId conforme índice
+  // (sqlite libsql não tem transaction exposta direta; fazer updates em sequência)
+  for (let i = 0; i < parsed.data.trackIds.length; i++) {
+    await db
+      .update(setTracksTable)
+      .set({ order: i })
+      .where(
+        and(
+          eq(setTracksTable.setId, parsed.data.setId),
+          eq(setTracksTable.trackId, parsed.data.trackIds[i]),
+        ),
+      );
+  }
+
+  // Revalida só a view /sets/[id] (que é fora desta tela). Evita disparar
+  // re-render do /sets/[id]/montar durante o drag — o componente client
+  // já atualiza state otimista localmente.
+  revalidatePath(`/sets/${parsed.data.setId}`);
+  return { ok: true };
+}
+
+/* ============================================================
+   triggerManualSync / reimportRecord — FR-033, FR-034, FR-034a (T090)
+   ============================================================ */
+
+import { runManualSync } from '@/lib/discogs/sync';
+import { reimportRecordJob } from '@/lib/discogs/reimport';
+
+export async function triggerManualSync(): Promise<
+  ActionResult<{ outcome: string; newCount?: number; removedCount?: number }>
+> {
+  const user = await requireCurrentUser();
+  if (user.discogsCredentialStatus === 'invalid') {
+    return {
+      ok: false,
+      error: 'Seu token do Discogs está inválido. Atualize em /conta.',
+    };
+  }
+  try {
+    const result = await runManualSync(user.id);
+    revalidatePath('/');
+    revalidatePath('/status');
+    if (result.outcome === 'erro') {
+      return { ok: false, error: result.errorMessage };
+    }
+    if (result.outcome === 'rate_limited') {
+      return {
+        ok: false,
+        error: `Rate limit do Discogs. Tente em ${result.retryAfterSeconds}s.`,
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        outcome: result.outcome,
+        newCount: 'newCount' in result ? result.newCount : undefined,
+        removedCount: 'removedCount' in result ? result.removedCount : undefined,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Erro inesperado.',
+    };
+  }
+}
+
+const reimportSchema = z.object({
+  recordId: z.number().int().positive(),
+});
+
+export async function reimportRecord(
+  input: z.infer<typeof reimportSchema>,
+): Promise<ActionResult<{ cooldownRemaining?: number }>> {
+  const user = await requireCurrentUser();
+  const parsed = reimportSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input inválido.' };
+
+  if (user.discogsCredentialStatus === 'invalid') {
+    return {
+      ok: false,
+      error: 'Seu token do Discogs está inválido. Atualize em /conta.',
+    };
+  }
+
+  const result = await reimportRecordJob(user.id, parsed.data.recordId);
+  if (result.outcome === 'ok') {
+    revalidatePath(`/disco/${parsed.data.recordId}`);
+    revalidatePath('/status');
+    return { ok: true };
+  }
+  if (result.outcome === 'rate_limited') {
+    return {
+      ok: false,
+      error: `Aguarde ${result.retryAfterSeconds}s para reimportar este disco.`,
+    };
+  }
+  return {
+    ok: false,
+    error: 'errorMessage' in result ? result.errorMessage : 'Erro inesperado.',
+  };
+}
+
+/* ============================================================
+   resolveTrackConflict — FR-037a (T099)
+   ============================================================ */
+
+const resolveConflictSchema = z.object({
+  trackId: z.number().int().positive(),
+  action: z.enum(['keep', 'discard']),
+});
+
+export async function resolveTrackConflict(
+  input: z.infer<typeof resolveConflictSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = resolveConflictSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input inválido.' };
+
+  const owned = await db
+    .select({ trackId: tracksTable.id, recordId: tracksTable.recordId })
+    .from(tracksTable)
+    .innerJoin(records, eq(tracksTable.recordId, records.id))
+    .where(and(eq(tracksTable.id, parsed.data.trackId), eq(records.userId, user.id)))
+    .limit(1);
+  if (owned.length === 0) return { ok: false, error: 'Faixa não encontrada.' };
+  const recordId = owned[0].recordId;
+
+  if (parsed.data.action === 'keep') {
+    await db
+      .update(tracksTable)
+      .set({ conflict: false, conflictDetectedAt: null, updatedAt: new Date() })
+      .where(eq(tracksTable.id, parsed.data.trackId));
+  } else {
+    await db.delete(tracksTable).where(eq(tracksTable.id, parsed.data.trackId));
+  }
+
+  revalidatePath('/status');
+  revalidatePath(`/disco/${recordId}`);
+  revalidatePath('/');
+  return { ok: true };
+}
+
+/* ============================================================
+   acknowledgeArchivedRecord — FR-036/FR-041 (T101)
+   ============================================================ */
+
+const acknowledgeSchema = z.object({
+  recordId: z.number().int().positive(),
+});
+
+export async function acknowledgeArchivedRecord(
+  input: z.infer<typeof acknowledgeSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = acknowledgeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input inválido.' };
+
+  const updated = await db
+    .update(records)
+    .set({ archivedAcknowledgedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(records.id, parsed.data.recordId), eq(records.userId, user.id)))
+    .returning({ id: records.id });
+
+  if (updated.length === 0) return { ok: false, error: 'Disco não encontrado.' };
+
+  revalidatePath('/status');
+  revalidatePath('/');
+  return { ok: true };
+}
+
+/* ============================================================
+   markStatusVisited — FR-041 (T097)
+   ============================================================ */
+
+export async function markStatusVisited(): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  await db
+    .update(users)
+    .set({ lastStatusVisitAt: new Date(), updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+  return { ok: true };
+}
+
+// Pending:
+// T109 deleteAccount
 // T079 reorderSetTracks
 // T090 triggerManualSync / reimportRecord
 // T099 resolveTrackConflict

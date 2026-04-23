@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateRecordStatus } from '@/lib/actions';
 import { CoverPlaceholder } from './cover-placeholder';
+import { BombaInline } from './bomba-badge';
 import type { CuradoriaDisc, CuradoriaStatusFilter } from '@/lib/queries/curadoria';
 
 type Status = 'unrated' | 'active' | 'discarded';
@@ -230,7 +231,7 @@ export function CuradoriaView({ disc, ids, currentIndex, status }: Props) {
                       }
                     >
                       {t.title}
-                      {t.isBomb ? <span className="ml-2">💣</span> : null}
+                      {t.isBomb ? <span className="ml-2"><BombaInline /></span> : null}
                       {t.selected ? <span className="ml-2 text-ok text-xs">●</span> : null}
                     </span>
                     <span className="font-mono text-[10px] text-ink-mute">

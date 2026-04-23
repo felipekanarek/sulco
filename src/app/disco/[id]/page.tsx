@@ -6,6 +6,7 @@ import { listUserVocabulary } from '@/lib/actions';
 import { loadDisc } from '@/lib/queries/curadoria';
 import { CoverPlaceholder } from '@/components/cover-placeholder';
 import { RecordControls } from '@/components/record-controls';
+import { ReimportButton } from '@/components/reimport-button';
 import { TrackCurationRow } from '@/components/track-curation-row';
 import { db } from '@/db';
 import { records as recordsTable } from '@/db/schema';
@@ -104,21 +105,25 @@ export default async function RecordDetailPage({
             notes={record.notes}
           />
 
-          <a
-            href={`https://www.discogs.com/release/${record.discogsId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-2 mt-4"
-          >
-            → Ver no Discogs
-          </a>
-
-          <Link
-            href="/curadoria"
-            className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-2"
-          >
-            → Voltar à triagem
-          </Link>
+          <div className="mt-4 pt-4 border-t border-line-soft space-y-3">
+            <ReimportButton recordId={disc.id} variant="default" />
+            <div className="flex flex-col gap-1">
+              <a
+                href={`https://www.discogs.com/release/${record.discogsId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-1"
+              >
+                → Ver no Discogs
+              </a>
+              <Link
+                href="/curadoria"
+                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-1"
+              >
+                → Voltar à triagem
+              </Link>
+            </div>
+          </div>
         </aside>
 
         {/* Right: tracklist */}
@@ -140,9 +145,12 @@ export default async function RecordDetailPage({
               <p className="font-serif italic text-lg text-warn">
                 Tracklist indisponível no Discogs para este release.
               </p>
-              <p className="label-tech text-ink-mute mt-2">
-                Tente "Reimportar este disco" (em breve) ou abra o link do Discogs acima.
+              <p className="label-tech text-ink-mute mt-2 mb-4">
+                Tente reimportar; se o Discogs corrigir o release depois, a tracklist aparece aqui.
               </p>
+              <div className="flex justify-center">
+                <ReimportButton recordId={disc.id} variant="default" />
+              </div>
             </div>
           ) : (
             [...bySide.entries()].map(([side, items]) => (

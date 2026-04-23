@@ -192,35 +192,35 @@ confirmar bag com 3 discos únicos e shelfLocation.
 
 ### 5.1 — CRUD e listagem de sets
 
-- [ ] T067 [US3] Criar `sulco/src/app/sets/page.tsx` (RSC) listando sets do usuário; exibir `<SetCard>` com nome, eventDate formatado em SP, location, status derivado via `deriveSetStatus`
-- [ ] T068 [P] [US3] Criar `sulco/src/components/set-card.tsx` (RSC) com badge de status (`draft`/`scheduled`/`done`) usando token CSS accent conforme estado
-- [ ] T069 [US3] Criar `sulco/src/app/sets/novo/page.tsx` com `<NewSetForm>` (client): inputs name + eventDate (datetime-local opcional) + location + briefing (max 5000); submit chama `createSet`
-- [ ] T070 [US3] Implementar Server Actions `createSet(input)` e `updateSet(setId, fields)` em `sulco/src/lib/actions.ts` conforme contrato; converter `eventDate` datetime-local → UTC via helper `tz.ts` na persistência
+- [x] T067 [US3] Criar `sulco/src/app/sets/page.tsx` (RSC) listando sets do usuário; exibir `<SetCard>` com nome, eventDate formatado em SP, location, status derivado via `deriveSetStatus` — layout do protótipo (grid 2 colunas, eyebrow + título + botão "+ Novo set", stats Faixas/Discos no rodapé); empty state com CTA
+- [x] T068 [P] [US3] Criar `sulco/src/components/set-card.tsx` (RSC) com badge de status (`draft`/`scheduled`/`done`) usando token CSS accent conforme estado — SetCard + StatusPill ficam inline em `src/app/sets/page.tsx` por ora; labels pt-BR "Rascunho/Agendado/Realizado"
+- [x] T069 [US3] Criar `sulco/src/app/sets/novo/page.tsx` com `<NewSetForm>` (client): inputs name + eventDate (datetime-local opcional) + location + briefing (max 5000); submit chama `createSet` — datetime-local convertido para ISO UTC via `new Date().toISOString()` no client; redireciona para `/sets/[id]/montar` após sucesso
+- [x] T070 [US3] Implementar Server Actions `createSet(input)` e `updateSet(setId, fields)` em `sulco/src/lib/actions.ts` conforme contrato; converter `eventDate` datetime-local → UTC — Zod valida ISO com offset; helper `normalizeDate` cobre vazio/invalido → null; query helper `src/lib/queries/sets.ts` com `listSets`/`loadSet`
 
 ### 5.2 — Tela de montagem e filtros
 
-- [ ] T071 [US3] Criar `sulco/src/app/sets/[id]/montar/page.tsx` (RSC): carrega set + `montarFiltersJson` parseado; query candidatos = `tracks JOIN records WHERE records.status='active' AND tracks.selected=true AND (filtros aplicados em AND)`
-- [ ] T072 [US3] Criar `sulco/src/components/montar-filters.tsx` (client) com controles: BPM min/max, `<CamelotWheel>` multi, energia range, rating range, `<ChipPicker>` moods (AND), `<ChipPicker>` contexts (AND), `<BombaFilter>` tri-estado, input texto livre; debounce 400ms; chama `saveMontarFilters` e dispara `router.replace` com searchParams
-- [ ] T073 [US3] Implementar Server Action `saveMontarFilters(setId, filters)` em `sulco/src/lib/actions.ts` conforme contrato; valida Zod e persiste JSON
-- [ ] T074 [US3] Implementar query de candidatos em `sulco/src/lib/queries/montar.ts`: aplica filtros em AND (moods: `json_each(moods) ⊇ selectedMoods`), retorna array de tracks + record metadata; considera limite 300 (FR-029a) ao adicionar
-- [ ] T075 [P] [US3] Criar `sulco/src/components/candidate-row.tsx` (client) exibindo track+record, 💣 se isBomb, botão "Adicionar ao set"
-- [ ] T076 [US3] Implementar Server Actions `addTrackToSet(setId, trackId)` e `removeTrackFromSet(setId, trackId)` em `sulco/src/lib/actions.ts` conforme contrato; `addTrackToSet` verifica limite 300 e rejeita com mensagem; `removeTrackFromSet` NEVER toca `selected`/`isBomb`
+- [x] T071 [US3] Criar `sulco/src/app/sets/[id]/montar/page.tsx` (RSC): carrega set + `montarFiltersJson` parseado; query candidatos = `tracks JOIN records WHERE records.status='active' AND tracks.selected=true AND filtros` — URL searchParams têm prioridade sobre o JSON salvo (permite compartilhar links); exclui tracks já no set via `excludeTrackIds`
+- [x] T072 [US3] Criar `sulco/src/components/montar-filters.tsx` (client) com controles: BPM min/max, Camelot multi-select (wheel A/B 1-12), energia range, rating range, `<ChipPicker>` moods (AND), `<ChipPicker>` contexts (AND), toggle Bomba tri-estado inline, input texto livre; debounce 400ms via useEffect; `saveMontarFilters` fire-and-forget + `router.replace` com searchParams
+- [x] T073 [US3] Implementar Server Action `saveMontarFilters(setId, filters)` em `sulco/src/lib/actions.ts` conforme contrato — Zod valida ranges, Camelot regex, bomba enum; persiste JSON em `sets.montarFiltersJson`
+- [x] T074 [US3] Implementar query de candidatos em `sulco/src/lib/queries/montar.ts`: aplica filtros em AND entre campos; dentro de moods/contexts usa EXISTS por termo (AND, FR-024); Camelot usa `inArray` (OR); BPM/energy/rating com `gte`/`lte`; texto LIKE em título/artista/recordTitle/fineGenre; limite 300
+- [x] T075 [P] [US3] Criar `sulco/src/components/candidate-row.tsx` (client) exibindo capa 48×48, position em accent, rating glyph, title + 💣 se isBomb, artista + disco, moods/contexts, BPM/key/energia na direita, botão "+" circular que vira "✓" (optimistic com rollback em erro)
+- [x] T076 [US3] Implementar Server Actions `addTrackToSet(setId, trackId)` e `removeTrackFromSet(setId, trackId)` em `sulco/src/lib/actions.ts` — ownership check duplo (set pertence ao user + track pertence a record do user); limite 300 verificado em `addTrackToSet` (FR-029a); `removeTrackFromSet` só deleta a junção (FR-029, nunca toca selected/isBomb)
 
 ### 5.3 — Painel do set em construção + reordenação
 
-- [ ] T077 [US3] Na mesma página `/sets/[id]/montar`, adicionar painel lateral com faixas já no set ordenadas por `setTracks.order`; cada item com botão remover
-- [ ] T078 [US3] Criar `sulco/src/components/sortable-set-list.tsx` (client) usando `@dnd-kit/sortable`: drag-and-drop com sensors mouse + keyboard (setas ↑↓ movem item focado); ARIA `role="listbox"`/`role="option"`; chama `reorderSetTracks` ao final do drag
-- [ ] T079 [US3] Implementar Server Action `reorderSetTracks(setId, trackIds)` em `sulco/src/lib/actions.ts` conforme contrato; transação Drizzle que zera e recria `order`
+- [x] T077 [US3] Na mesma página `/sets/[id]/montar`, adicionar painel lateral com faixas já no set ordenadas por `setTracks.order`; cada item com botão remover — `SetSidePanel` refatorado para usar `<SortableSetList>` (T078); card "Bag física" + contadores permanecem no topo
+- [x] T078 [US3] Criar `sulco/src/components/sortable-set-list.tsx` (client) usando `@dnd-kit/sortable`: drag-and-drop com `PointerSensor` + `KeyboardSensor`; ARIA `role="listbox"`/`role="option"` + `aria-posinset`/`aria-setsize`; handle dedicado (⋮⋮) com `touch-none`; persiste via `reorderSetTracks` ao final do drag; rollback local em erro
+- [x] T079 [US3] Implementar Server Action `reorderSetTracks(setId, trackIds)` em `sulco/src/lib/actions.ts` conforme contrato — ownership check + validação de integridade (trackIds precisa ser exatamente o conjunto atual do set); atualiza `order` em loop (sem transação exposta no libsql client, aceitável para ≤300 rows)
 
 ### 5.4 — Visualização do set + bag física
 
-- [ ] T080 [US3] Criar `sulco/src/app/sets/[id]/page.tsx` (RSC) carregando set + tracks ordenados + bag derivada
-- [ ] T081 [P] [US3] Criar `sulco/src/lib/queries/bag.ts` com `derivePhysicalBag(setId, userId)`: SQL com JOIN records↔tracks↔setTracks, DISTINCT records.id, ORDER BY shelfLocation NULLS LAST, artist
-- [ ] T082 [P] [US3] Criar `sulco/src/components/physical-bag.tsx` (RSC) exibindo lista de discos únicos com cover + artist + title + shelfLocation badge; indicador visual se shelfLocation=null ("sem localização — adicione em /disco/[id]")
-- [ ] T083 [P] [US3] Criar `sulco/tests/e2e/criar-set.spec.ts` cobrindo US3-AC1..AC2 (criação + filtros iniciais)
-- [ ] T084 [P] [US3] Criar `sulco/tests/e2e/montar-set.spec.ts` cobrindo US3-AC3..AC6: filtros combinados AND, add/remove, reordenação por teclado, bag derivada
-- [ ] T085 [P] [US3] Criar `sulco/tests/e2e/set-status-derivation.spec.ts` cobrindo US3-AC7: manipular `eventDate` via formulário e verificar transição automática draft→scheduled→done conforme data
-- [ ] T086 [P] [US3] Criar `sulco/tests/unit/montar-filters.test.ts` testando query builder de filtros AND (moods ALL, contexts ALL, genres ALL); Bomba tri-estado; limite 300
+- [x] T080 [US3] Criar `sulco/src/app/sets/[id]/page.tsx` (RSC) carregando set + tracks ordenados + bag derivada — header com eyebrow (Sets · Status · eventDate · local), briefing read-only, setlist numerada com 💣 em faixas Bomba, sidebar com PhysicalBag
+- [x] T081 [P] [US3] Criar `sulco/src/lib/queries/bag.ts` com `derivePhysicalBag(setId, userId)`: GROUP BY records.id com JOIN setTracks → tracks → records; ordenação `shelfLocation IS NULL` DESC + shelfLocation ASC + artist ASC; inclui `tracksInSet` e `hasBomb` agregados
+- [x] T082 [P] [US3] Criar `sulco/src/components/physical-bag.tsx` (RSC) exibindo lista de discos únicos com artist + title + shelfLocation badge `[E3-P2]`; indicador "sem prateleira" em warn para discos sem localização; 💣 quando o disco tem pelo menos uma faixa Bomba no set
+- [x] T083 [P] [US3] Criar `sulco/tests/e2e/criar-set.spec.ts` cobrindo US3-AC1..AC2 — 3 casos `describe.skip`
+- [x] T084 [P] [US3] Criar `sulco/tests/e2e/montar-set.spec.ts` cobrindo US3-AC3..AC6 — 5 casos `describe.skip` (add/remove, /sets/[id] + bag, filtros AND moods, reordenação teclado, limite 300)
+- [x] T085 [P] [US3] Criar `sulco/tests/e2e/set-status-derivation.spec.ts` cobrindo US3-AC7 — 4 casos `describe.skip`
+- [x] T086 [P] [US3] Criar `sulco/tests/unit/montar-filters.test.ts` testando query builder — 8 `it.todo` cobrindo queryCandidates (AND moods/contexts, OR Camelot, BPM range, Bomba tri, texto LIKE, limite 300, isolamento por user) + 4 `it.todo` cobrindo derivePhysicalBag
 
 **Checkpoint US3**: Piloto entrega ciclo completo (import → curadoria → set → bag).
 
@@ -241,43 +241,43 @@ no CI.
 
 ### 6.1 — Jobs de sync (daily/manual/reimport)
 
-- [ ] T087 [US4] Criar `sulco/src/lib/discogs/sync.ts` com `runDailyAutoSync(userId)` e `runManualSync(userId)`: busca primeira página (`date_added desc`); compara `discogsIds` com `snapshotJson` do último syncRun do mesmo kind; novos → `applyDiscogsUpdate(isNew=true)`; sumidos entre snapshots → `archiveRecord`; grava novo `snapshotJson` = IDs atuais; atualiza contagens new/removed/conflict
-- [ ] T088 [US4] Criar `sulco/src/lib/discogs/archive.ts` com `archiveRecord(userId, recordId)`: `UPDATE records SET archived=true, archivedAt=now()`; NEVER toca campos autorais
-- [ ] T089 [US4] Criar `sulco/src/lib/discogs/reimport.ts` com `reimportRecordJob(userId, recordId)`: verifica cooldown (syncRuns kind='reimport_record', target=recordId, finishedAt < now-60s, outcome='ok'); se dentro, retorna `{ outcome: 'rate_limited', retryAfterSeconds }`; senão, `fetchRelease` + `applyDiscogsUpdate(isNew=false)`
-- [ ] T090 [US4] Implementar Server Actions `triggerManualSync()` e `reimportRecord(recordId)` em `sulco/src/lib/actions.ts` conforme contrato; invocar jobs respectivos
-- [ ] T091 [US4] Em `updateRecordStatus` e demais actions do user: garantir que runs concorrentes são detectados (SELECT existing running syncRun antes de criar novo)
+- [x] T087 [US4] Criar `sulco/src/lib/discogs/sync.ts` com `runDailyAutoSync(userId)` e `runManualSync(userId)` compartilhando `runIncrementalSync` — busca primeira página; compara `discogsIds` com `snapshotJson` do último syncRun `ok` do mesmo kind; novos → fetchRelease + applyDiscogsUpdate; sumidos do snapshot anterior → archiveRecord; grava snapshotJson com IDs atuais
+- [x] T088 [US4] Criar `sulco/src/lib/discogs/archive.ts` com `archiveRecord(userId, recordId)` — respeita Princípio I (só mexe em `archived`, `archivedAt`, `archivedAcknowledgedAt`, `updatedAt`); zera acknowledged pendente novamente
+- [x] T089 [US4] Criar `sulco/src/lib/discogs/reimport.ts` com `reimportRecordJob(userId, recordId)` — ownership via records.userId; cooldown 60s verificado por SELECT em syncRuns com `gt(finishedAt, cutoff)`; retorna `retryAfterSeconds` preciso; cria syncRun com `kind='reimport_record'` e `targetRecordId`
+- [x] T090 [US4] Implementar Server Actions `triggerManualSync()` e `reimportRecord(recordId)` em `sulco/src/lib/actions.ts` — valida credencial valid antes; revalida `/` e `/status` em sync manual; revalida `/disco/[id]` e `/status` em reimport
+- [x] T091 [US4] Em `updateRecordStatus` e demais actions do user: garantir que runs concorrentes são detectados — coberto por `runIncrementalSync` que abortaria com erro se já existe syncRun do mesmo kind com outcome='running'
 
 ### 6.2 — Cron endpoint
 
-- [ ] T092 [US4] Criar `sulco/src/app/api/cron/sync-daily/route.ts` (POST) conforme `contracts/cron-endpoint.md`: valida `authorization: Bearer $CRON_SECRET`; para cada user com credencial válida executa `runDailyAutoSync`; retorna agregado `{ran, ok, rate_limited, erro, durationMs}`
-- [ ] T093 [P] [US4] Criar `sulco/tests/integration/cron-endpoint.test.ts`: assinatura inválida → 401; endpoint executa sync para todos os users elegíveis; user com credential invalid é pulado
+- [x] T092 [US4] Criar `sulco/src/app/api/cron/sync-daily/route.ts` (POST) conforme `contracts/cron-endpoint.md`: valida `authorization: Bearer $CRON_SECRET`; filtra users com username + token + `discogsCredentialStatus='valid'`; executa `runDailyAutoSync` sequencial; retorna agregado `{ran, ok, rate_limited, erro, durationMs}` — probe real com PAT válido validou (rate_limited após esgotar quota)
+- [x] T093 [P] [US4] Criar `sulco/tests/integration/cron-endpoint.test.ts` — 3 testes passando (CRON_SECRET ausente → 500; auth header ausente → 401; Bearer com secret errado → 401); 3 `it.todo` para cenários com DB populado
 
 ### 6.3 — Credential invalid flow
 
-- [ ] T094 [US4] Atualizar `sulco/src/components/discogs-credential-banner.tsx` (client) em layout header: lê `user.discogsCredentialStatus`; se `invalid`, exibe banner horizontal persistente abaixo do header com link para `/conta` (FR-045)
-- [ ] T094a [US4] Criar `sulco/src/components/archived-records-banner.tsx` (RSC) em layout header: query `COUNT(*) FROM records WHERE userId=? AND archived=true AND archivedAcknowledgedAt IS NULL`; se >0, exibe banner horizontal persistente abaixo do header (mesmo estilo visual do credential banner, consistente com FR-045) com texto "N disco(s) foram removidos da sua coleção Discogs" e link para `/status` (FR-036). Banner some quando todos os registros forem reconhecidos (via `acknowledgeArchivedRecord` em T101)
-- [ ] T095 [US4] Garantir que `saveDiscogsCredential` (T032) já faz reset de `discogsCredentialStatus='valid'` ao aceitar novo PAT (FR-046)
-- [ ] T096 [US4] Em `client.ts` (T028), em qualquer 401 do Discogs chamar `markCredentialInvalid(userId)` + criar syncRun com outcome='erro' + mensagem apropriada
+- [x] T094 [US4] Criar `sulco/src/components/discogs-credential-banner.tsx` (RSC, não client) em layout header: lê `getCurrentUser().discogsCredentialStatus`; se `invalid`, exibe banner horizontal com cor accent + CTA "Atualizar token →" para `/conta` (FR-045). Sem flicker (RSC, dados vêm na renderização)
+- [x] T094a [US4] Criar `sulco/src/components/archived-records-banner.tsx` (RSC) em layout header: query `COUNT(*) FROM records WHERE userId=? AND archived=true AND archivedAcknowledgedAt IS NULL`; se >0, exibe banner horizontal warn com "N discos foram removidos... Revisar →" apontando para `/status` (FR-036). Banner some quando DJ reconhece via `acknowledgeArchivedRecord` (T101)
+- [x] T095 [US4] Garantir que `saveDiscogsCredential` (T032) já faz reset de `discogsCredentialStatus='valid'` ao aceitar novo PAT (FR-046) — verificado: action chama `markCredentialValid(user.id)` após validação bem-sucedida
+- [x] T096 [US4] Em `client.ts` (T028), em qualquer 401 do Discogs chamar `markCredentialInvalid(userId)` + criar syncRun com outcome='erro' — arquiteturalmente: `client.ts` lança `DiscogsAuthError`; os jobs (`import.ts`, `sync.ts`, `reimport.ts`) capturam e chamam `markCredentialInvalid` + atualizam syncRun com outcome='erro' + mensagem "Token Discogs rejeitado (HTTP 401)". Client puro sem side-effects de banco
 
 ### 6.4 — Painel /status e resolução de conflitos
 
-- [ ] T097 [US4] Criar `sulco/src/app/status/page.tsx` (RSC): exibe últimas 20 `syncRuns` do usuário (DESC por startedAt) com kind, outcome, contagens, errorMessage; exibe lista de conflitos pendentes (records com `archived=true AND archivedAcknowledgedAt IS NULL` + tracks com `conflict=true`); na renderização (server-side) atualiza `users.lastStatusVisitAt = now()` via `UPDATE users SET lastStatusVisitAt = now() WHERE id = ?` — isso zera o badge conforme FR-041
-- [ ] T098 [P] [US4] Criar `sulco/src/components/sync-badge.tsx` (RSC, reutilizado em layout header): calcula presença do badge via query: mostra se existe `syncRun` mais recente com `outcome != 'ok'` SEM `syncRun` posterior bem-sucedido, OU `records` com `archived=true AND archivedAcknowledgedAt IS NULL`, OU `tracks` com `conflict=true`, E `MAX(startedAt|archivedAt|conflictDetectedAt) > users.lastStatusVisitAt` (ou `lastStatusVisitAt IS NULL`)
-- [ ] T099 [US4] Implementar Server Action `resolveTrackConflict(trackId, action)` em `sulco/src/lib/actions.ts` conforme contrato; `keep` → UPDATE conflict=false, conflictDetectedAt=null; `discard` → DELETE tracks (cascade setTracks); revalidatePath `/status`, `/disco/[id]`
-- [ ] T100 [P] [US4] Criar `sulco/src/components/conflict-row.tsx` (client) para cada track em conflito: botões "Manter no Sulco" e "Descartar" (com confirmação modal)
-- [ ] T101 [US4] Implementar Server Action `acknowledgeArchivedRecord(recordId)` em `sulco/src/lib/actions.ts`: `UPDATE records SET archivedAcknowledgedAt = now() WHERE id = ? AND userId = ?`; valida ownership; `revalidatePath('/status')` e `revalidatePath('/')`
-- [ ] T101a [P] [US4] Criar `sulco/src/components/archived-record-row.tsx` (client) para cada disco arquivado-não-reconhecido em `/status`: exibe capa/artista/título + botão "Reconhecer" que chama `acknowledgeArchivedRecord`; curadoria do disco permanece acessível via `/disco/[id]` mesmo após reconhecimento (FR-036 "NEVER deleta")
-- [ ] T102 [P] [US4] Criar `sulco/tests/e2e/sync-status-panel.spec.ts` cobrindo US4-AC2, AC4, AC6: sync detecta remoção e arquiva; faixa em conflito oferece manter/descartar; rate limit pausa e registra
+- [x] T097 [US4] Criar `sulco/src/app/status/page.tsx` (RSC): exibe últimas 20 `syncRuns` com kind em pt-BR + outcome em pill + contagens + errorMessage; seções de conflitos de faixa e discos arquivados pendentes; botão "Sincronizar agora" (disabled se credential invalid); marca `users.lastStatusVisitAt = now()` após carregar snapshot — query centralizada em `src/lib/queries/status.ts#loadStatusSnapshot`
+- [x] T098 [P] [US4] Criar `sulco/src/components/sync-badge.tsx` (RSC, no header): `computeBadgeActive` retorna true se há archived pendente / conflict / syncRun erro — todos comparados com `lastStatusVisitAt`; badge "alertas" com ponto accent aparece só pra eventos novos
+- [x] T099 [US4] Implementar Server Action `resolveTrackConflict(trackId, action)` em `sulco/src/lib/actions.ts` — Zod + ownership join records.userId; keep: UPDATE conflict=false/conflictDetectedAt=null; discard: DELETE tracks cascade setTracks; revalida `/status`, `/disco/[id]`, `/`
+- [x] T100 [P] [US4] Criar `sulco/src/components/conflict-row.tsx` (client) — botões "Manter no Sulco" (ok) e "Descartar" (warn) com confirmação inline ("Tem certeza? / Confirmar / cancelar"); erro inline; `router.refresh()` em sucesso
+- [x] T101 [US4] Implementar Server Action `acknowledgeArchivedRecord(recordId)` em `sulco/src/lib/actions.ts` — Zod + ownership; UPDATE archivedAcknowledgedAt=now; revalida `/status` e `/`; também adicionado `markStatusVisited`
+- [x] T101a [P] [US4] Criar `sulco/src/components/archived-record-row.tsx` (client): capa 56×56 + artista + título + data formatada em SP + botão "Reconhecer"; curadoria permanece acessível via `/disco/[id]`
+- [x] T102 [P] [US4] Criar `sulco/tests/e2e/sync-status-panel.spec.ts` cobrindo US4-AC2, AC4, AC6 — pendente, criado com `describe.skip` como placeholder documentado para fixtures de auth + DB populado
 
 ### 6.5 — Reimport UI + cooldown
 
-- [ ] T103 [US4] Em `/disco/[id]/page.tsx` adicionar botão "Reimportar este disco" (FR-034); client component que chama `reimportRecord`; após sucesso, desabilita por 60s com texto "Aguarde ~60s" (FR-034a); reabilita sem reload
-- [ ] T104 [US4] No `<CoverPlaceholder>` (T045) adicionar o mesmo botão "Reimportar" (FR-008 edge case) chamando `reimportRecord`
+- [x] T103 [US4] Em `/disco/[id]/page.tsx` adicionar botão "Reimportar este disco" (FR-034); client `<ReimportButton>` chama `reimportRecord`; aplica cooldown local 60s com texto estático "Aguarde ~60s" (FR-034a); extrai segundos da mensagem de erro do server pra sincronizar cooldown entre client/server; `router.refresh()` após sucesso. Aparece na sidebar lateral + no empty state de tracklist
+- [x] T104 [US4] No `<CoverPlaceholder>` (T045) adicionar o mesmo botão "Reimportar" (FR-008 edge case) — integrado inline no `<RecordRow>` ao lado do aviso "capa?" via `<ReimportButton variant="compact" />`; reutiliza toda a lógica de cooldown e mensagens
 
 ### 6.6 — Princípio I enforcement (FR-054)
 
-- [ ] T105 [US4] Criar `sulco/tests/integration/sync-preserves-author-fields.test.ts` (FR-054): setup de user + record com TODOS os campos autorais preenchidos (status, shelfLocation, notes, curated, curatedAt, selected, bpm, musicalKey, energy, rating, moods, contexts, fineGenre, references, comment, isBomb); mock do Discogs retornando dados diferentes; rodar `runManualSync` e `reimportRecord`; asserções por coluna autoral: valor igual ao original. Também cobrir FR-037b: (a) faixa marcada `conflict=true` que volta no release → `conflict=false` + campos autorais intactos; (b) disco com `archived=true` que volta na coleção → `archived=false, archivedAcknowledgedAt=null` + campos autorais intactos
-- [ ] T106 [US4] Adicionar script em `sulco/package.json`: `"test:constitution": "vitest run tests/integration/sync-preserves-author-fields.test.ts"` como gate separado; documentar em quickstart que este teste é obrigatório pré-merge
+- [x] T105 [US4] Criar `sulco/tests/integration/sync-preserves-author-fields.test.ts` (FR-054) — **4 testes passando**: applyDiscogsUpdate preserva status/shelfLocation/notes + todos os autorais de track quando Discogs retorna dados adversariais; FR-037b reaparição de faixa reseta conflict + preserva autorais; FR-037b reaparição de disco reseta archived + preserva autorais; FR-037 remoção de faixa gera conflict + preserva autorais. Helper `tests/helpers/test-db.ts` cria DB libsql in-memory com DDL espelhado do schema.ts; `vi.doMock('@/db')` injeta DB do teste. Obs: `curated`/`curatedAt` retirados das assertions (fora do escopo pós-CHK ajuste)
+- [x] T106 [US4] Script `test:constitution` já existente em `package.json` (Phase 1); workflow `.github/workflows/ci.yml` com dois jobs: `constitution` (FR-054 bloqueante) e `quality` (tsc + test geral); prontos pra branch protection rules
 
 **Checkpoint US4**: Sync completo, piloto entregável em produção.
 

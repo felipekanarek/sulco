@@ -1,7 +1,7 @@
 import 'server-only';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { syncRuns } from '@/db/schema';
+import { records, syncRuns } from '@/db/schema';
 import {
   DiscogsAuthError,
   DiscogsError,
@@ -10,6 +10,7 @@ import {
 } from './client';
 import { applyDiscogsUpdate } from './apply-update';
 import { markCredentialInvalid } from './index';
+import { killZombieSyncRuns } from './zombie';
 
 export type SyncOutcome =
   | { outcome: 'ok'; newCount: number; removedCount: number; conflictCount: number }
@@ -32,6 +33,10 @@ export async function runInitialImport(
   userId: number,
   opts?: { resumeFromPage?: number },
 ): Promise<SyncOutcome> {
+  // Mata runs zumbis antes de verificar concorrência (evita que processo
+  // morto deixe o run em estado 'running' para sempre)
+  await killZombieSyncRuns(userId, 'initial_import');
+
   // Se já existe run em andamento, não inicia outro (idempotência)
   const running = await db
     .select({ id: syncRuns.id, lastCheckpointPage: syncRuns.lastCheckpointPage })
@@ -103,24 +108,38 @@ export async function runInitialImport(
       })
       .where(eq(syncRuns.id, runId));
 
+    // processPage já atualiza newCount incrementalmente no DB row;
+    // local `newCount` fica como hint pra syncRun de erro — ressincronizamos
+    // lendo do DB no fim de cada página.
+    const readNewCount = async (): Promise<number> => {
+      const [row] = await db
+        .select({ newCount: syncRuns.newCount })
+        .from(syncRuns)
+        .where(eq(syncRuns.id, runId))
+        .limit(1);
+      return Number(row?.newCount ?? 0);
+    };
+
     await processPage(userId, firstPage.releases);
-    newCount += firstPage.releases.length;
+    // Checkpoint após processar a página inicial completamente.
+    await db
+      .update(syncRuns)
+      .set({ lastCheckpointPage: pageNum })
+      .where(eq(syncRuns.id, runId));
+    newCount = await readNewCount();
 
     while (pageNum < totalPages) {
       pageNum += 1;
       const page = await fetchCollectionPage(userId, { page: pageNum, perPage: PER_PAGE });
       totalPages = page.pagination.pages;
       await processPage(userId, page.releases);
-      newCount += page.releases.length;
 
       // checkpoint após cada página
       await db
         .update(syncRuns)
-        .set({
-          lastCheckpointPage: pageNum,
-          newCount,
-        })
+        .set({ lastCheckpointPage: pageNum })
         .where(eq(syncRuns.id, runId));
+      newCount = await readNewCount();
     }
 
     // Sucesso
@@ -179,13 +198,35 @@ export async function runInitialImport(
   }
 
   async function processPage(userId: number, releases: { id: number; date_added: string }[]) {
+    // Otimização crítica para retomada após rate_limited:
+    // pré-busca quais discogsIds desta página JÁ foram importados pelo user
+    // e pula direto (applyDiscogsUpdate seria idempotente mas faz 1 fetchRelease
+    // por release — cada um consome quota que já foi gasta em retomadas anteriores).
+    if (releases.length === 0) return;
+    const existingRows = await db
+      .select({ discogsId: records.discogsId })
+      .from(records)
+      .where(
+        and(
+          eq(records.userId, userId),
+          inArray(
+            records.discogsId,
+            releases.map((r) => r.id),
+          ),
+        ),
+      );
+    const existingIds = new Set(existingRows.map((r) => r.discogsId));
+
     for (const rel of releases) {
+      if (existingIds.has(rel.id)) continue; // já importado; evita gastar quota
       const full = await fetchRelease(userId, rel.id);
-      const result = await applyDiscogsUpdate(userId, full, { isNew: true });
-      if (!result.created) {
-        // Reaparição: já estava no DB (ex: retomada pós-checkpoint); não contamos
-        // como "new" porque os metadados serão preservados autoralmente.
-      }
+      await applyDiscogsUpdate(userId, full, { isNew: true });
+      // incremento parcial em syncRuns — se der rate_limit no próximo release,
+      // o progresso até aqui fica refletido.
+      await db
+        .update(syncRuns)
+        .set({ newCount: sql`${syncRuns.newCount} + 1` })
+        .where(eq(syncRuns.id, runId));
     }
   }
 }

@@ -78,10 +78,7 @@ export function TrackCurationRow({
 
       <div className="min-w-0">
         <div className="flex items-baseline gap-3 mb-2">
-          <h3 className="font-serif italic text-[19px] leading-tight">
-            {local.title}
-            {local.isBomb ? <span className="ml-2" aria-label="Bomba">💣</span> : null}
-          </h3>
+          <h3 className="font-serif italic text-[19px] leading-tight">{local.title}</h3>
           {local.duration ? (
             <span className="font-mono text-[11px] text-ink-mute">{local.duration}</span>
           ) : null}

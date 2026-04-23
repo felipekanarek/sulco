@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { CollectionRow } from '@/lib/queries/collection';
 import { CoverPlaceholder } from './cover-placeholder';
+import { BombaBadge, BombaInline } from './bomba-badge';
+import { ReimportButton } from './reimport-button';
 
 type RecordRowProps = {
   record: CollectionRow;
@@ -43,37 +45,24 @@ export function RecordRow({ record }: RecordRowProps) {
           <CoverPlaceholder artist={record.artist} />
         )}
         {record.hasBomb ? (
-          <span
-            className="absolute top-0 right-0 bg-paper/90 px-1 text-sm leading-none"
-            aria-label="Contém faixa marcada como Bomba"
-            title="Contém faixa Bomba"
-          >
-            💣
+          <span className="absolute top-1 right-1 bg-paper/95 rounded-sm px-1 py-0.5 shadow-sm">
+            <BombaInline />
           </span>
         ) : null}
       </Link>
 
       <div className="min-w-0">
-        <p className="label-tech mb-1 truncate" title={record.artist}>
-          {record.artist}
+        <p className="label-tech mb-1 truncate flex items-center gap-2" title={record.artist}>
+          <span className="truncate">{record.artist}</span>
+          {record.hasBomb ? <BombaBadge size="md" /> : null}
         </p>
-        <h3 className="font-serif italic text-[22px] font-medium tracking-tight leading-tight mb-2 flex items-center gap-2 flex-wrap">
+        <h3 className="font-serif italic text-[22px] font-medium tracking-tight leading-tight mb-2 truncate">
           <Link
             href={`/disco/${record.id}`}
             className="hover:text-accent transition-colors"
           >
             {record.title}
           </Link>
-          {record.hasBomb ? (
-            <span
-              className="inline-flex items-center gap-1 font-mono not-italic text-[10px] uppercase tracking-[0.12em] text-accent border border-accent px-2 py-0.5 rounded-sm bg-accent/5"
-              title="Contém ao menos uma faixa marcada como Bomba"
-              aria-label="Disco com Bomba"
-            >
-              <span aria-hidden>💣</span>
-              <span>Bomba</span>
-            </span>
-          ) : null}
         </h3>
         <p className="label-tech truncate" title={metaLine}>
           {metaLine || '—'}
@@ -109,11 +98,9 @@ export function RecordRow({ record }: RecordRowProps) {
             <span className="text-ink-mute">· {record.shelfLocation}</span>
           ) : null}
           {coverFailed ? (
-            <span
-              className="text-warn"
-              title="Capa indisponível. Use reimport na página do disco."
-            >
-              capa?
+            <span className="inline-flex items-center gap-1">
+              <span className="text-warn">capa?</span>
+              <ReimportButton recordId={record.id} variant="compact" />
             </span>
           ) : null}
         </p>

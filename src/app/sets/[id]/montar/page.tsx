@@ -1,14 +1,212 @@
+import Link from 'next/link';
+import { notFound, redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
+import { loadSet } from '@/lib/queries/sets';
+import {
+  listSelectedVocab,
+  listSetTracks,
+  queryCandidates,
+  type BombaFilter,
+  type MontarFilters,
+} from '@/lib/queries/montar';
+import { MontarFiltersForm } from '@/components/montar-filters';
+import { CandidateRow } from '@/components/candidate-row';
+import { SetSidePanel } from '@/components/set-side-panel';
 
-/** Rota `/sets/[id]/montar` (FR-023..FR-026). Implementação plena em US3 (T071..T079). */
-export default async function MontarSetPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireCurrentUser();
+type SearchParams = Promise<{
+  bpmMin?: string;
+  bpmMax?: string;
+  energyMin?: string;
+  energyMax?: string;
+  ratingMin?: string;
+  ratingMax?: string;
+  key?: string | string[];
+  mood?: string | string[];
+  context?: string | string[];
+  bomba?: string;
+  q?: string;
+}>;
+
+export default async function MontarSetPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: SearchParams;
+}) {
+  const user = await requireCurrentUser();
+  if (user.needsOnboarding) redirect('/onboarding');
+
   const { id } = await params;
+  const setId = Number(id);
+  if (!Number.isFinite(setId)) notFound();
+
+  const set = await loadSet(user.id, setId);
+  if (!set) notFound();
+
+  // Filtros: prioridade searchParams > persistidos em sets.montarFiltersJson
+  const sp = await searchParams;
+  const filtersFromUrl = parseFiltersFromSearchParams(sp);
+  const hasUrlFilters = Object.keys(filtersFromUrl).length > 0;
+  let storedFilters: MontarFilters = {};
+  if (!hasUrlFilters && set.montarFiltersJson && set.montarFiltersJson !== '{}') {
+    try {
+      storedFilters = JSON.parse(set.montarFiltersJson) as MontarFilters;
+    } catch {
+      storedFilters = {};
+    }
+  }
+  const filters: MontarFilters = hasUrlFilters ? filtersFromUrl : storedFilters;
+
+  const inSetTracks = await listSetTracks(setId, user.id);
+  const inSetIds = new Set(inSetTracks.map((t) => t.trackId));
+
+  const [candidates, moodSuggestions, contextSuggestions] = await Promise.all([
+    queryCandidates(user.id, filters, { excludeTrackIds: Array.from(inSetIds) }),
+    listSelectedVocab(user.id, 'moods'),
+    listSelectedVocab(user.id, 'contexts'),
+  ]);
+
+  const uniqueRecords = new Set(inSetTracks.map((t) => t.recordId)).size;
+  const atLimit = inSetTracks.length >= 300;
+
   return (
-    <div className="max-w-[1240px] mx-auto px-8">
-      <p className="eyebrow mb-4">Montar set</p>
-      <h1 className="font-serif italic text-4xl">Set #{id}</h1>
-      <p className="text-ink-soft mt-4">Candidatos + filtros AND + DnD em US3 (T071..T079).</p>
+    <div className="max-w-[1440px] mx-auto px-8">
+      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-8">
+        <div>
+          <p className="eyebrow mb-2">
+            <Link href={`/sets/${set.id}`} className="hover:text-ink transition-colors">
+              ← {set.name}
+            </Link>{' '}
+            · montar
+          </p>
+          <h1 className="title-display text-[32px]">{set.name}</h1>
+        </div>
+        <Link
+          href={`/sets/${set.id}`}
+          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 rounded-sm hover:bg-accent transition-colors"
+        >
+          Finalizar →
+        </Link>
+      </section>
+
+      <div className="grid grid-cols-[1fr_400px] gap-12 items-start">
+        {/* Esquerda: briefing + filtros + candidatos */}
+        <div className="flex flex-col gap-8">
+          {set.briefing ? (
+            <section className="border border-line bg-paper-raised p-6 rounded-sm">
+              <p className="eyebrow text-accent mb-3">01 · briefing</p>
+              <p className="font-serif italic text-[19px] text-ink-soft leading-relaxed whitespace-pre-wrap">
+                {set.briefing}
+              </p>
+            </section>
+          ) : null}
+
+          <MontarFiltersForm
+            setId={setId}
+            initial={filters}
+            moodSuggestions={moodSuggestions}
+            contextSuggestions={contextSuggestions}
+          />
+
+          <section>
+            <div className="flex justify-between items-baseline pb-4 border-b border-line mb-6">
+              <h2 className="font-serif italic text-[28px] font-medium tracking-tight">
+                Candidatos
+              </h2>
+              <span className="label-tech">
+                {candidates.length} {candidates.length === 1 ? 'faixa' : 'faixas'} ·
+                selecionadas + ativas
+              </span>
+            </div>
+
+            {atLimit ? (
+              <div className="border border-warn/40 bg-warn/5 p-4 rounded-sm mb-6">
+                <p className="font-serif italic text-ink-soft">
+                  Você atingiu o limite de <strong>300 faixas por set</strong>. Remova alguma
+                  faixa à direita para continuar adicionando.
+                </p>
+              </div>
+            ) : null}
+
+            {candidates.length === 0 ? (
+              <p className="font-serif italic text-ink-mute text-center py-12">
+                Nenhuma faixa encontrada com esses filtros.
+              </p>
+            ) : (
+              <ol>
+                {candidates.map((c) => (
+                  <CandidateRow
+                    key={c.id}
+                    candidate={c}
+                    setId={setId}
+                    alreadyIn={inSetIds.has(c.id)}
+                  />
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>
+
+        {/* Direita: set em construção */}
+        <SetSidePanel
+          setId={setId}
+          setName={set.name}
+          uniqueRecords={uniqueRecords}
+          tracks={inSetTracks.map((t) => ({
+            trackId: t.trackId,
+            position: t.position,
+            title: t.title,
+            rating: t.rating,
+            artist: t.artist,
+            recordId: t.recordId,
+            isBomb: t.isBomb,
+          }))}
+        />
+      </div>
     </div>
   );
+}
+
+function parseFiltersFromSearchParams(sp: Awaited<SearchParams>): MontarFilters {
+  const f: MontarFilters = {};
+
+  const bpmMin = parseIntOr(sp.bpmMin);
+  const bpmMax = parseIntOr(sp.bpmMax);
+  if (bpmMin != null || bpmMax != null) f.bpm = { min: bpmMin ?? undefined, max: bpmMax ?? undefined };
+
+  const energyMin = parseIntOr(sp.energyMin);
+  const energyMax = parseIntOr(sp.energyMax);
+  if (energyMin != null || energyMax != null)
+    f.energy = { min: energyMin ?? undefined, max: energyMax ?? undefined };
+
+  const ratingMin = parseIntOr(sp.ratingMin);
+  const ratingMax = parseIntOr(sp.ratingMax);
+  if (ratingMin != null || ratingMax != null)
+    f.rating = { min: ratingMin ?? undefined, max: ratingMax ?? undefined };
+
+  const keys = parseMulti(sp.key);
+  if (keys.length > 0) f.musicalKey = keys;
+
+  const moods = parseMulti(sp.mood);
+  if (moods.length > 0) f.moods = moods;
+
+  const contexts = parseMulti(sp.context);
+  if (contexts.length > 0) f.contexts = contexts;
+
+  if (sp.bomba === 'only' || sp.bomba === 'none') f.bomba = sp.bomba as BombaFilter;
+
+  if (sp.q && sp.q.trim().length > 0) f.text = sp.q.trim();
+
+  return f;
+}
+
+function parseIntOr(v: string | undefined): number | null {
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function parseMulti(v: string | string[] | undefined): string[] {
+  if (!v) return [];
+  return Array.isArray(v) ? v.filter(Boolean) : [v];
 }
