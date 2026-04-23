@@ -58,16 +58,43 @@ export function RecordGridCard({ record }: { record: CollectionRow }) {
             {record.title}
           </h3>
         </Link>
-        <p className="label-tech text-ink-mute mt-1">
-          {record.tracksTotal > 0 ? (
-            <>
-              <span className="text-ink">{record.tracksSelected}</span>
-              <span>/{record.tracksTotal} selecionadas</span>
-            </>
-          ) : (
-            '—'
-          )}
-          {record.shelfLocation ? <span> · {record.shelfLocation}</span> : null}
+        {record.genres.length > 0 ? (
+          <p
+            className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft truncate mt-1"
+            title={record.genres.join(', ')}
+          >
+            {record.genres.slice(0, 2).join(' · ')}
+          </p>
+        ) : null}
+        {record.styles.length > 0 ? (
+          <p
+            className="font-serif italic text-[12px] text-ink-mute truncate"
+            title={record.styles.join(', ')}
+          >
+            {record.styles.slice(0, 3).join(' · ')}
+          </p>
+        ) : null}
+        <p className="label-tech text-ink-mute mt-1 flex items-center gap-2 flex-wrap">
+          <span>
+            {record.tracksTotal > 0 ? (
+              <>
+                <span className="text-ink">{record.tracksSelected}</span>
+                <span>/{record.tracksTotal} selec.</span>
+              </>
+            ) : (
+              '—'
+            )}
+          </span>
+          {record.hasBomb ? (
+            <span
+              className="inline-flex items-center gap-0.5 text-accent border border-accent/40 px-1.5 rounded-sm text-[9px]"
+              title="Contém faixa Bomba"
+            >
+              <span aria-hidden>💣</span>
+              <span>Bomba</span>
+            </span>
+          ) : null}
+          {record.shelfLocation ? <span>· {record.shelfLocation}</span> : null}
         </p>
       </div>
     </article>

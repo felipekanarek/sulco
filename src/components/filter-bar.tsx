@@ -11,6 +11,8 @@ export type FilterBarProps = {
   text: string;
   genres: string[];
   availableGenres: string[];
+  styles: string[];
+  availableStyles: string[];
   bomba: BombaFilterValue;
   counts: {
     total: number;
@@ -25,6 +27,8 @@ export function FilterBar({
   text,
   genres,
   availableGenres,
+  styles,
+  availableStyles,
   bomba,
   counts,
 }: FilterBarProps) {
@@ -46,16 +50,21 @@ export function FilterBar({
     });
   }
 
-  function toggleGenre(g: string) {
+  function toggleMulti(paramKey: 'genre' | 'style', current: Set<string>, value: string) {
     startTransition(() => {
-      const current = new Set(genres);
-      current.has(g) ? current.delete(g) : current.add(g);
+      current.has(value) ? current.delete(value) : current.add(value);
       const next = new URLSearchParams(params);
-      next.delete('genre');
-      for (const x of current) next.append('genre', x);
+      next.delete(paramKey);
+      for (const x of current) next.append(paramKey, x);
       const qs = next.toString();
       router.push(qs ? `${pathname}?${qs}` : pathname);
     });
+  }
+  function toggleGenre(g: string) {
+    toggleMulti('genre', new Set(genres), g);
+  }
+  function toggleStyle(s: string) {
+    toggleMulti('style', new Set(styles), s);
   }
 
   function clearAll() {
@@ -65,7 +74,11 @@ export function FilterBar({
   }
 
   const hasAnyFilter =
-    status !== 'all' || text.length > 0 || genres.length > 0 || bomba !== 'any';
+    status !== 'all' ||
+    text.length > 0 ||
+    genres.length > 0 ||
+    styles.length > 0 ||
+    bomba !== 'any';
 
   return (
     <section
@@ -130,6 +143,30 @@ export function FilterBar({
                 }`}
               >
                 {g}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {availableStyles.length > 0 ? (
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="label-tech text-ink-mute mr-1">estilos (E)</span>
+          {availableStyles.map((s) => {
+            const active = styles.includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleStyle(s)}
+                className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 border rounded-full transition-colors ${
+                  active
+                    ? 'bg-ok/10 border-ok text-ink'
+                    : 'border-line text-ink-soft hover:border-ink hover:text-ink'
+                }`}
+              >
+                {s}
               </button>
             );
           })}

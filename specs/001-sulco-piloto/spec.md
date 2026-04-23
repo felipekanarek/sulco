@@ -357,13 +357,15 @@ permanecer intacto.
 - **FR-005**: Sistema MUST expor a rota `/` exibindo todos os discos do usuário com capa,
   artista, título, ano, selo, gêneros, status e `shelfLocation` quando disponível.
 - **FR-006**: Sistema MUST permitir filtrar a listagem por: status (`unrated`, `active`,
-  `discarded`, `all`), gênero, texto livre (artista/título), e presença de faixas com
-  Bomba (tri-estado com rótulos uniformes `qualquer` / `apenas Bomba` / `sem Bomba`,
-  default `qualquer`; na listagem de discos, "apenas Bomba" significa "discos que
-  têm ao menos uma faixa com `isBomb = true`" e "sem Bomba" significa "discos sem
-  nenhuma faixa Bomba"). Quando o DJ seleciona múltiplos gêneros, a semântica é
-  AND (o disco só aparece se tiver TODOS os gêneros selecionados), consistente
-  com FR-024.
+  `discarded`, `all`), **gênero (amplo, ex: "Jazz")**, **estilo (granular, ex:
+  "Soul-Jazz" ou "Bossa Nova")**, texto livre (artista/título/selo), e presença de
+  faixas com Bomba (tri-estado com rótulos uniformes `qualquer` / `apenas Bomba` /
+  `sem Bomba`, default `qualquer`; na listagem de discos, "apenas Bomba" significa
+  "discos que têm ao menos uma faixa com `isBomb = true`" e "sem Bomba" significa
+  "discos sem nenhuma faixa Bomba"). Quando o DJ seleciona múltiplos gêneros OU
+  múltiplos estilos, a semântica é AND por campo (o disco só aparece se tiver
+  TODOS os gêneros selecionados E TODOS os estilos selecionados), consistente
+  com FR-024. Gêneros e estilos espelham os campos de mesmo nome do Discogs.
 - **FR-007**: Sistema MUST oferecer link "Curadoria →" em cada item da listagem que leva a
   `/curadoria` pré-selecionando aquele disco.
 

@@ -12,6 +12,7 @@ export type CollectionQuery = {
   status: StatusFilter;
   text: string;
   genres: string[]; // AND entre termos (FR-006)
+  styles: string[]; // AND entre estilos (FR-006)
   bomba: BombaFilter; // tri-estado (FR-006)
 };
 
@@ -25,11 +26,12 @@ export type CollectionRow = Pick<
   | 'country'
   | 'format'
   | 'coverUrl'
-  | 'genres'
-  | 'styles'
   | 'status'
   | 'shelfLocation'
 > & {
+  /** Garantidos não-nulos pelo mapping do queryCollection (`?? []`). */
+  genres: string[];
+  styles: string[];
   hasBomb: boolean;
   tracksTotal: number;
   tracksSelected: number;
@@ -59,6 +61,11 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
   // AND entre gêneros (FR-006)
   for (const g of q.genres) {
     conds.push(sql`EXISTS (SELECT 1 FROM json_each(${records.genres}) WHERE value = ${g})`);
+  }
+
+  // AND entre estilos (FR-006) — mais granular que gênero
+  for (const s of q.styles) {
+    conds.push(sql`EXISTS (SELECT 1 FROM json_each(${records.styles}) WHERE value = ${s})`);
   }
 
   if (q.bomba === 'only') {
@@ -149,6 +156,19 @@ export async function listUserGenres(userId: number): Promise<string[]> {
     .select({ value: sql<string>`DISTINCT value` })
     .from(records)
     .innerJoin(sql`json_each(${records.genres})`, sql`1=1`)
+    .where(and(eq(records.userId, userId), eq(records.archived, false)));
+
+  return rows
+    .map((r) => r.value)
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+export async function listUserStyles(userId: number): Promise<string[]> {
+  const rows = await db
+    .select({ value: sql<string>`DISTINCT value` })
+    .from(records)
+    .innerJoin(sql`json_each(${records.styles})`, sql`1=1`)
     .where(and(eq(records.userId, userId), eq(records.archived, false)));
 
   return rows

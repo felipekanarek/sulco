@@ -12,6 +12,7 @@ import {
   collectionCounts,
   countSelectedTracks,
   listUserGenres,
+  listUserStyles,
   queryCollection,
 } from '@/lib/queries/collection';
 
@@ -21,6 +22,7 @@ type SearchParams = Promise<{
   bomba?: string;
   view?: string;
   genre?: string | string[];
+  style?: string | string[];
 }>;
 
 export default async function CollectionPage({
@@ -36,15 +38,18 @@ export default async function CollectionPage({
   const text = (sp.q ?? '').trim();
   const bomba = parseBomba(sp.bomba);
   const view = parseView(sp.view);
-  const genres = parseGenreList(sp.genre);
+  const genres = parseMultiList(sp.genre);
+  const styles = parseMultiList(sp.style);
 
-  const [progress, rows, availableGenres, counts, selectedTotal] = await Promise.all([
-    getImportProgress(),
-    queryCollection({ userId: user.id, status, text, genres, bomba }),
-    listUserGenres(user.id),
-    collectionCounts(user.id),
-    countSelectedTracks(user.id),
-  ]);
+  const [progress, rows, availableGenres, availableStyles, counts, selectedTotal] =
+    await Promise.all([
+      getImportProgress(),
+      queryCollection({ userId: user.id, status, text, genres, styles, bomba }),
+      listUserGenres(user.id),
+      listUserStyles(user.id),
+      collectionCounts(user.id),
+      countSelectedTracks(user.id),
+    ]);
 
   const canResume =
     progress.outcome === 'idle' ||
@@ -57,7 +62,11 @@ export default async function CollectionPage({
   }
 
   const hasFilters =
-    status !== 'all' || text.length > 0 || bomba !== 'any' || genres.length > 0;
+    status !== 'all' ||
+    text.length > 0 ||
+    bomba !== 'any' ||
+    genres.length > 0 ||
+    styles.length > 0;
 
   return (
     <div className="max-w-[1240px] mx-auto px-8">
@@ -83,6 +92,8 @@ export default async function CollectionPage({
         bomba={bomba}
         genres={genres}
         availableGenres={availableGenres}
+        styles={styles}
+        availableStyles={availableStyles}
         counts={counts}
       />
 
@@ -169,7 +180,7 @@ function parseView(v: string | undefined): ViewMode {
   if (v === 'grade' || v === 'lista') return v;
   return 'lista';
 }
-function parseGenreList(v: string | string[] | undefined): string[] {
+function parseMultiList(v: string | string[] | undefined): string[] {
   if (!v) return [];
   return Array.isArray(v) ? v.filter(Boolean) : [v];
 }

@@ -3,25 +3,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import type { Record } from '@/db/schema';
+import type { CollectionRow } from '@/lib/queries/collection';
 import { CoverPlaceholder } from './cover-placeholder';
 
 type RecordRowProps = {
-  record: Pick<
-    Record,
-    | 'id'
-    | 'artist'
-    | 'title'
-    | 'year'
-    | 'label'
-    | 'country'
-    | 'format'
-    | 'coverUrl'
-    | 'genres'
-    | 'styles'
-    | 'status'
-    | 'shelfLocation'
-  > & { hasBomb: boolean; tracksTotal: number; tracksSelected: number };
+  record: CollectionRow;
 };
 
 /**
@@ -30,7 +16,8 @@ type RecordRowProps = {
  */
 export function RecordRow({ record }: RecordRowProps) {
   const [coverFailed, setCoverFailed] = useState(false);
-  const stylesText = (record.styles ?? []).slice(0, 3).join(' · ');
+  const genresText = (record.genres ?? []).slice(0, 3).join(' · ');
+  const stylesText = (record.styles ?? []).slice(0, 4).join(' · ');
   const metaLine = [record.label, record.year, record.format, record.country]
     .filter((x) => x && String(x).trim())
     .join(' · ');
@@ -81,25 +68,42 @@ export function RecordRow({ record }: RecordRowProps) {
       </div>
 
       <div className="min-w-0">
-        <p className="font-serif italic text-[13px] text-ink-soft mb-2 truncate">
+        {genresText ? (
+          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink mb-1 truncate" title={record.genres.join(', ')}>
+            {genresText}
+          </p>
+        ) : null}
+        <p
+          className="font-serif italic text-[13px] text-ink-soft mb-2 truncate"
+          title={record.styles.join(', ')}
+        >
           {stylesText || '—'}
         </p>
-        <p className="label-tech">
+        <p className="label-tech flex flex-wrap items-center gap-x-2 gap-y-1">
           {record.tracksTotal > 0 ? (
-            <>
+            <span>
               <span className="text-ink font-medium">{record.tracksSelected}</span>
               <span className="text-ink-mute">/{record.tracksTotal}</span>
               <span className="text-ink-mute"> selecionadas</span>
-            </>
+            </span>
           ) : (
-            '—'
+            <span>—</span>
           )}
+          {record.hasBomb ? (
+            <span
+              className="inline-flex items-center gap-1 text-accent border border-accent/40 px-2 py-0.5 rounded-sm"
+              title="Contém ao menos uma faixa marcada como Bomba"
+            >
+              <span aria-hidden>💣</span>
+              <span>Bomba</span>
+            </span>
+          ) : null}
           {record.shelfLocation ? (
-            <span className="text-ink-mute"> · {record.shelfLocation}</span>
+            <span className="text-ink-mute">· {record.shelfLocation}</span>
           ) : null}
           {coverFailed ? (
             <span
-              className="text-warn ml-2"
+              className="text-warn"
               title="Capa indisponível. Use reimport na página do disco."
             >
               capa?
