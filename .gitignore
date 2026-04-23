@@ -6,3 +6,4 @@ sulco.db
 
 # agent workspace — pode conter tokens/credenciais locais
 .claude/
+.vercel

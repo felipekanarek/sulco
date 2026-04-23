@@ -1,0 +1,13 @@
+node_modules
+.next
+.turbo
+coverage
+test-results
+playwright-report
+*.log
+sulco.db
+sulco.db-shm
+sulco.db-wal
+.env.local
+.env.vercel.check
+tsconfig.tsbuildinfo
