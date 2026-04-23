@@ -1,8 +1,9 @@
 'use client';
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { BombaFilter, type BombaFilterValue } from './bomba-filter';
+import type { FacetCount } from '@/lib/queries/collection';
 
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
 
@@ -10,9 +11,9 @@ export type FilterBarProps = {
   status: StatusFilter;
   text: string;
   genres: string[];
-  availableGenres: string[];
+  availableGenres: FacetCount[];
   styles: string[];
-  availableStyles: string[];
+  availableStyles: FacetCount[];
   bomba: BombaFilterValue;
   counts: {
     total: number;
@@ -21,6 +22,8 @@ export type FilterBarProps = {
     descartados: number;
   };
 };
+
+const COLLAPSED_COUNT = 10;
 
 export function FilterBar({
   status,
@@ -125,54 +128,87 @@ export function FilterBar({
         </div>
       </div>
 
-      {availableGenres.length > 0 ? (
-        <div className="flex gap-2 flex-wrap items-center">
-          <span className="label-tech text-ink-mute mr-1">gêneros (E)</span>
-          {availableGenres.map((g) => {
-            const active = genres.includes(g);
-            return (
-              <button
-                key={g}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleGenre(g)}
-                className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 border rounded-full transition-colors ${
-                  active
-                    ? 'bg-accent/10 border-accent text-ink'
-                    : 'border-line text-ink-soft hover:border-ink hover:text-ink'
-                }`}
-              >
-                {g}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      <FacetRow
+        label="gêneros (OU)"
+        available={availableGenres}
+        selected={genres}
+        onToggle={toggleGenre}
+        activeCls="bg-accent/10 border-accent text-ink"
+      />
 
-      {availableStyles.length > 0 ? (
-        <div className="flex gap-2 flex-wrap items-center">
-          <span className="label-tech text-ink-mute mr-1">estilos (E)</span>
-          {availableStyles.map((s) => {
-            const active = styles.includes(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleStyle(s)}
-                className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 border rounded-full transition-colors ${
-                  active
-                    ? 'bg-ok/10 border-ok text-ink'
-                    : 'border-line text-ink-soft hover:border-ink hover:text-ink'
-                }`}
-              >
-                {s}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      <FacetRow
+        label="estilos (OU)"
+        available={availableStyles}
+        selected={styles}
+        onToggle={toggleStyle}
+        activeCls="bg-ok/10 border-ok text-ink"
+      />
     </section>
+  );
+}
+
+function FacetRow({
+  label,
+  available,
+  selected,
+  onToggle,
+  activeCls,
+}: {
+  label: string;
+  available: FacetCount[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  activeCls: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (available.length === 0) return null;
+
+  // Mantém selecionados sempre visíveis (mesmo se caem fora do top-N).
+  const selectedSet = new Set(selected);
+  const selectedFacets = available.filter((f) => selectedSet.has(f.value));
+  const unselected = available.filter((f) => !selectedSet.has(f.value));
+  const visibleUnselected = expanded
+    ? unselected
+    : unselected.slice(0, Math.max(0, COLLAPSED_COUNT - selectedFacets.length));
+  const visible = [...selectedFacets, ...visibleUnselected];
+  const hidden = available.length - visible.length;
+
+  return (
+    <div
+      className={`flex gap-2 items-center ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
+    >
+      <span className="label-tech text-ink-mute mr-1 shrink-0">{label}</span>
+      <div className={`flex gap-2 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}>
+        {visible.map((f) => {
+          const active = selectedSet.has(f.value);
+          return (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onToggle(f.value)}
+              title={`${f.count} ${f.count === 1 ? 'disco' : 'discos'}`}
+              className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 border rounded-full transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
+                active ? activeCls : 'border-line text-ink-soft hover:border-ink hover:text-ink'
+              }`}
+            >
+              <span>{f.value}</span>
+              <span className="text-ink-mute">{f.count}</span>
+            </button>
+          );
+        })}
+      </div>
+      {hidden > 0 || expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="label-tech text-ink-mute hover:text-accent underline shrink-0 ml-1"
+        >
+          {expanded ? 'recolher' : `+${hidden} mais`}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

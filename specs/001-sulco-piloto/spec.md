@@ -27,7 +27,7 @@ briefing, playlists."
 - Q: Fluxo de resolução de conflitos de faixa → A: Na lista de conflitos, cada faixa tem "Manter no Sulco" (remove marca de conflito) e "Descartar" (deleta faixa + relações em setTracks); nenhuma resolução automática
 - Q: Reordenação de faixas no set → A: Drag-and-drop como mecanismo primário + fallback por teclado (setas ↑/↓ movem o item focado) para atender acessibilidade
 - Q: Persistência do estado da tela de montagem → A: Filtros persistem por set no banco (`sets.montarFiltersJson`); reabrir `/sets/[id]/montar` restaura o último estado aplicado
-- Q: Semântica de filtro em campos multivalorados (moods, contexts, genres) → A: AND (todos os termos selecionados devem estar presentes) como padrão fixo; sem toggle AND/OR no piloto
+- Q: Semântica de filtro em campos multivalorados (moods, contexts, genres) → A: AND (todos os termos selecionados devem estar presentes) como padrão fixo; sem toggle AND/OR no piloto — **revisto em 2026-04-24 durante implementação**: para **gênero e estilo** da listagem `/`, DENTRO do campo a semântica virou **OR** (disco aparece com QUALQUER um dos termos); entre campos continua AND. A regra AND original segue valendo para `moods`/`contexts` de faixas na montagem de set (FR-024).
 - Q: Transições de status de um Set → A: Status totalmente derivado de `eventDate` — `draft` quando `eventDate` é nulo, `scheduled` quando `eventDate` está no futuro, `done` quando no passado; status não é editável manualmente
 - Q: Proteção contra spam no botão "Reimportar este disco" → A: Cooldown de 60s por disco — botão desabilita após reimport bem-sucedido exibindo contagem regressiva/mensagem "Aguarde 60s"
 - Q: Fuso horário e formato do `eventDate` → A: Armazenado em UTC (ISO 8601); exibido e comparado contra `now` em `America/Sao_Paulo`; input via datetime-local do navegador (converte para UTC ao salvar)
@@ -362,10 +362,15 @@ permanecer intacto.
   faixas com Bomba (tri-estado com rótulos uniformes `qualquer` / `apenas Bomba` /
   `sem Bomba`, default `qualquer`; na listagem de discos, "apenas Bomba" significa
   "discos que têm ao menos uma faixa com `isBomb = true`" e "sem Bomba" significa
-  "discos sem nenhuma faixa Bomba"). Quando o DJ seleciona múltiplos gêneros OU
-  múltiplos estilos, a semântica é AND por campo (o disco só aparece se tiver
-  TODOS os gêneros selecionados E TODOS os estilos selecionados), consistente
-  com FR-024. Gêneros e estilos espelham os campos de mesmo nome do Discogs.
+  "discos sem nenhuma faixa Bomba"). Quando o DJ seleciona múltiplos gêneros, a
+  semântica DENTRO do campo é **OR** (disco aparece se tiver QUALQUER um dos
+  gêneros selecionados); mesmo para estilos. ENTRE campos (gênero + estilo +
+  status + bomba + texto) a semântica continua AND (interseção). Gêneros e
+  estilos espelham os campos de mesmo nome do Discogs. Em listas com alto número
+  de facetas (centenas de estilos), a UI MUST oferecer visualização recolhida
+  (top-N por contagem em ordem descendente) com opção de expandir para a lista
+  completa; facetas já selecionadas permanecem sempre visíveis mesmo quando
+  recolhida.
 - **FR-007**: Sistema MUST oferecer link "Curadoria →" em cada item da listagem que leva a
   `/curadoria` pré-selecionando aquele disco.
 

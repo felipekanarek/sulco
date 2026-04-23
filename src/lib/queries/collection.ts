@@ -58,14 +58,18 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
     );
   }
 
-  // AND entre gêneros (FR-006)
-  for (const g of q.genres) {
-    conds.push(sql`EXISTS (SELECT 1 FROM json_each(${records.genres}) WHERE value = ${g})`);
+  // OR dentro de gêneros (FR-006): disco aparece se tiver QUALQUER um dos gêneros selecionados
+  if (q.genres.length > 0) {
+    conds.push(
+      sql`EXISTS (SELECT 1 FROM json_each(${records.genres}) WHERE value IN ${q.genres})`,
+    );
   }
 
-  // AND entre estilos (FR-006) — mais granular que gênero
-  for (const s of q.styles) {
-    conds.push(sql`EXISTS (SELECT 1 FROM json_each(${records.styles}) WHERE value = ${s})`);
+  // OR dentro de estilos (FR-006): mesma lógica, mais granular
+  if (q.styles.length > 0) {
+    conds.push(
+      sql`EXISTS (SELECT 1 FROM json_each(${records.styles}) WHERE value IN ${q.styles})`,
+    );
   }
 
   if (q.bomba === 'only') {
@@ -151,28 +155,35 @@ export async function countSelectedTracks(userId: number): Promise<number> {
   return Number(rows[0]?.c ?? 0);
 }
 
-export async function listUserGenres(userId: number): Promise<string[]> {
+export type FacetCount = { value: string; count: number };
+
+async function countFacet(
+  userId: number,
+  column: typeof records.genres | typeof records.styles,
+): Promise<FacetCount[]> {
   const rows = await db
-    .select({ value: sql<string>`DISTINCT value` })
+    .select({
+      value: sql<string>`value`,
+      count: sql<number>`COUNT(*)`,
+    })
     .from(records)
-    .innerJoin(sql`json_each(${records.genres})`, sql`1=1`)
-    .where(and(eq(records.userId, userId), eq(records.archived, false)));
+    .innerJoin(sql`json_each(${column})`, sql`1=1`)
+    .where(and(eq(records.userId, userId), eq(records.archived, false)))
+    .groupBy(sql`value`);
 
   return rows
-    .map((r) => r.value)
-    .filter((v): v is string => typeof v === 'string' && v.length > 0)
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    .filter((r) => typeof r.value === 'string' && r.value.length > 0)
+    .map((r) => ({ value: r.value, count: Number(r.count) }))
+    .sort(
+      (a, b) =>
+        b.count - a.count || a.value.localeCompare(b.value, 'pt-BR'),
+    );
 }
 
-export async function listUserStyles(userId: number): Promise<string[]> {
-  const rows = await db
-    .select({ value: sql<string>`DISTINCT value` })
-    .from(records)
-    .innerJoin(sql`json_each(${records.styles})`, sql`1=1`)
-    .where(and(eq(records.userId, userId), eq(records.archived, false)));
+export async function listUserGenres(userId: number): Promise<FacetCount[]> {
+  return countFacet(userId, records.genres);
+}
 
-  return rows
-    .map((r) => r.value)
-    .filter((v): v is string => typeof v === 'string' && v.length > 0)
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+export async function listUserStyles(userId: number): Promise<FacetCount[]> {
+  return countFacet(userId, records.styles);
 }
