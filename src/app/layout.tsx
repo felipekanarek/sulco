@@ -1,6 +1,14 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import {
+  ClerkProvider,
+  Show,
+  UserButton,
+  SignInButton,
+  SignUpButton,
+} from '@clerk/nextjs';
+import { ptBR } from '@clerk/localizations';
 
 export const metadata: Metadata = {
   title: 'Sulco — curadoria de vinil para DJs',
@@ -11,13 +19,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body>
-        <Header />
-        <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
-        <footer className="border-t border-line py-6">
-          <div className="max-w-[1240px] mx-auto px-8">
-            <p className="eyebrow text-center">Sulco · protótipo nível 2 · Next.js + SQLite local</p>
-          </div>
-        </footer>
+        <ClerkProvider localization={ptBR}>
+          <Header />
+          {/* Banners globais — implementação plena virá em US4 (T094, T094a) */}
+          <CredentialBannerPlaceholder />
+          <ArchivedBannerPlaceholder />
+          <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
+          <footer className="border-t border-line py-6">
+            <div className="max-w-[1240px] mx-auto px-8">
+              <p className="eyebrow text-center">Sulco · protótipo nível 2 · Next.js + SQLite local</p>
+            </div>
+          </footer>
+        </ClerkProvider>
       </body>
     </html>
   );
@@ -31,13 +44,24 @@ function Header() {
           Sulco<span className="text-accent not-italic">.</span>
         </Link>
         <nav className="flex gap-10 justify-center">
-          <NavLink href="/">Coleção</NavLink>
-          <NavLink href="/sets">Sets</NavLink>
-          <NavLink href="/sets/novo">Montar</NavLink>
+          <Show when="signed-in">
+            <NavLink href="/">Coleção</NavLink>
+            <NavLink href="/curadoria">Curadoria</NavLink>
+            <NavLink href="/sets">Sets</NavLink>
+            <NavLink href="/status">Status</NavLink>
+          </Show>
         </nav>
-        <span className="label-tech flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-ok inline-block" />
-          Sincronizado
+        <span className="label-tech flex items-center gap-3">
+          <Show when="signed-in">
+            <Link href="/conta" className="hover:text-ink transition-colors">
+              Conta
+            </Link>
+            <UserButton />
+          </Show>
+          <Show when="signed-out">
+            <SignInButton />
+            <SignUpButton />
+          </Show>
         </span>
       </div>
     </header>
@@ -53,4 +77,13 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
       {children}
     </Link>
   );
+}
+
+// Placeholders — serão substituídos pelos componentes reais em US4.
+function CredentialBannerPlaceholder() {
+  return null;
+}
+
+function ArchivedBannerPlaceholder() {
+  return null;
 }

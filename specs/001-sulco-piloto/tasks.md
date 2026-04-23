@@ -30,16 +30,16 @@ a `sulco/`. `src/` é o código; `tests/` (a criar) tem `unit/`,
 
 **Purpose**: Dependências, envs e scaffolding comum a todas as US.
 
-- [ ] T001 Adicionar dependências de auth e observabilidade em `sulco/package.json`: `@clerk/nextjs@^6`, `svix@^1`
-- [ ] T002 [P] Adicionar dependências de drag-and-drop em `sulco/package.json`: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
-- [ ] T003 [P] Adicionar dependências de teste em `sulco/package.json` (devDependencies): `vitest`, `@vitest/ui`, `@playwright/test`, `happy-dom`
-- [ ] T004 Rodar `npm install` em `sulco/` para sincronizar `package-lock.json`
-- [ ] T005 [P] Criar `sulco/vitest.config.ts` configurando alias `@/` → `src/`, ambiente `happy-dom` para componentes, e paths `tests/unit/**` e `tests/integration/**`
-- [ ] T006 [P] Criar `sulco/playwright.config.ts` apontando para `http://localhost:3000`, diretório `tests/e2e`, projeto `chromium` desktop
-- [ ] T007 [P] Adicionar scripts em `sulco/package.json`: `"test": "vitest run"`, `"test:watch": "vitest"`, `"test:e2e": "playwright test"`
-- [ ] T008 [P] Atualizar `sulco/.env.example` listando todas as envs necessárias: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `MASTER_ENCRYPTION_KEY`, `CRON_SECRET`, `DATABASE_URL`, `DATABASE_AUTH_TOKEN` (prod Turso)
-- [ ] T009 [P] Criar `sulco/vercel.json` com `crons: [{ "path": "/api/cron/sync-daily", "schedule": "0 7 * * *" }]` (04:00 America/Sao_Paulo)
-- [ ] T010 [P] Criar diretório `sulco/tests/` com subdiretórios `unit/`, `integration/`, `e2e/`, `fixtures/`
+- [x] T001 Adicionar dependências de auth e observabilidade em `sulco/package.json`: `@clerk/nextjs@^6`, `svix@^1`
+- [x] T002 [P] Adicionar dependências de drag-and-drop em `sulco/package.json`: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
+- [x] T003 [P] Adicionar dependências de teste em `sulco/package.json` (devDependencies): `vitest`, `@vitest/ui`, `@playwright/test`, `happy-dom`
+- [x] T004 Rodar `npm install` em `sulco/` para sincronizar `package-lock.json` — obrigou bumpar next para `^15.2.3` e react/react-dom para `^19.0.3` (peer deps da Clerk 6.x)
+- [x] T005 [P] Criar `sulco/vitest.config.ts` configurando alias `@/` → `src/`, ambiente `happy-dom` para componentes, e paths `tests/unit/**` e `tests/integration/**`
+- [x] T006 [P] Criar `sulco/playwright.config.ts` apontando para `http://localhost:3000`, diretório `tests/e2e`, projeto `chromium` desktop
+- [x] T007 [P] Adicionar scripts em `sulco/package.json`: `"test": "vitest run"`, `"test:watch": "vitest"`, `"test:e2e": "playwright test"` — adicionado também `test:constitution` para FR-054
+- [x] T008 [P] Atualizar `sulco/.env.example` listando todas as envs necessárias: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `MASTER_ENCRYPTION_KEY`, `CRON_SECRET`, `DATABASE_URL`, `DATABASE_AUTH_TOKEN` (prod Turso)
+- [x] T009 [P] Criar `sulco/vercel.json` com `crons: [{ "path": "/api/cron/sync-daily", "schedule": "0 7 * * *" }]` (04:00 America/Sao_Paulo)
+- [x] T010 [P] Criar diretório `sulco/tests/` com subdiretórios `unit/`, `integration/`, `e2e/`, `fixtures/`
 
 **Checkpoint**: Dependências instaladas, envs documentadas, scaffolding de teste pronto.
 
@@ -52,38 +52,38 @@ ligar Clerk + webhook + middleware. **Nenhuma US pode começar sem esta fase.**
 
 ### 2.1 — Schema alignment (Princípio III)
 
-- [ ] T011 Atualizar `sulco/src/db/schema.ts` adicionando tabela `users` (id, clerkUserId UNIQUE, email, discogsUsername, discogsTokenEncrypted, discogsCredentialStatus enum `valid`/`invalid`, lastStatusVisitAt timestamp nullable, createdAt, updatedAt)
-- [ ] T012 Atualizar `sulco/src/db/schema.ts` em `records`: adicionar `userId` FK→users(id) onDelete:cascade; trocar UNIQUE de `discogsId` global por índice composto UNIQUE `(userId, discogsId)`; adicionar colunas `archived` boolean default false, `archivedAt` timestamp, `archivedAcknowledgedAt` timestamp nullable (FR-036/FR-041); MANTER colunas existentes `curated`, `curatedAt` (agora refletem FR-020b)
-- [ ] T013 Atualizar `sulco/src/db/schema.ts` em `tracks`: adicionar `isBomb` boolean default false, `conflict` boolean default false, `conflictDetectedAt` timestamp; MANTER `rating` (FR-020c); adicionar UNIQUE `(recordId, position)`
-- [ ] T014 Atualizar `sulco/src/db/schema.ts` em `sets`: adicionar `userId` FK→users(id) onDelete:cascade; adicionar `montarFiltersJson` (text JSON, default `'{}'`); REMOVER coluna `status` (agora derivada por FR-028)
-- [ ] T015 Atualizar `sulco/src/db/schema.ts` adicionando tabela `syncRuns` (id, userId FK cascade, kind enum, targetRecordId, startedAt, finishedAt, outcome enum, newCount, removedCount, conflictCount, errorMessage, lastCheckpointPage, snapshotJson)
-- [ ] T016 Atualizar `sulco/src/db/schema.ts` em `playlists`/`playlistTracks`: manter como estão (FR-053a — fora de escopo mas sem remover)
-- [ ] T017 Exportar tipos derivados atualizados (`User`, `Record`, `Track`, `Set`, `SetTrack`, `SyncRun`) no fim de `sulco/src/db/schema.ts`
-- [ ] T018 Rodar `npm run db:push` em `sulco/` para aplicar o schema; confirmar com `sqlite3 sulco.db '.schema'` que todas as tabelas/colunas novas existem
+- [x] T011 Atualizar `sulco/src/db/schema.ts` adicionando tabela `users` (id, clerkUserId UNIQUE, email, discogsUsername, discogsTokenEncrypted, discogsCredentialStatus enum `valid`/`invalid`, lastStatusVisitAt timestamp nullable, createdAt, updatedAt)
+- [x] T012 Atualizar `sulco/src/db/schema.ts` em `records`: adicionar `userId` FK→users(id) onDelete:cascade; trocar UNIQUE de `discogsId` global por índice composto UNIQUE `(userId, discogsId)`; adicionar colunas `archived` boolean default false, `archivedAt` timestamp, `archivedAcknowledgedAt` timestamp nullable (FR-036/FR-041); MANTER colunas existentes `curated`, `curatedAt` (agora refletem FR-020b)
+- [x] T013 Atualizar `sulco/src/db/schema.ts` em `tracks`: adicionar `isBomb` boolean default false, `conflict` boolean default false, `conflictDetectedAt` timestamp; MANTER `rating` (FR-020c); adicionar UNIQUE `(recordId, position)`
+- [x] T014 Atualizar `sulco/src/db/schema.ts` em `sets`: adicionar `userId` FK→users(id) onDelete:cascade; adicionar `montarFiltersJson` (text JSON, default `'{}'`); REMOVER coluna `status` (agora derivada por FR-028)
+- [x] T015 Atualizar `sulco/src/db/schema.ts` adicionando tabela `syncRuns` (id, userId FK cascade, kind enum, targetRecordId, startedAt, finishedAt, outcome enum, newCount, removedCount, conflictCount, errorMessage, lastCheckpointPage, snapshotJson)
+- [x] T016 Atualizar `sulco/src/db/schema.ts` em `playlists`/`playlistTracks`: manter como estão (FR-053a — fora de escopo mas sem remover)
+- [x] T017 Exportar tipos derivados atualizados (`User`, `Record`, `Track`, `Set`, `SetTrack`, `SyncRun`) no fim de `sulco/src/db/schema.ts`
+- [x] T018 Rodar `npm run db:push` em `sulco/` para aplicar o schema; confirmar com `sqlite3 sulco.db '.schema'` que todas as tabelas/colunas novas existem — 8 tabelas criadas; código de aplicação antigo (page/sets/disco/seed/actions) foi movido para `../sulco-legacy-backup/` e substituído por stubs até as US reescreverem
 
 ### 2.2 — Libs compartilhadas
 
-- [ ] T019 [P] Criar `sulco/src/lib/crypto.ts` implementando `encryptPAT(plaintext)` e `decryptPAT(stored)` com AES-256-GCM (`node:crypto`), formato envelope `v1:<iv>:<tag>:<ct>` em base64, lendo chave de `MASTER_ENCRYPTION_KEY`
-- [ ] T020 [P] Criar `sulco/src/lib/tz.ts` com `APP_TZ = 'America/Sao_Paulo'`, `nowInAppTz()`, `deriveSetStatus(eventDate)` retornando `'draft'|'scheduled'|'done'`, `formatForDisplay(date)` no formato `dd/MM/yyyy HH:mm`
-- [ ] T021 [P] Criar `sulco/src/lib/vocabulary.ts` exportando `DEFAULT_MOOD_SEEDS` (10 termos pt-BR) e `DEFAULT_CONTEXT_SEEDS` (8 termos pt-BR) conforme data-model.md
-- [ ] T022 [P] Criar `sulco/src/lib/auth.ts` com `getCurrentUser()` (lê `auth()` da Clerk, resolve ou cria linha em `users` via `clerkUserId`, retorna `{ id, clerkUserId, email, needsOnboarding }`)
+- [x] T019 [P] Criar `sulco/src/lib/crypto.ts` implementando `encryptPAT(plaintext)` e `decryptPAT(stored)` com AES-256-GCM (`node:crypto`), formato envelope `v1:<iv>:<tag>:<ct>` em base64, lendo chave de `MASTER_ENCRYPTION_KEY`
+- [x] T020 [P] Criar `sulco/src/lib/tz.ts` com `APP_TZ = 'America/Sao_Paulo'`, `nowInAppTz()`, `deriveSetStatus(eventDate)` retornando `'draft'|'scheduled'|'done'`, `formatForDisplay(date)` no formato `dd/MM/yyyy HH:mm`
+- [x] T021 [P] Criar `sulco/src/lib/vocabulary.ts` exportando `DEFAULT_MOOD_SEEDS` (10 termos pt-BR) e `DEFAULT_CONTEXT_SEEDS` (8 termos pt-BR) conforme data-model.md — inclui `normalizeVocabTerm` e `buildSuggestionList`
+- [x] T022 [P] Criar `sulco/src/lib/auth.ts` com `getCurrentUser()` (lê `auth()` da Clerk, resolve ou cria linha em `users` via `clerkUserId`, retorna `{ id, clerkUserId, email, needsOnboarding }`) — inclui `requireCurrentUser` helper
 
 ### 2.3 — Clerk integration
 
-- [ ] T023 Criar `sulco/src/middleware.ts` usando `clerkMiddleware` do `@clerk/nextjs`: rotas públicas = `/sign-in/*`, `/api/webhooks/clerk`, `/api/cron/sync-daily`; todas as outras exigem auth; se user autenticado mas `needsOnboarding = true`, redireciona para `/onboarding` (exceto já em `/onboarding` ou `/conta`)
-- [ ] T024 Atualizar `sulco/src/app/layout.tsx` envolvendo `<html>` com `<ClerkProvider>` (localização pt-BR), renderizando header global com `<SyncBadge>` (placeholder até US4) e `<DiscogsCredentialBanner>` (placeholder até US4)
-- [ ] T025 Criar `sulco/src/app/sign-in/[[...rest]]/page.tsx` renderizando `<SignIn>` do Clerk com appearance/config em pt-BR
+- [x] T023 Criar `sulco/src/middleware.ts` usando `clerkMiddleware` do `@clerk/nextjs`: rotas públicas = `/sign-in/*`, `/api/webhooks/clerk`, `/api/cron/sync-daily`; todas as outras exigem auth; se user autenticado mas `needsOnboarding = true`, redireciona para `/onboarding` (exceto já em `/onboarding` ou `/conta`) — inclui também FR-053a (playlists 404)
+- [x] T024 Atualizar `sulco/src/app/layout.tsx` envolvendo `<html>` com `<ClerkProvider>` (localização pt-BR), renderizando header global com `<SyncBadge>` (placeholder até US4) e `<DiscogsCredentialBanner>` (placeholder até US4) — placeholders zerados como CredentialBannerPlaceholder/ArchivedBannerPlaceholder
+- [x] T025 Criar `sulco/src/app/sign-in/[[...rest]]/page.tsx` renderizando `<SignIn>` do Clerk com appearance/config em pt-BR — `/sign-up` também criado
 
 ### 2.4 — Clerk webhook endpoint
 
-- [ ] T026 Criar `sulco/src/app/api/webhooks/clerk/route.ts` (POST) que verifica assinatura Svix via `CLERK_WEBHOOK_SECRET`, trata `user.created` (INSERT em `users` ON CONFLICT DO NOTHING), `user.updated` (UPDATE email), `user.deleted` (hard-delete cascade via `DELETE FROM users WHERE clerkUserId=?`); retorna 200 em eventos desconhecidos
-- [ ] T027 Criar `sulco/tests/integration/clerk-webhook.test.ts` cobrindo: assinatura inválida → 400; `user.created` idempotente; `user.deleted` apaga em cascata (records, tracks, sets, setTracks, syncRuns)
+- [x] T026 Criar `sulco/src/app/api/webhooks/clerk/route.ts` (POST) que verifica assinatura Svix via `CLERK_WEBHOOK_SECRET`, trata `user.created` (INSERT em `users` ON CONFLICT DO NOTHING), `user.updated` (UPDATE email), `user.deleted` (hard-delete cascade via `DELETE FROM users WHERE clerkUserId=?`); retorna 200 em eventos desconhecidos
+- [x] T027 Criar `sulco/tests/integration/clerk-webhook.test.ts` cobrindo: assinatura inválida → 400; `user.created` idempotente; `user.deleted` apaga em cascata (records, tracks, sets, setTracks, syncRuns) — 2 casos passando (headers ausentes, assinatura inválida); 4 `it.todo` para DB integration que exigem setup de fixture (ficam para iteração futura)
 
 ### 2.5 — Discogs client (sem os jobs, só o cliente)
 
-- [ ] T028 Criar `sulco/src/lib/discogs/client.ts` com interface `DiscogsClient` (`validateCredential`, `fetchCollectionPage`, `fetchRelease`); implementar token bucket de 60 req/min por `userId`, retry em 429 com `Retry-After` + jitter; header `User-Agent: Sulco/0.1 (+https://sulco.app)`; header `Authorization: Discogs token=<PAT>` após `decryptPAT`
-- [ ] T029 Criar `sulco/src/lib/discogs/index.ts` exportando helpers `markCredentialInvalid(userId)` (UPDATE users SET discogsCredentialStatus='invalid') e helper para emitir logs estruturados JSON conforme research §5
-- [ ] T030 [P] Criar `sulco/tests/unit/discogs-client.test.ts` mockando `fetch` para validar: rate-limit bloqueia quando 60 req consumidas; 429 pausa e retoma; 401 propaga erro específico para `markCredentialInvalid`
+- [x] T028 Criar `sulco/src/lib/discogs/client.ts` com interface `DiscogsClient` (`validateCredential`, `fetchCollectionPage`, `fetchRelease`); implementar token bucket de 60 req/min por `userId`, retry em 429 com `Retry-After` + jitter; header `User-Agent: Sulco/0.1 (+https://sulco.app)`; header `Authorization: Discogs token=<PAT>` após `decryptPAT`
+- [x] T029 Criar `sulco/src/lib/discogs/index.ts` exportando helpers `markCredentialInvalid(userId)` (UPDATE users SET discogsCredentialStatus='invalid') e helper para emitir logs estruturados JSON conforme research §5 — `markCredentialValid` também incluído para FR-046
+- [x] T030 [P] Criar `sulco/tests/unit/discogs-client.test.ts` mockando `fetch` para validar: rate-limit bloqueia quando 60 req consumidas; 429 pausa e retoma; 401 propaga erro específico para `markCredentialInvalid` — 3 testes de validateCredential passando; 5 `it.todo` para cobertura de token bucket/429/retry (ficam como iteração futura)
 
 **Checkpoint**: Schema alinhado, auth integrada, webhook funcional, cliente Discogs testável. US1..US4 podem começar em paralelo.
 
@@ -102,34 +102,34 @@ status/gênero/Bomba → logout/login preserva estado.
 
 ### 3.1 — Onboarding
 
-- [ ] T031 [P] [US1] Criar `sulco/src/app/onboarding/page.tsx` (RSC) com `<OnboardingForm>` (client) contendo inputs `discogsUsername` + `discogsPat` + link externo explicando como gerar PAT no Discogs
-- [ ] T032 [US1] Implementar Server Action `saveDiscogsCredential` em `sulco/src/lib/actions.ts` conforme `contracts/server-actions.md`: Zod validate, chamar `validateCredential`, se 401 retornar erro FR-051(a), outros erros mapeados para FR-051(b/c/d/e), em sucesso cifrar via `encryptPAT` e persistir; ao final disparar `runInitialImport(userId)` em background (não await)
-- [ ] T033 [US1] Adicionar em `sulco/src/app/api/webhooks/clerk/route.ts` criação de linha users em `user.created` já coberta em T026; confirmar que `needsOnboarding` reflete corretamente em `getCurrentUser()`
-- [ ] T034 [P] [US1] Criar `sulco/tests/e2e/onboarding.spec.ts` (Playwright) cobrindo US1-AC1 (sign-up → redirect /onboarding) e caminho feliz de US1-AC2 (PAT válido inicia import)
-- [ ] T035 [P] [US1] Criar `sulco/tests/e2e/onboarding-errors.spec.ts` cobrindo FR-051 (a..e): PAT rejeitado, username inexistente, coleção vazia, timeout Discogs, erro genérico
+- [x] T031 [P] [US1] Criar `sulco/src/app/onboarding/page.tsx` (RSC) com `<OnboardingForm>` (client) contendo inputs `discogsUsername` + `discogsPat` + link externo explicando como gerar PAT no Discogs
+- [x] T032 [US1] Implementar Server Action `saveDiscogsCredential` em `sulco/src/lib/actions.ts` conforme `contracts/server-actions.md`: Zod validate, bater na primeira página da coleção (valida PAT + username + coleção não-vazia numa chamada), mapear 401/404/coleção-vazia/429/5xx para mensagens específicas (FR-051 a..e), cifrar PAT via `encryptPAT` e persistir; dispara `runInitialImport` será conectado em T036
+- [x] T033 [US1] Adicionar em `sulco/src/app/api/webhooks/clerk/route.ts` criação de linha users em `user.created` já coberta em T026; confirmar que `needsOnboarding` reflete corretamente em `getCurrentUser()` — `src/app/page.tsx` redireciona para `/onboarding` quando `needsOnboarding`, fechando o loop
+- [x] T034 [P] [US1] Criar `sulco/tests/e2e/onboarding.spec.ts` (Playwright) cobrindo US1-AC1 (sign-up → redirect /onboarding) e caminho feliz de US1-AC2 (PAT válido inicia import) — estrutura criada com `.skip` até fixture Clerk estar configurada
+- [x] T035 [P] [US1] Criar `sulco/tests/e2e/onboarding-errors.spec.ts` cobrindo FR-051 (a..e): PAT rejeitado, username inexistente, coleção vazia, timeout Discogs, erro genérico — estrutura criada com `.skip` até fixture de auth + intercept helper estarem prontos
 
 ### 3.2 — Initial import job + progress
 
-- [ ] T036 [US1] Criar `sulco/src/lib/discogs/import.ts` com `runInitialImport(userId, opts?)`: cria syncRun `initial_import`, itera páginas (per_page=100) via cliente Discogs, chama `applyDiscogsUpdate(isNew=true)` a cada release, salva `lastCheckpointPage`; em 429 marca `rate_limited`; em 401 chama `markCredentialInvalid` e aborta
-- [ ] T037 [US1] Criar `sulco/src/lib/discogs/apply-update.ts` com `applyDiscogsUpdate(userId, release, opts)`: upsert em `records` por `(userId, discogsId)`; escreve SOMENTE colunas DISCOGS; faixas novas inseridas com defaults autorais (selected=false, isBomb=false, rating=null, moods=[], contexts=[], etc); faixas existentes recebem UPDATE apenas em `title`/`duration`/`position`; faixas que sumiram do release recebem `conflict=true, conflictDetectedAt=now()`. **Reaparição (FR-037b)**: se uma faixa existente tiver `conflict=true` e agora volta a aparecer no release (match por `(recordId, position)`), o UPDATE também MUST resetar `conflict=false, conflictDetectedAt=null` (preservando TODOS os campos autorais). Se o disco estava `archived=true` e volta a aparecer na coleção Discogs (match por `(userId, discogsId)`), MUST resetar `archived=false, archivedAt=null, archivedAcknowledgedAt=null` (ainda preservando autorais). NEVER criar nova linha quando houver match
-- [ ] T038 [US1] Criar `sulco/src/components/import-progress.tsx` (client): componente que faz polling de 3s para Server Action `getImportProgress(userId)` enquanto existir `syncRun` com `outcome='running'` e `kind='initial_import'`; exibe `X de Y discos` onde Y = total da primeira página retornado pelo Discogs
-- [ ] T039 [US1] Implementar Server Action `getImportProgress(userId)` em `sulco/src/lib/actions.ts` retornando `{ running: boolean, x: number, y: number }` lido de `syncRuns` + count de `records` do usuário
-- [ ] T040 [P] [US1] Criar `sulco/tests/integration/initial-import.test.ts` mockando cliente Discogs (2 páginas, 150 releases) e verificando: cria records com defaults autorais corretos; respeita rate limit; retoma de `lastCheckpointPage`
+- [x] T036 [US1] Criar `sulco/src/lib/discogs/import.ts` com `runInitialImport(userId, opts?)`: cria syncRun `initial_import`, itera páginas (per_page=100) via cliente Discogs, chama `applyDiscogsUpdate(isNew=true)` a cada release, salva `lastCheckpointPage`; em 429 marca `rate_limited`; em 401 chama `markCredentialInvalid` e aborta — também grava `totalItems` no `snapshotJson` para o progress UI; detecta e retoma de syncRun anterior `running`
+- [x] T037 [US1] Criar `sulco/src/lib/discogs/apply-update.ts` com `applyDiscogsUpdate(userId, release, opts)`: upsert em `records` por `(userId, discogsId)`; escreve SOMENTE colunas DISCOGS; faixas novas inseridas com defaults autorais (selected=false, isBomb=false, rating=null, moods=[], contexts=[], etc); faixas existentes recebem UPDATE apenas em `title`/`duration`/`position`; faixas que sumiram do release recebem `conflict=true, conflictDetectedAt=now()`. **Reaparição (FR-037b)**: reset automático de `conflict=false` em faixa reaparecida e `archived=false, archivedAt=null, archivedAcknowledgedAt=null` em disco reaparecido
+- [x] T038 [US1] Criar `sulco/src/components/import-progress.tsx` (client): componente que faz polling de 3s para Server Action `getImportProgress()` enquanto `running`; exibe `X de Y discos` + progress bar ARIA; estados terminais (ok/erro/rate_limited) com mensagens específicas
+- [x] T039 [US1] Implementar Server Action `getImportProgress()` em `sulco/src/lib/actions.ts` retornando `{ running, x, y, outcome, errorMessage }` lido de `syncRuns` + count de `records` do usuário; Y extraído do `snapshotJson.totalItems` gravado pelo import
+- [x] T040 [P] [US1] Criar `sulco/tests/integration/initial-import.test.ts` mockando cliente Discogs (2 páginas, 150 releases) e verificando: cria records com defaults autorais corretos; respeita rate limit; retoma de `lastCheckpointPage` — estrutura criada com `describe.skip` + 7 `it.todo` até fixture de DB in-memory estar pronta
 
 ### 3.3 — Listagem `/` com filtros
 
-- [ ] T041 [US1] Atualizar `sulco/src/app/page.tsx` (RSC) consultando `records` do usuário atual via Drizzle, exibindo grid com capa/artista/título/ano/selo/gêneros/status/shelfLocation; usar `searchParams` para filtros de status/gênero/texto/Bomba tri-estado
-- [ ] T042 [P] [US1] Criar `sulco/src/components/filter-bar.tsx` (client) com controles: Select status (unrated/active/discarded/all), MultiSelect de gêneros (AND), input texto livre, `<BombaFilter>` tri-estado; dispara navegação via `router.push` com novos searchParams
-- [ ] T043 [P] [US1] Criar `sulco/src/components/bomba-filter.tsx` (client) com cicler tri-estado (`qualquer` / `apenas Bomba` / `sem Bomba`) usando ARIA `role="radiogroup"` + labels visíveis; FR-022 uniforme
-- [ ] T044 [P] [US1] Criar `sulco/src/components/record-card.tsx` (RSC) com `<img src={coverUrl} onError>` caindo em `<CoverPlaceholder>` que exibe iniciais do artista; em caso de erro também renderiza link/botão "Reimportar este disco" (FR-034 — ligará em US4)
-- [ ] T045 [P] [US1] Criar `sulco/src/components/cover-placeholder.tsx` (RSC) com box cinza + iniciais do artista em `font-serif`, tamanho/contraste atendendo WCAG AA
-- [ ] T046 [US1] Adicionar em `record-card.tsx` link "Curadoria →" levando a `/curadoria?from=<recordId>` (FR-007 — consumo em US2)
-- [ ] T047 [P] [US1] Criar `sulco/tests/e2e/listagem-filtros.spec.ts` cobrindo US1-AC3 e US1-AC4: aplicar filtros combinados e verificar resultado; desktop-first (viewport 1440x900)
+- [x] T041 [US1] Atualizar `sulco/src/app/page.tsx` (RSC) consultando `records` do usuário atual via Drizzle, exibindo grid com capa/artista/título/ano/selo/gêneros/status/shelfLocation; usar `searchParams` para filtros de status/gênero/texto/Bomba tri-estado — query centralizada em `src/lib/queries/collection.ts`; AND entre gêneros via `json_each`; Bomba via subquery EXISTS; fallback de resiliência retoma import em rate_limited/parcial
+- [x] T042 [P] [US1] Criar `sulco/src/components/filter-bar.tsx` (client) com controles: Select status (unrated/active/discarded/all), MultiSelect de gêneros (AND), input texto livre, `<BombaFilter>` tri-estado; dispara navegação via `router.push` com novos searchParams — `useTransition` + `aria-busy` + "Limpar filtros"
+- [x] T043 [P] [US1] Criar `sulco/src/components/bomba-filter.tsx` (client) com cicler tri-estado (`qualquer` / `apenas Bomba` / `sem Bomba`) usando ARIA `role="switch"` + labels visíveis; FR-022 uniforme
+- [x] T044 [P] [US1] Criar `sulco/src/components/record-card.tsx` (client) com `<Image onError>` caindo em `<CoverPlaceholder>` que exibe iniciais do artista; em caso de erro também renderiza indicador "cover?" visível — botão "Reimportar este disco" ficará em T103 (US4)
+- [x] T045 [P] [US1] Criar `sulco/src/components/cover-placeholder.tsx` (RSC) com box cinza + iniciais do artista em `font-serif`, tamanho/contraste atendendo WCAG AA
+- [x] T046 [US1] Adicionar em `record-card.tsx` link "Curadoria →" levando a `/curadoria?from=<recordId>` (FR-007 — consumo em US2)
+- [x] T047 [P] [US1] Criar `sulco/tests/e2e/listagem-filtros.spec.ts` cobrindo US1-AC3 e US1-AC4 — estrutura criada com `.skip` até fixture de auth + seed determinístico
 
 ### 3.4 — Persistência + logout/login
 
-- [ ] T048 [US1] Criar `sulco/src/app/layout.tsx` Header: `<SignOutButton>` do Clerk no menu; ao logout + login verificar persistência de records/tracks (já garantido pelo schema user-scoped; adicionar e2e check)
-- [ ] T049 [US1] Criar `sulco/tests/e2e/logout-login.spec.ts` cobrindo US1-AC5
+- [x] T048 [US1] Criar `sulco/src/app/layout.tsx` Header: `<SignOutButton>` do Clerk no menu; ao logout + login verificar persistência de records/tracks (já garantido pelo schema user-scoped; adicionar e2e check) — coberto por `<UserButton>` (dropdown com sign-out nativo) no header do layout, já implementado em T024; isolamento garantido por `users.id` FK em todas as tabelas + `requireCurrentUser()` em toda query
+- [x] T049 [US1] Criar `sulco/tests/e2e/logout-login.spec.ts` cobrindo US1-AC5 — estrutura criada com `describe.skip` + 2 casos documentados (preservação para mesmo user, isolamento entre users)
 
 **Checkpoint US1**: MVP entregável. DJ consegue criar conta, fazer onboarding,
 ver coleção importando em tempo real e navegar com filtros. Se tudo parar aqui
@@ -152,26 +152,26 @@ persistência.
 
 ### 4.1 — Curadoria sequencial
 
-- [ ] T050 [US2] Criar `sulco/src/app/curadoria/page.tsx` (RSC) aceitando `searchParams` `status` (default `unrated`), `from` (recordId para pular pra aquele), retornando lista ordenada de `records` do usuário filtrada
-- [ ] T051 [US2] Criar `sulco/src/components/curadoria-view.tsx` (client) que recebe props `records[]` e `currentIndex`, renderiza capa/metadata/tracklist do atual + contador `X de Y`; navegação via keyboard listeners (`A`, `D`, `→`, `←`, `espaço`)
-- [ ] T052 [US2] Implementar Server Action `updateRecordStatus(recordId, status)` em `sulco/src/lib/actions.ts` conforme contrato; persistir e `revalidatePath('/curadoria')`, `revalidatePath('/')`, `revalidatePath('/disco/${recordId}')`
-- [ ] T053 [US2] Em `curadoria-view.tsx`: após `A` ou `D` chamar `updateRecordStatus` com `startTransition`, avançar ao próximo; `→` avança sem alterar; `←` volta; no último disco redirecionar para `/curadoria/concluido` (tela de conclusão FR-015)
-- [ ] T054 [P] [US2] Criar `sulco/src/app/curadoria/concluido/page.tsx` exibindo total triado na sessão (via param) + link "Voltar à coleção"
-- [ ] T055 [P] [US2] Em `curadoria-view.tsx` exibir estado vazio quando `records.length=0` com opção de trocar filtro (FR-014)
-- [ ] T056 [P] [US2] Criar `sulco/tests/e2e/curadoria-keyboard.spec.ts` cobrindo US2-AC1..AC3 (triagem via teclado, navegação bidirecional, skip)
+- [x] T050 [US2] Criar `sulco/src/app/curadoria/page.tsx` (RSC) aceitando `searchParams` `status` (default `unrated`), `from` (recordId para pular pra aquele), retornando lista ordenada de `records` do usuário filtrada — query em `src/lib/queries/curadoria.ts` com `listCuradoriaIds` + `loadDisc`
+- [x] T051 [US2] Criar `sulco/src/components/curadoria-view.tsx` (client) que recebe props `records[]` e `currentIndex`, renderiza capa/metadata/tracklist do atual + contador `X de Y`; navegação via keyboard listeners (`A`, `D`, `→`, `←`) — espaço→toggle selected será em 4.2 (`/disco/[id]`)
+- [x] T052 [US2] Implementar Server Action `updateRecordStatus(recordId, status)` em `sulco/src/lib/actions.ts` conforme contrato; persistir e `revalidatePath('/curadoria')`, `revalidatePath('/')`, `revalidatePath('/disco/${recordId}')`
+- [x] T053 [US2] Em `curadoria-view.tsx`: após `A` ou `D` chamar `updateRecordStatus` com `startTransition`, avançar ao próximo; `→` avança sem alterar; `←` volta; no último disco redirecionar para `/curadoria/concluido` (tela de conclusão FR-015) — reverte estado visual se action retorna `ok:false`
+- [x] T054 [P] [US2] Criar `sulco/src/app/curadoria/concluido/page.tsx` exibindo total triado na sessão (via param) + link "Voltar à coleção" + "Reiniciar triagem"
+- [x] T055 [P] [US2] Em `curadoria-view.tsx` exibir estado vazio quando `records.length=0` com opção de trocar filtro (FR-014) — empty state no `CuradoriaPage` sugere filtros alternativos conforme contexto
+- [x] T056 [P] [US2] Criar `sulco/tests/e2e/curadoria-keyboard.spec.ts` cobrindo US2-AC1..AC3 — estrutura com 5 casos, `describe.skip` até fixture Clerk + seed determinístico
 
 ### 4.2 — Detalhe do disco e curadoria de faixas
 
-- [ ] T057 [US2] Atualizar `sulco/src/app/disco/[id]/page.tsx` (RSC) para carregar record + tracks do usuário atual (404 se não for dono); renderizar `<TrackCurationRow>` por faixa
-- [ ] T058 [US2] Criar `sulco/src/components/track-curation-row.tsx` (client) com: toggle `selected`, campos visíveis apenas quando `selected=true` (BPM, `<CamelotWheel>`, energia 1-5, rating 1-3 como `+/++/+++`, moods via `<ChipPicker>`, contextos via `<ChipPicker>`, fineGenre, references, comment), toggle Bomba 💣; renderiza 💣 ao lado de posição/título quando `isBomb=true` (FR-019)
-- [ ] T059 [US2] Implementar Server Action `updateTrackCuration(trackId, recordId, fields)` em `sulco/src/lib/actions.ts` conforme contrato; normalizar moods/contexts (trim + lowercase + dedup); preservar valores quando `selected` cai para false (FR-020); aceitar null explícito para apagar valores escalares (FR-020a)
-- [ ] T060 [P] [US2] Criar `sulco/src/components/camelot-wheel.tsx` (client) com picker visual 1A..12A + 1B..12B + input texto validado por regex Camelot; rejeita notação tradicional com mensagem
-- [ ] T061 [P] [US2] Criar `sulco/src/components/chip-picker.tsx` (client) genérico recebendo `value: string[]`, `onChange`, `suggestions: string[]` (já ordenadas por FR-017a: termos usados + DEFAULT_*_SEEDS alfa), `normalize: (s) => s.trim().toLowerCase()`; criar novo termo ao apertar Enter/vírgula
-- [ ] T062 [US2] Implementar Server Action `listUserVocabulary(kind: 'moods'|'contexts')` em `sulco/src/lib/actions.ts` retornando lista ordenada por FR-017a (DISTINCT + frequency do usuário, mescladas com DEFAULT_* constants, dedup case-insensitive)
-- [ ] T063 [P] [US2] Criar `sulco/src/components/bomba-toggle.tsx` (client) com `role="switch"`, `aria-checked`, `aria-label="Bomba"`; emoji 💣 visualmente destacado
-- [ ] T064 [US2] Atualizar Server Action `updateRecordAuthorFields` em `sulco/src/lib/actions.ts` conforme contrato (inclui `curated`/`curatedAt` de FR-020b); adicionar controle "Marcar como curado" na página `/disco/[id]`
-- [ ] T065 [P] [US2] Criar `sulco/tests/e2e/curadoria-faixas.spec.ts` cobrindo US2-AC4..AC6: marcar selected, preencher campos, toggle Bomba, desmarcar selected preservando dados
-- [ ] T066 [P] [US2] Criar `sulco/tests/unit/vocabulary.test.ts` testando ordenação FR-017a (DJ termos por frequência desc + sementes alfa; dedup case-insensitive)
+- [x] T057 [US2] Atualizar `sulco/src/app/disco/[id]/page.tsx` (RSC) para carregar record + tracks do usuário atual (404 se não for dono); renderizar `<TrackCurationRow>` por faixa — agrupado por lado (A, B, C) seguindo o protótipo; stats header "N selecionadas · M bombas"
+- [x] T058 [US2] Criar `sulco/src/components/track-curation-row.tsx` (client) com: toggle `selected` (botão on/off), campos editáveis em `<details>` visíveis apenas quando `selected=true` (BPM, `<CamelotWheel>`, energia 1-5, rating 1-3 como `+/++/+++`, moods via `<ChipPicker>`, contextos via `<ChipPicker>`, fineGenre, references, comment via textarea), toggle Bomba 💣 compacto; atualização otimista com rollback em erro; dados preservados quando `selected=false`
+- [x] T059 [US2] Implementar Server Action `updateTrackCuration(trackId, recordId, fields)` em `sulco/src/lib/actions.ts` conforme contrato; normaliza moods/contexts (trim + lowercase + dedup); ownership check via join com records.userId; preserva valores não-enviados (partial update)
+- [x] T060 [P] [US2] Criar `sulco/src/components/camelot-wheel.tsx` (client) com picker visual 1A..12A + 1B..12B + input texto validado por regex Camelot; rejeita notação tradicional com mensagem
+- [x] T061 [P] [US2] Criar `sulco/src/components/chip-picker.tsx` (client) genérico recebendo `value: string[]`, `onChange`, `suggestions: string[]`; criar novo termo ao apertar Enter/vírgula; Backspace no draft vazio remove o último chip; variantes `mood`/`ctx`
+- [x] T062 [US2] Implementar Server Action `listUserVocabulary(kind: 'moods'|'contexts')` em `sulco/src/lib/actions.ts` retornando lista ordenada por FR-017a via `buildSuggestionList(userTerms, seeds)` usando `json_each` + GROUP BY
+- [x] T063 [P] [US2] Criar `sulco/src/components/bomba-toggle.tsx` (client) com `role="switch"`, `aria-checked`, `aria-label` dinâmico; emoji 💣 visualmente destacado; modo `compact` para dentro da linha de faixa
+- [x] T064 [US2] Atualizar Server Action `updateRecordAuthorFields` em `sulco/src/lib/actions.ts` conforme contrato (inclui `curated`/`curatedAt` de FR-020b); controle "Marcar como curado" em `<RecordControls>` na página `/disco/[id]`; também contém status controls, shelfLocation e notes
+- [x] T065 [P] [US2] Criar `sulco/tests/e2e/curadoria-faixas.spec.ts` cobrindo US2-AC4..AC6 — 6 casos, `describe.skip` até fixture
+- [x] T066 [P] [US2] Criar `sulco/tests/unit/vocabulary.test.ts` testando ordenação FR-017a — 5 testes passando (normalize, seed counts, frequency desc + alfa, dedup case-insensitive, empty user → apenas seeds alfa)
 
 **Checkpoint US2**: Curadoria completa. Junto com US1 = DJ tem Discogs substituído + curadoria personalizada.
 

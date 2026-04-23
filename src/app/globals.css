@@ -61,6 +61,16 @@ input, select, textarea, button { font-family: inherit; }
   line-height: 0.95;
 }
 
+.kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+}
+
 /* Capa fake com efeito de vinil */
 .cover {
   background: linear-gradient(135deg, #2d2923 0%, #4a4438 50%, #6b6352 100%);

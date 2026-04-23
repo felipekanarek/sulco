@@ -8,28 +8,42 @@
     "start": "next start",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
-    "db:reset": "rm -f sulco.db && npm run db:push && npm run db:seed"
+    "db:reset": "rm -f sulco.db && npm run db:push && npm run db:seed",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:constitution": "vitest run tests/integration/sync-preserves-author-fields.test.ts"
   },
   "dependencies": {
-    "next": "15.1.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "drizzle-orm": "^0.36.4",
-    "zod": "^3.23.8",
+    "@clerk/localizations": "^4.5.3",
+    "@clerk/nextjs": "^7.2.5",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@libsql/client": "^0.14.0",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4",
+    "drizzle-orm": "^0.36.4",
     "lucide-react": "^0.460.0",
-    "@libsql/client": "^0.14.0"
+    "next": "^15.2.3",
+    "react": "^19.0.3",
+    "react-dom": "^19.0.3",
+    "svix": "^1.40.0",
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@types/node": "^22.9.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitest/ui": "^2.1.8",
+    "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.28.1",
+    "happy-dom": "^15.11.7",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
-    "tailwindcss": "^3.4.14",
-    "postcss": "^8.4.49",
-    "autoprefixer": "^10.4.20"
+    "vitest": "^2.1.8"
   }
 }

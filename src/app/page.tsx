@@ -1,183 +1,119 @@
-import Link from 'next/link';
-import { db, records, tracks } from '@/db';
-import { eq, sql, desc } from 'drizzle-orm';
+import { redirect } from 'next/navigation';
+import { requireCurrentUser } from '@/lib/auth';
+import { getImportProgress } from '@/lib/actions';
+import { ImportProgressCard } from '@/components/import-progress';
+import { FilterBar, type StatusFilter } from '@/components/filter-bar';
+import { RecordRow } from '@/components/record-card';
+import { RecordGridCard } from '@/components/record-grid-card';
+import { ViewToggle, type ViewMode } from '@/components/view-toggle';
+import type { BombaFilterValue } from '@/components/bomba-filter';
+import { runInitialImport } from '@/lib/discogs/import';
+import {
+  collectionCounts,
+  countSelectedTracks,
+  listUserGenres,
+  queryCollection,
+} from '@/lib/queries/collection';
 
-export const dynamic = 'force-dynamic';
-
-type SearchParams = { status?: string; q?: string; curated?: string };
+type SearchParams = Promise<{
+  status?: string;
+  q?: string;
+  bomba?: string;
+  view?: string;
+  genre?: string | string[];
+}>;
 
 export default async function CollectionPage({
   searchParams,
 }: {
-  searchParams: Promise<SearchParams>;
+  searchParams: SearchParams;
 }) {
+  const user = await requireCurrentUser();
+  if (user.needsOnboarding) redirect('/onboarding');
+
   const sp = await searchParams;
-  const statusFilter = sp.status ?? 'all';
-  const curatedFilter = sp.curated ?? 'all';
-  const query = sp.q ?? '';
+  const status = parseStatus(sp.status);
+  const text = (sp.q ?? '').trim();
+  const bomba = parseBomba(sp.bomba);
+  const view = parseView(sp.view);
+  const genres = parseGenreList(sp.genre);
 
-  // Query com contagem de faixas e selecionadas
-  const rows = await db
-    .select({
-      id: records.id,
-      artist: records.artist,
-      title: records.title,
-      year: records.year,
-      label: records.label,
-      country: records.country,
-      format: records.format,
-      styles: records.styles,
-      status: records.status,
-      curated: records.curated,
-      shelfLocation: records.shelfLocation,
-      tracksTotal: sql<number>`(select count(*) from ${tracks} where ${tracks.recordId} = ${records.id})`,
-      tracksSelected: sql<number>`(select count(*) from ${tracks} where ${tracks.recordId} = ${records.id} and ${tracks.selected} = 1)`,
-    })
-    .from(records)
-    .orderBy(desc(records.importedAt));
+  const [progress, rows, availableGenres, counts, selectedTotal] = await Promise.all([
+    getImportProgress(),
+    queryCollection({ userId: user.id, status, text, genres, bomba }),
+    listUserGenres(user.id),
+    collectionCounts(user.id),
+    countSelectedTracks(user.id),
+  ]);
 
-  const filtered = rows.filter((r) => {
-    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (curatedFilter === 'yes' && !r.curated) return false;
-    if (curatedFilter === 'no' && r.curated) return false;
-    if (query) {
-      const q = query.toLowerCase();
-      const hit =
-        r.artist.toLowerCase().includes(q) ||
-        r.title.toLowerCase().includes(q) ||
-        (r.label ?? '').toLowerCase().includes(q);
-      if (!hit) return false;
-    }
-    return true;
-  });
+  const canResume =
+    progress.outcome === 'idle' ||
+    progress.outcome === 'rate_limited' ||
+    progress.outcome === 'parcial';
+  if (canResume && !progress.running) {
+    runInitialImport(user.id).catch((err) => {
+      console.error('[sulco] runInitialImport (fallback / page) falhou:', err);
+    });
+  }
 
-  const stats = {
-    total: rows.length,
-    active: rows.filter((r) => r.status === 'active').length,
-    unrated: rows.filter((r) => r.status === 'unrated').length,
-    curated: rows.filter((r) => r.curated).length,
-    notCurated: rows.filter((r) => !r.curated).length,
-    selectedTotal: rows.reduce((acc, r) => acc + Number(r.tracksSelected), 0),
-  };
+  const hasFilters =
+    status !== 'all' || text.length > 0 || bomba !== 'any' || genres.length > 0;
 
   return (
     <div className="max-w-[1240px] mx-auto px-8">
-      {/* Head */}
-      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-8">
+      {/* Head editorial */}
+      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-6">
         <div>
-          <p className="eyebrow mb-2">felipekanarek · discogs</p>
+          <p className="eyebrow mb-2">{user.discogsUsername} · discogs</p>
           <h1 className="title-display text-[44px]">Coleção</h1>
         </div>
         <dl className="flex gap-10 items-end">
-          <Stat label="Discos" value={stats.total.toLocaleString('pt-BR')} />
-          <Stat label="Curados" value={stats.curated.toLocaleString('pt-BR')} />
-          <Stat label="Não curados" value={stats.notCurated.toLocaleString('pt-BR')} />
-          <Stat label="Faixas selecionadas" value={stats.selectedTotal.toLocaleString('pt-BR')} />
+          <Stat label="Discos" value={counts.total.toLocaleString('pt-BR')} />
+          <Stat label="Ativos" value={counts.ativos.toLocaleString('pt-BR')} />
+          <Stat label="Não avaliados" value={counts.naoAvaliados.toLocaleString('pt-BR')} />
+          <Stat label="Faixas selecionadas" value={selectedTotal.toLocaleString('pt-BR')} />
         </dl>
       </section>
 
-      {/* Toolbar */}
-      <section className="flex flex-col gap-4 mb-8 pb-4">
-        <div className="grid grid-cols-[320px_1fr] gap-8 items-center">
-          <form method="GET" action="/">
-            <input
-              type="search"
-              name="q"
-              defaultValue={query}
-              placeholder="Buscar por artista, título, selo…"
-              className="w-full bg-transparent border-0 border-b border-ink pb-2 font-serif text-[19px] italic placeholder:text-ink-mute outline-none focus:border-accent"
-            />
-            {statusFilter !== 'all' && <input type="hidden" name="status" value={statusFilter} />}
-            {curatedFilter !== 'all' && <input type="hidden" name="curated" value={curatedFilter} />}
-          </form>
-          <div className="flex gap-3 justify-end flex-wrap">
-            <span className="label-tech text-ink-mute self-center mr-1">status</span>
-            <FilterChip href={queryUrl({ status: undefined, curated: curatedFilter === 'all' ? undefined : curatedFilter, q: query })} active={statusFilter === 'all'}>
-              Todos · {stats.total}
-            </FilterChip>
-            <FilterChip href={queryUrl({ status: 'active', curated: curatedFilter === 'all' ? undefined : curatedFilter, q: query })} active={statusFilter === 'active'}>
-              Ativos · {stats.active}
-            </FilterChip>
-            <FilterChip href={queryUrl({ status: 'unrated', curated: curatedFilter === 'all' ? undefined : curatedFilter, q: query })} active={statusFilter === 'unrated'}>
-              Não avaliados · {stats.unrated}
-            </FilterChip>
-            <FilterChip href={queryUrl({ status: 'discarded', curated: curatedFilter === 'all' ? undefined : curatedFilter, q: query })} active={statusFilter === 'discarded'}>
-              Descartados
-            </FilterChip>
-          </div>
-        </div>
-        <div className="flex gap-3 justify-end flex-wrap">
-          <span className="label-tech text-ink-mute self-center mr-1">curadoria</span>
-          <FilterChip href={queryUrl({ status: statusFilter === 'all' ? undefined : statusFilter, curated: undefined, q: query })} active={curatedFilter === 'all'}>
-            Todos
-          </FilterChip>
-          <FilterChip href={queryUrl({ status: statusFilter === 'all' ? undefined : statusFilter, curated: 'yes', q: query })} active={curatedFilter === 'yes'}>
-            Curados · {stats.curated}
-          </FilterChip>
-          <FilterChip href={queryUrl({ status: statusFilter === 'all' ? undefined : statusFilter, curated: 'no', q: query })} active={curatedFilter === 'no'}>
-            Não curados · {stats.notCurated}
-          </FilterChip>
-        </div>
-      </section>
+      <ImportProgressCard initial={progress} />
 
-      {/* Lista */}
-      <ol className="border-t border-line">
-        {filtered.length === 0 ? (
-          <li className="py-12 text-center font-serif italic text-ink-mute">
-            Nenhum disco encontrado.
-          </li>
-        ) : (
-          filtered.map((r) => (
-            <li
-              key={r.id}
-              className="grid grid-cols-[72px_1fr_1fr_auto] gap-6 items-center py-6 border-b border-line-soft hover:bg-paper-raised transition-colors"
-            >
-              <Link href={`/disco/${r.id}`} className="cover w-[72px] h-[72px] block" aria-hidden />
-              <div className="min-w-0">
-                <p className="label-tech mb-1">{r.artist}</p>
-                <h3 className="font-serif italic text-[22px] font-medium tracking-tight leading-tight mb-2">
-                  <Link href={`/disco/${r.id}`} className="hover:text-accent">{r.title}</Link>
-                </h3>
-                <p className="label-tech">
-                  {r.label} · {r.year} · {r.format} · {r.country}
-                </p>
-              </div>
-              <div>
-                <p className="font-serif italic text-[13px] text-ink-soft mb-2">
-                  {(r.styles ?? []).slice(0, 3).join(' · ') || '—'}
-                </p>
-                <p className="label-tech">
-                  {r.tracksTotal > 0 ? (
-                    <>
-                      <span className="text-ink font-medium">{r.tracksSelected}</span>
-                      <span className="text-ink-mute">/{r.tracksTotal}</span>
-                      <span className="text-ink-mute"> curadas</span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                  {r.shelfLocation && <span className="text-ink-mute"> · {r.shelfLocation}</span>}
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex gap-2">
-                  <CuratedBadge curated={r.curated} />
-                  <StatusBadge status={r.status} />
-                </div>
-                <Link
-                  href={`/disco/${r.id}`}
-                  className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
-                >
-                  Curadoria →
-                </Link>
-              </div>
-            </li>
-          ))
-        )}
-      </ol>
+      <FilterBar
+        status={status}
+        text={text}
+        bomba={bomba}
+        genres={genres}
+        availableGenres={availableGenres}
+        counts={counts}
+      />
+
+      <div className="flex items-center justify-between mb-4 pb-2 border-b border-line-soft">
+        <p className="label-tech">
+          Mostrando {rows.length.toLocaleString('pt-BR')} de {counts.total.toLocaleString('pt-BR')}
+          {hasFilters ? ' (filtrado)' : ''}
+        </p>
+        <ViewToggle value={view} />
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState hasFilters={hasFilters} importRunning={progress.running} />
+      ) : view === 'grade' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+          {rows.map((r) => (
+            <RecordGridCard key={r.id} record={r} />
+          ))}
+        </div>
+      ) : (
+        <ol className="border-t border-line">
+          {rows.map((r) => (
+            <RecordRow key={r.id} record={r} />
+          ))}
+        </ol>
+      )}
 
       <div className="flex justify-between items-center pt-6 mt-4">
-        <p className="label-tech">Mostrando {filtered.length} de {stats.total}</p>
+        <p className="label-tech">
+          {rows.length.toLocaleString('pt-BR')} de {counts.total.toLocaleString('pt-BR')}
+        </p>
       </div>
     </div>
   );
@@ -192,59 +128,48 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FilterChip({
-  href,
-  active,
-  children,
+function EmptyState({
+  hasFilters,
+  importRunning,
 }: {
-  href: string;
-  active?: boolean;
-  children: React.ReactNode;
+  hasFilters: boolean;
+  importRunning: boolean;
 }) {
+  if (importRunning) {
+    return (
+      <div className="border border-dashed border-line p-10 text-center">
+        <p className="eyebrow">Importando</p>
+        <p className="font-serif italic text-xl mt-2">
+          A coleção aparece aqui conforme o Discogs responde.
+        </p>
+      </div>
+    );
+  }
   return (
-    <Link
-      href={href}
-      className={`font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 rounded-full border transition-colors ${
-        active
-          ? 'bg-ink text-paper border-ink'
-          : 'border-line text-ink-soft hover:border-ink hover:text-ink'
-      }`}
-    >
-      {children}
-    </Link>
+    <div className="border border-dashed border-line p-10 text-center">
+      <p className="eyebrow">Vazio</p>
+      <p className="font-serif italic text-xl mt-2">
+        {hasFilters
+          ? 'Nenhum disco encontrado com esses filtros.'
+          : 'Sua coleção ainda está vazia. Verifique o /status se o import terminou com erro.'}
+      </p>
+    </div>
   );
 }
 
-function CuratedBadge({ curated }: { curated: boolean }) {
-  return (
-    <span
-      className={`font-mono text-[10px] uppercase tracking-[0.14em] px-3 py-1 border rounded-sm ${
-        curated ? 'text-ok border-ok' : 'text-ink-mute border-line'
-      }`}
-    >
-      {curated ? 'Curado' : 'Não curado'}
-    </span>
-  );
+function parseStatus(v: string | undefined): StatusFilter {
+  if (v === 'unrated' || v === 'active' || v === 'discarded' || v === 'all') return v;
+  return 'all';
 }
-
-function StatusBadge({ status }: { status: string }) {
-  const cfg = {
-    active: { label: 'Ativo', cls: 'text-ok border-ok' },
-    unrated: { label: 'Não avaliado', cls: 'text-warn border-warn' },
-    discarded: { label: 'Descartado', cls: 'text-ink-mute border-ink-mute' },
-  }[status] ?? { label: status, cls: 'text-ink-mute border-ink-mute' };
-  return (
-    <span className={`font-mono text-[10px] uppercase tracking-[0.14em] px-3 py-1 border rounded-sm ${cfg.cls}`}>
-      {cfg.label}
-    </span>
-  );
+function parseBomba(v: string | undefined): BombaFilterValue {
+  if (v === 'only' || v === 'none') return v;
+  return 'any';
 }
-
-function queryUrl(params: { status?: string; q?: string; curated?: string }): string {
-  const u = new URLSearchParams();
-  if (params.status) u.set('status', params.status);
-  if (params.curated) u.set('curated', params.curated);
-  if (params.q) u.set('q', params.q);
-  const s = u.toString();
-  return s ? `/?${s}` : '/';
+function parseView(v: string | undefined): ViewMode {
+  if (v === 'grade' || v === 'lista') return v;
+  return 'lista';
+}
+function parseGenreList(v: string | string[] | undefined): string[] {
+  if (!v) return [];
+  return Array.isArray(v) ? v.filter(Boolean) : [v];
 }
