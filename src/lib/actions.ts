@@ -184,6 +184,11 @@ export type ImportProgress = {
 
 export async function getImportProgress(): Promise<ImportProgress> {
   const user = await requireCurrentUser();
+
+  // Em serverless, o worker do import morre a cada ~60s (maxDuration Hobby).
+  // Mata zumbis antes de ler estado — assim o UI sempre mostra algo coerente.
+  await killZombieSyncRuns(user.id, 'initial_import');
+
   const latest = await db
     .select({
       outcome: syncRuns.outcome,
@@ -238,11 +243,31 @@ export async function getImportProgress(): Promise<ImportProgress> {
     }
   }
 
+  // Continuation automática: se o import não concluiu e não há nada rodando,
+  // dispara mais um chunk via after() pra o progresso avançar sozinho.
+  // runInitialImport é idempotente (checa outcome='running' antes de criar
+  // novo syncRun), então duas chamadas concorrentes não colidem.
+  const needsResume =
+    (row.outcome === 'parcial' ||
+      row.outcome === 'rate_limited' ||
+      (row.outcome === 'erro' && /(run zumbi|killed on restart)/i.test(row.errorMessage ?? ''))) &&
+    x < y;
+
+  if (needsResume) {
+    after(async () => {
+      try {
+        await runInitialImport(user.id);
+      } catch (err) {
+        console.error('[sulco] resume runInitialImport falhou:', err);
+      }
+    });
+  }
+
   return {
-    running: row.outcome === 'running',
+    running: row.outcome === 'running' || needsResume,
     x,
     y,
-    outcome: row.outcome,
+    outcome: needsResume ? 'running' : row.outcome,
     errorMessage: row.errorMessage,
   };
 }

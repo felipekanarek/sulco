@@ -1,6 +1,11 @@
 import { redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { getImportProgress } from '@/lib/actions';
+
+// getImportProgress pode disparar after(runInitialImport) para continuar
+// imports que pararam em serverless timeout. after() herda o maxDuration
+// da rota — declaramos 60 (max Hobby) pra dar fôlego.
+export const maxDuration = 60;
 import { ImportProgressCard } from '@/components/import-progress';
 import { FilterBar, type StatusFilter } from '@/components/filter-bar';
 import { RecordRow } from '@/components/record-card';
