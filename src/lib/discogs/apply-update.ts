@@ -35,6 +35,9 @@ export async function applyDiscogsUpdate(
   let created = false;
 
   if (existing.length === 0) {
+    // onConflictDoNothing cobre race de dois workers concorrentes tentando
+    // inserir o mesmo disco (caso comum em serverless onde após retomar um
+    // run, o worker morto pode ainda estar executando em background).
     const inserted = await db
       .insert(records)
       .values({
@@ -54,9 +57,27 @@ export async function applyDiscogsUpdate(
         importedAt: new Date(),
         updatedAt: new Date(),
       })
+      .onConflictDoNothing({ target: [records.userId, records.discogsId] })
       .returning({ id: records.id });
-    recordId = inserted[0].id;
-    created = true;
+    if (inserted.length > 0) {
+      recordId = inserted[0].id;
+      created = true;
+    } else {
+      // Race: outro worker inseriu primeiro. Re-seleciona para continuar
+      // idempotentemente para a atualização de tracks.
+      const raced = await db
+        .select({ id: records.id })
+        .from(records)
+        .where(and(eq(records.userId, userId), eq(records.discogsId, release.id)))
+        .limit(1);
+      if (raced.length === 0) {
+        throw new Error(
+          `records insert skipped por conflict mas re-select não achou discogsId=${release.id}`,
+        );
+      }
+      recordId = raced[0].id;
+      created = false;
+    }
   } else {
     recordId = existing[0].id;
     // UPDATE só em colunas DISCOGS. Reaparição: se archived=true, reseta.
