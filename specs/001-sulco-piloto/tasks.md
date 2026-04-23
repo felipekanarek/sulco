@@ -289,40 +289,40 @@ no CI.
 
 ### 7.1 — Conta e deleção
 
-- [ ] T107 Criar `sulco/src/app/conta/page.tsx` (RSC) exibindo email (read-only), `discogsUsername` (editável), PAT mascarado com botão "Substituir" (abre form igual onboarding), botão "Apagar conta" que abre `<DeleteAccountModal>`
-- [ ] T108 [P] Criar `sulco/src/components/delete-account-modal.tsx` (client) exigindo digitar literal "APAGAR" (FR-043); submit chama `deleteAccount`
-- [ ] T109 Implementar Server Action `deleteAccount({confirm: 'APAGAR'})` em `sulco/src/lib/actions.ts` conforme contrato: aborta syncRuns running; cascade delete via `DELETE FROM users WHERE id=?`; chama `clerkClient.users.deleteUser(clerkUserId)`; redirect `/`
-- [ ] T110 [P] Criar `sulco/tests/integration/delete-account.test.ts` verificando: cascade delete remove records/tracks/sets/setTracks/syncRuns; syncRuns em andamento são abortadas; clerk delete é chamado
+- [x] T107 Criar `sulco/src/app/conta/page.tsx` (RSC) exibindo email (read-only), `discogsUsername` (editável), PAT mascarado com botão "Substituir" (abre form igual onboarding), botão "Apagar conta" que abre `<DeleteAccountModal>`
+- [x] T108 [P] Criar `sulco/src/components/delete-account-modal.tsx` (client) exigindo digitar literal "APAGAR" (FR-043); submit chama `deleteAccount`
+- [x] T109 Implementar Server Action `deleteAccount({confirm: 'APAGAR'})` em `sulco/src/lib/actions.ts` conforme contrato: aborta syncRuns running; cascade delete via `DELETE FROM users WHERE id=?`; chama `clerkClient.users.deleteUser(clerkUserId)`; redirect `/`
+- [x] T110 [P] Criar `sulco/tests/integration/delete-account.test.ts` verificando: cascade delete remove records/tracks/sets/setTracks/syncRuns; syncRuns em andamento são abortadas; clerk delete é chamado
 
 ### 7.2 — Playlists 404 (FR-053a)
 
-- [ ] T111 Adicionar handler em `sulco/src/middleware.ts` retornando `NextResponse.rewrite('/404')` para qualquer path começando com `/playlists` (FR-053a)
-- [ ] T112 [P] Criar `sulco/tests/e2e/playlists-404.spec.ts` verificando que `/playlists` e `/playlists/novo` retornam 404
+- [x] T111 Adicionar handler em `sulco/src/middleware.ts` retornando `NextResponse.rewrite('/404')` para qualquer path começando com `/playlists` (FR-053a)
+- [x] T112 [P] Criar `sulco/tests/e2e/playlists-404.spec.ts` verificando que `/playlists` e `/playlists/novo` retornam 404
 
 ### 7.3 — Seed atualizado
 
-- [ ] T113 Atualizar `sulco/src/db/seed.ts`: 30 discos associados a um user de desenvolvimento (criar fixture user com clerkUserId estático); primeiro disco com algumas faixas `selected=true` + valores exemplo em bpm/musicalKey/energy/rating para smoke test; NÃO injetar termos de mood/context (responsabilidade do `DEFAULT_*_SEEDS`)
-- [ ] T114 [P] Verificar que `npm run db:seed` em ambiente limpo resulta em 30 records + ~600 tracks (~20 por disco) sem erros; rodar via `npm run db:reset`
+- [x] T113 Atualizar `sulco/src/db/seed.ts`: 30 discos associados a um user de desenvolvimento (criar fixture user com clerkUserId estático); primeiro disco com algumas faixas `selected=true` + valores exemplo em bpm/musicalKey/energy/rating para smoke test; NÃO injetar termos de mood/context (responsabilidade do `DEFAULT_*_SEEDS`)
+- [x] T114 [P] Verificar que `npm run db:seed` em ambiente limpo resulta em 30 records + ~600 tracks (~20 por disco) sem erros; rodar via `npm run db:reset`
 
 ### 7.4 — Verificação manual de acessibilidade (FR-049a)
 
-- [ ] T115 Verificação manual WCAG 2.1 AA via Chrome DevTools (aba Accessibility + Lighthouse) nas telas: `/`, `/curadoria`, `/disco/[id]`, `/sets/[id]/montar`, banner `<DiscogsCredentialBanner>`; registrar screenshots de contraste ≥ 4.5:1 para texto normal e ≥ 3:1 para UI/texto grande em `docs/a11y-audit-20260422.md`
-- [ ] T116 [P] Auditar ARIA em toggles (`<BombaToggle>`, `<BombaFilter>`, drag-and-drop do set) via Chrome DevTools Accessibility tree; cada um deve expor `role`, `aria-pressed`/`aria-checked`/`aria-selected`, `aria-label` apropriado
+- [x] T115 Verificação manual WCAG 2.1 AA via Chrome DevTools (aba Accessibility + Lighthouse) nas telas: `/`, `/curadoria`, `/disco/[id]`, `/sets/[id]/montar`, banner `<DiscogsCredentialBanner>`; registrar screenshots de contraste ≥ 4.5:1 para texto normal e ≥ 3:1 para UI/texto grande em `docs/a11y-audit-20260422.md`
+- [x] T116 [P] Auditar ARIA em toggles (`<BombaToggle>`, `<BombaFilter>`, drag-and-drop do set) via Chrome DevTools Accessibility tree; cada um deve expor `role`, `aria-pressed`/`aria-checked`/`aria-selected`, `aria-label` apropriado
 
 ### 7.5 — CLAUDE.md sync
 
-- [ ] T117 Atualizar `sulco/CLAUDE.md` seção "O que ainda não existe": remover incrementos 1/2/3 já cobertos neste piloto; manter "Incremento 4 — PWA / mobile" como único item futuro
-- [ ] T118 [P] Atualizar `sulco/CLAUDE.md` seção "Histórico de decisões": adicionar linha "Auth: Clerk (Abril 2026)" com motivo "free tier cobre piloto indefinidamente; migração para NextAuth viável se virar SaaS"
+- [x] T117 Atualizar `sulco/CLAUDE.md` seção "O que ainda não existe": remover incrementos 1/2/3 já cobertos neste piloto; manter "Incremento 4 — PWA / mobile" como único item futuro
+- [x] T118 [P] Atualizar `sulco/CLAUDE.md` seção "Histórico de decisões": adicionar linha "Auth: Clerk (Abril 2026)" com motivo "free tier cobre piloto indefinidamente; migração para NextAuth viável se virar SaaS"
 
 ### 7.6 — Quickstart e documentação de operação
 
-- [ ] T119 Atualizar `sulco/README.md` com link para quickstart e exemplo de invocação local do cron: `curl -X POST http://localhost:3000/api/cron/sync-daily -H "authorization: Bearer $CRON_SECRET"`
-- [ ] T120 [P] Validar quickstart.md end-to-end rodando todos os passos em uma máquina limpa + screenshots em `docs/quickstart-walkthrough/`
+- [x] T119 Atualizar `sulco/README.md` com link para quickstart e exemplo de invocação local do cron: `curl -X POST http://localhost:3000/api/cron/sync-daily -H "authorization: Bearer $CRON_SECRET"`
+- [x] T120 [P] Validar quickstart.md end-to-end rodando todos os passos em uma máquina limpa + screenshots em `docs/quickstart-walkthrough/`
 
 ### 7.7 — Constitution final check
 
-- [ ] T121 Rodar `npm run test:constitution` em CI config (`.github/workflows/ci.yml` ou equivalente) para garantir FR-054 bloqueia merge; criar o workflow file se ainda não existir
-- [ ] T122 [P] Confirmar que `npm run build` e `npm test` passam antes de fechar piloto
+- [x] T121 Rodar `npm run test:constitution` em CI config (`.github/workflows/ci.yml` ou equivalente) para garantir FR-054 bloqueia merge; criar o workflow file se ainda não existir
+- [x] T122 [P] Confirmar que `npm run build` e `npm test` passam antes de fechar piloto
 
 ---
 

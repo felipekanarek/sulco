@@ -8,27 +8,24 @@ import { getImportProgress, type ImportProgress } from '@/lib/actions';
  * Exibe o progresso do import inicial (FR-030). Faz polling a cada 3s
  * enquanto o `syncRun` kind='initial_import' estiver `running`.
  *
- * Quando `running` vira false e o outcome é 'ok', chama router.refresh()
- * para a página pai (provavelmente `/`) atualizar listando os records.
- *
- * Fonte de dados: Server Action `getImportProgress()` — user-scoped.
+ * Layout unificado: o card de progresso tem o mesmo template em
+ * running / parcial / rate_limited — só o eyebrow e o hint de rodapé
+ * mudam. `ok` e `erro` têm cards próprios menores.
  */
 export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
   const router = useRouter();
   const [state, setState] = useState(initial);
 
   useEffect(() => {
-    if (!state.running) return; // nada a fazer se não está rodando
+    if (!state.running) return;
     const id = setInterval(async () => {
       const next = await getImportProgress();
       setState(next);
-      // refresh da árvore RSC quando o progresso avança; também pega o término.
       router.refresh();
     }, 3000);
     return () => clearInterval(id);
   }, [state.running, router]);
 
-  // Estados terminais — mostra mensagem contextual
   if (state.outcome === 'ok') {
     return (
       <Card tone="ok">
@@ -47,26 +44,32 @@ export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
     );
   }
 
-  if (state.outcome === 'rate_limited') {
-    return (
-      <Card tone="warn">
-        <p className="eyebrow text-warn">Pausado pelo rate limit do Discogs</p>
-        <p className="mt-2 text-sm">
-          {state.x} discos importados até agora. Retomando automaticamente no próximo ciclo.
-        </p>
-      </Card>
-    );
-  }
+  // outcome 'idle' E sem progresso → nada a mostrar
+  if (state.outcome === 'idle' && state.x === 0) return null;
 
-  if (state.outcome === 'idle' || (!state.running && state.outcome !== 'parcial')) {
-    return null; // nenhum import ativo — não exibe card
-  }
+  // running / parcial / rate_limited / idle-com-records-já-importados:
+  // todos usam o mesmo layout com X de Y + barra, só muda o eyebrow
+  // e o hint do rodapé.
+  const isRateLimited = state.outcome === 'rate_limited';
+  const isRunning = state.running;
 
-  // running / parcial
+  const eyebrow = isRunning
+    ? 'Importando do Discogs'
+    : isRateLimited
+      ? 'Pausado pelo rate limit do Discogs'
+      : 'Import pausado';
+
+  const hint = isRunning
+    ? 'Respeitando rate limit de 60 req/min. Você pode navegar enquanto o import roda.'
+    : isRateLimited
+      ? 'O Discogs pediu pausa temporária. Recarregue esta página em alguns minutos para retomar de onde parou.'
+      : 'Recarregue a página para retomar o import de onde parou.';
+
   const pct = state.y > 0 ? Math.min(100, Math.round((state.x / state.y) * 100)) : 0;
+
   return (
     <Card tone="info" aria-live="polite">
-      <p className="eyebrow">Importando do Discogs</p>
+      <p className="eyebrow">{eyebrow}</p>
       <p className="font-serif text-2xl italic mt-1">
         {state.x} <span className="text-ink-mute">de</span> {state.y || '?'} discos
       </p>
@@ -79,12 +82,13 @@ export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
           aria-valuemax={100}
           aria-label="Progresso do import"
         >
-          <div className="absolute left-0 top-0 bottom-0 bg-accent" style={{ width: `${pct}%` }} />
+          <div
+            className="absolute left-0 top-0 bottom-0 bg-accent"
+            style={{ width: `${pct}%` }}
+          />
         </div>
       ) : null}
-      <p className="mt-3 text-xs text-ink-mute">
-        Respeitando rate limit de 60 req/min. Você pode navegar enquanto o import roda.
-      </p>
+      <p className="mt-3 text-xs text-ink-mute">{hint}</p>
     </Card>
   );
 }

@@ -179,59 +179,45 @@ npm run db:reset     # limpar e recriar tudo
 
 ## O que ainda não existe (próximos incrementos)
 
-### Incremento 1 — Página /curadoria (triagem sequencial)
-Página que mostra um disco por vez com navegação anterior/próximo.
-- Filtro por status: `unrated | active | all`
-- Botão explícito "Curadoria →" em cada card da coleção
-- Atalhos de teclado: espaço toggle selected, seta → próximo disco
-- Modo triagem rápida (só on/off) vs modo detalhe (todos os campos)
+Os incrementos originais 1, 2 e 3 (curadoria sequencial, integração Discogs, e
+o piloto completo) foram **implementados em `specs/001-sulco-piloto/`**. Veja
+o plan, tasks e checklists lá. Ficam como próximos incrementos:
 
-### Incremento 2 — Integração Discogs
-Arquivo: `src/lib/discogs.ts`
-
-```typescript
-// Endpoints necessários:
-// GET /users/{username}/collection/folders/0/releases?per_page=100&page=N
-// GET /releases/{id}  ← para tracklist completo
-```
-
-Fluxo:
-1. Onboarding: usuário cola username ou URL da collection
-2. Import inicial em background (job incremental, não bloqueia UI)
-3. Sync diário automático (checar novos por `date_added`)
-4. Botão "Sincronizar agora" na UI
-5. Botão "Reimportar este disco" na página do disco
-
-Variável de ambiente: `DISCOGS_TOKEN` em `.env.local`
-
-### Incremento 3 — Briefing com IA
-Arquivo: `src/lib/ai.ts`
+### Incremento futuro 1 — Briefing com IA
+Arquivo: `src/lib/ai.ts` (ainda não criado).
 
 Na tela `/sets/[id]/montar`, botão "Sugerir com IA" que:
 1. Lê o briefing do set
 2. Busca todas as faixas selecionadas de discos ativos com seus metadados
-3. Chama `claude-sonnet-4-5` via Anthropic API com prompt estruturado
+3. Chama `claude-sonnet-4-7` via Anthropic SDK com prompt estruturado
 4. Retorna lista ranqueada de faixas com justificativa
 
-Variável de ambiente: `ANTHROPIC_API_KEY` em `.env.local`
+Variável de ambiente: `ANTHROPIC_API_KEY` em `.env.local`.
 
-### Incremento 4 — PWA / mobile
+### Incremento futuro 2 — PWA / mobile
 - `next-pwa` ou manifest manual
 - Tela de curadoria adaptada para mobile (card por card, swipe)
 - Tela de montar set responsiva
+
+### Incremento futuro 3 — Playlists (blocos reutilizáveis)
+Atualmente **fora do escopo do piloto** (FR-053a). Schema já tem as tabelas
+`playlists` e `playlist_tracks`, mas rotas `/playlists*` retornam 404. Ativar
+quando houver produto para isso.
 
 ---
 
 ## Histórico de decisões de arquitetura
 
 | Decisão | Escolha | Motivo |
-|---------|---------|--------|
+|---|---|---|
 | ORM | Drizzle | TypeScript-first, zero runtime overhead, SQL explícito quando necessário |
 | Banco | SQLite via libsql | Single-user, backup = copiar arquivo, sem servidor |
 | Mutações | Server Actions | Sem API layer desnecessária, formulários funcionam sem JS |
 | Estilo | Tailwind puro | Sem shadcn nesta fase — UI customizada demais para componentes genéricos |
-| Auth | Nenhuma agora | Single-user pessoal, adicionar Clerk se abrir para outros DJs |
+| Auth | **Clerk** (abril 2026) | Free tier cobre piloto indefinidamente; "sign out all sessions" nativo para FR-002; migração para NextAuth viável caso vire SaaS com custo relevante |
 | Deploy futuro | Vercel + Turso | Turso = libsql com sync multi-device quando necessário |
+| Drag-and-drop | `@dnd-kit/sortable` | Keyboard sensor nativo + ARIA correto para FR-049 |
+| Fuso horário | UTC at-rest, `America/Sao_Paulo` na UI | FR-028/Q4 sessão 4 — status de set derivado de eventDate |
 
 <!-- SPECKIT START -->
 Current active feature: **001-sulco-piloto**

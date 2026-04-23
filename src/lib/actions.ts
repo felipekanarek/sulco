@@ -892,10 +892,57 @@ export async function markStatusVisited(): Promise<ActionResult> {
   return { ok: true };
 }
 
-// Pending:
-// T109 deleteAccount
-// T079 reorderSetTracks
-// T090 triggerManualSync / reimportRecord
-// T099 resolveTrackConflict
-// T101 acknowledgeArchivedRecord
-// T109 deleteAccount
+/* ============================================================
+   deleteAccount — FR-042, FR-043 (T109)
+   Hard-delete em cascata com confirmação "APAGAR" + revoga Clerk
+   ============================================================ */
+
+import { clerkClient } from '@clerk/nextjs/server';
+
+const deleteAccountSchema = z.object({
+  confirm: z.literal('APAGAR'),
+});
+
+export async function deleteAccount(
+  input: z.infer<typeof deleteAccountSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = deleteAccountSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Digite "APAGAR" para confirmar.' };
+  }
+
+  try {
+    // Aborta syncRuns em andamento antes do cascade delete (FR-042)
+    await db
+      .update(syncRuns)
+      .set({
+        outcome: 'erro',
+        errorMessage: 'Conta deletada pelo usuário',
+        finishedAt: new Date(),
+      })
+      .where(and(eq(syncRuns.userId, user.id), eq(syncRuns.outcome, 'running')));
+
+    // Hard-delete em cascata — FK ON DELETE CASCADE cuida de records,
+    // tracks, sets, setTracks, syncRuns.
+    await db.delete(users).where(eq(users.id, user.id));
+
+    // Revoga conta Clerk (FR-043 — encerra todas as sessões)
+    try {
+      const client = await clerkClient();
+      await client.users.deleteUser(user.clerkUserId);
+    } catch (err) {
+      // Se Clerk falhar, DB já foi limpo. Webhook `user.deleted` vai
+      // ser no-op (users já deletado). Log e seguir.
+      console.error('[deleteAccount] falha ao revogar Clerk:', err);
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Erro inesperado ao apagar conta.',
+    };
+  }
+
+  revalidatePath('/');
+  return { ok: true };
+}

@@ -156,6 +156,10 @@ export async function runInitialImport(
 
     return { outcome: 'ok', newCount, removedCount: 0, conflictCount };
   } catch (err) {
+    // Nos UPDATEs de erro/rate_limited, NÃO setamos `newCount` porque
+    // `processPage` já incrementa a coluna no DB a cada release importado.
+    // Sobrescrever com a variável local `newCount` (só atualizada ao final
+    // de uma página inteira) zeraria o progresso parcial já gravado.
     if (err instanceof DiscogsAuthError) {
       await markCredentialInvalid(userId);
       await db
@@ -164,7 +168,6 @@ export async function runInitialImport(
           outcome: 'erro',
           errorMessage: 'Token Discogs rejeitado (HTTP 401)',
           finishedAt: new Date(),
-          newCount,
         })
         .where(eq(syncRuns.id, runId));
       return { outcome: 'erro', errorMessage: 'Token Discogs rejeitado' };
@@ -176,7 +179,6 @@ export async function runInitialImport(
           outcome: 'rate_limited',
           errorMessage: `Rate limit; retomar em ${err.retryAfterSeconds ?? 60}s`,
           finishedAt: new Date(),
-          newCount,
         })
         .where(eq(syncRuns.id, runId));
       return {
@@ -191,7 +193,6 @@ export async function runInitialImport(
         outcome: 'erro',
         errorMessage: msg.slice(0, 500),
         finishedAt: new Date(),
-        newCount,
       })
       .where(eq(syncRuns.id, runId));
     return { outcome: 'erro', errorMessage: msg };
