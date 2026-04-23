@@ -107,14 +107,18 @@ export async function applyDiscogsUpdate(
   for (const incoming of incomingByPosition.values()) {
     const local = existingByPosition.get(incoming.position);
     if (!local) {
-      // nova faixa
-      await db.insert(tracks).values({
-        recordId,
-        position: incoming.position,
-        title: incoming.title,
-        duration: incoming.duration,
-        updatedAt: new Date(),
-      });
+      // nova faixa — onConflictDoNothing cobre race de imports concorrentes
+      // (dois runInitialImport ao mesmo tempo no mesmo user).
+      await db
+        .insert(tracks)
+        .values({
+          recordId,
+          position: incoming.position,
+          title: incoming.title,
+          duration: incoming.duration,
+          updatedAt: new Date(),
+        })
+        .onConflictDoNothing({ target: [tracks.recordId, tracks.position] });
     } else {
       // reaparição (FR-037b): se estava em conflict, reseta
       const resetConflict = local.conflict

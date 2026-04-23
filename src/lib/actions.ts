@@ -114,17 +114,34 @@ export async function saveDiscogsCredential(
   // Sucesso: credencial válida e coleção não-vazia.
   await markCredentialValid(user.id);
 
-  // Dispara import inicial em background — em serverless (Vercel), `after()`
-  // mantém o worker vivo após a response ser retornada (até ~5min em Hobby).
-  // FR-030: o DJ não fica bloqueado esperando; o componente <ImportProgress>
-  // faz polling a cada 3s no lado do cliente.
-  after(async () => {
-    try {
-      await runInitialImport(user.id);
-    } catch (err) {
-      console.error('[sulco] runInitialImport fundo falhou:', err);
-    }
-  });
+  // Só dispara novo import se NÃO houver um em andamento. Evita race de
+  // duplo-clique no form criando múltiplos imports em paralelo que colidem
+  // em INSERTs concorrentes.
+  const alreadyRunning = await db
+    .select({ id: syncRuns.id })
+    .from(syncRuns)
+    .where(
+      and(
+        eq(syncRuns.userId, user.id),
+        eq(syncRuns.kind, 'initial_import'),
+        eq(syncRuns.outcome, 'running'),
+      ),
+    )
+    .limit(1);
+
+  if (alreadyRunning.length === 0) {
+    // Dispara import inicial em background — em serverless (Vercel), `after()`
+    // mantém o worker vivo após a response ser retornada (até ~5min em Hobby).
+    // FR-030: o DJ não fica bloqueado esperando; o componente <ImportProgress>
+    // faz polling a cada 3s no lado do cliente.
+    after(async () => {
+      try {
+        await runInitialImport(user.id);
+      } catch (err) {
+        console.error('[sulco] runInitialImport fundo falhou:', err);
+      }
+    });
+  }
 
   revalidatePath('/onboarding');
   revalidatePath('/conta');
