@@ -2,6 +2,11 @@ import { redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { OnboardingForm } from '@/components/onboarding-form';
 
+// saveDiscogsCredential dispara runInitialImport via after() que pode
+// precisar de vários segundos para fazer a primeira varredura da coleção.
+// Hobby default (10s) é curto; declaramos 60 (max Hobby) para a action ter fôlego.
+export const maxDuration = 60;
+
 /**
  * Rota `/onboarding` (FR-050).
  * Usuário chega aqui via middleware sempre que `needsOnboarding === true`.

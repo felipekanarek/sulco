@@ -15,6 +15,7 @@ import {
   fetchCollectionPage,
 } from '@/lib/discogs/client';
 import { runInitialImport } from '@/lib/discogs/import';
+import { killZombieSyncRuns } from '@/lib/discogs/zombie';
 
 export type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -113,6 +114,11 @@ export async function saveDiscogsCredential(
 
   // Sucesso: credencial válida e coleção não-vazia.
   await markCredentialValid(user.id);
+
+  // Reclama runs zumbis (processos mortos sem finalizar) antes de decidir
+  // se já há um em andamento — essencial em serverless, onde funções podem
+  // morrer silenciosamente antes de atualizar o estado do run.
+  await killZombieSyncRuns(user.id, 'initial_import');
 
   // Só dispara novo import se NÃO houver um em andamento. Evita race de
   // duplo-clique no form criando múltiplos imports em paralelo que colidem

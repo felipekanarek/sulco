@@ -3,7 +3,10 @@ import { and, eq, lt, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { syncRuns } from '@/db/schema';
 
-const STALE_RUN_MS = 15 * 60 * 1000; // 15 min
+// Em serverless (Vercel), funções morrem em até 60s. Threshold de 90s
+// garante que runs sem checkpoint há 90s são tratadas como mortas e podem
+// ser retomadas pelo próximo disparo.
+const STALE_RUN_MS = 90 * 1000;
 
 /**
  * Mata runs zumbis: `outcome='running'` sem progresso há mais de 15 min.

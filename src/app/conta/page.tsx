@@ -3,6 +3,10 @@ import { requireCurrentUser } from '@/lib/auth';
 import { UpdateCredentialForm } from '@/components/update-credential-form';
 import { DeleteAccountModal } from '@/components/delete-account-modal';
 
+// Substituir credencial dispara runInitialImport via after() — mesmo motivo
+// de /onboarding (página pode precisar de até 60s de fôlego em Hobby).
+export const maxDuration = 60;
+
 /**
  * Rota `/conta` — perfil do DJ, credencial Discogs, apagar conta (FR-004, FR-042).
  */
