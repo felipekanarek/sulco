@@ -234,6 +234,24 @@ Variável de ambiente: `ANTHROPIC_API_KEY` em `.env.local`
 | Deploy futuro | Vercel + Turso | Turso = libsql com sync multi-device quando necessário |
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Current active feature: **001-sulco-piloto**
+
+Authoritative planning artifacts (read these before making changes that
+affect the pilot):
+
+- Plan: [specs/001-sulco-piloto/plan.md](specs/001-sulco-piloto/plan.md)
+- Spec: [specs/001-sulco-piloto/spec.md](specs/001-sulco-piloto/spec.md)
+- Data model: [specs/001-sulco-piloto/data-model.md](specs/001-sulco-piloto/data-model.md)
+- Contracts: [specs/001-sulco-piloto/contracts/](specs/001-sulco-piloto/contracts/)
+- Research: [specs/001-sulco-piloto/research.md](specs/001-sulco-piloto/research.md)
+- Quickstart: [specs/001-sulco-piloto/quickstart.md](specs/001-sulco-piloto/quickstart.md)
+
+Key deltas vs. the original CLAUDE.md stack note:
+- Auth: Clerk is now in scope (not "Nenhuma agora").
+- Schema gains `users` (Clerk-anchored) and `syncRuns`; `records` gains
+  `archived`, `archivedAt`; `tracks` gains `isBomb`, `conflict`,
+  `conflictDetectedAt`; `sets` loses persisted `status` (derived from
+  `eventDate` in `America/Sao_Paulo`) and gains `montarFiltersJson`.
+- UNIQUE `(userId, discogsId)` on `records`.
+- New libs: `@clerk/nextjs`, `@dnd-kit/core`+`/sortable`, `svix`.
 <!-- SPECKIT END -->

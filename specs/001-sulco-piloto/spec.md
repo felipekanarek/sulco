@@ -36,6 +36,12 @@ briefing, playlists."
 
 ## User Scenarios & Testing *(mandatory)*
 
+> **Acceptance Criteria ID convention**: Cada cenário Given/When/Then numerado de
+> uma User Story é referenciado pelo padrão `US{N}-AC{M}`, onde `N` é o número
+> da User Story (1..4) e `M` é o índice do cenário na lista (1-based). Ex:
+> `US3-AC5` = 5º cenário de US3. Testes e tasks MUST usar esses IDs ao
+> rastrear cobertura.
+
 ### User Story 1 - Entrar no produto e ver a coleção autenticada (Priority: P1)
 
 O DJ acessa o Sulco pela primeira vez, faz login, conecta a coleção do Discogs (username) e
@@ -55,8 +61,10 @@ metadados, (b) os filtros funcionam, (c) um logout/login preserva o estado.
 1. **Given** um novo visitante, **When** ele clica em "Entrar" e se autentica, **Then** o
    sistema cria a conta, pede o username do Discogs, e inicia o onboarding.
 2. **Given** o DJ forneceu um username válido do Discogs, **When** o sistema inicia o import
-   inicial, **Then** exibe progresso em tempo real (`X de Y discos`), não bloqueia a UI, e
-   respeita o limite de 60 req/min autenticado.
+   inicial, **Then** exibe progresso `X de Y discos` onde Y é o total anunciado pela
+   primeira página da coleção Discogs (conhecido no início do job) e X é o cumulativo
+   já importado, atualizado via polling de 3s; não bloqueia a UI, e respeita o limite
+   de 60 req/min autenticado.
 3. **Given** o import concluiu, **When** o DJ abre a home `/`, **Then** a listagem mostra
    todos os discos importados com capa, artista, título, ano, selo, gêneros e
    `shelfLocation` (se preenchido).
@@ -207,6 +215,11 @@ permanecer intacto.
   retoma do último disco importado, não reinicia do zero.
 - **Disco sem tracklist no Discogs**: o disco é importado mesmo assim; curadoria detalhada
   fica bloqueada com aviso "tracklist indisponível, reimportar" até o DJ decidir.
+- **Imagem da capa (`coverUrl`) quebrada**: quando a URL retorna erro ou 404, a UI
+  MUST exibir um placeholder genérico consistente (silhueta de vinil ou caixa
+  cinza com iniciais do artista) e oferecer de forma visível o botão/link
+  "Reimportar este disco" diretamente no card afetado, além do botão regular na
+  página do disco.
 - **Filtro vazio em `/curadoria`**: exibir estado vazio com opção de trocar filtro.
 - **Falha de persistência em mutação** (disco, faixa, set): não avançar de disco, não
   remover da UI, mostrar erro inline.
@@ -262,11 +275,64 @@ permanecer intacto.
   as execuções automáticas de sync para aquele usuário até que um novo token seja
   salvo.
 - **FR-045**: Enquanto `discogsCredentialStatus = invalid`, a UI MUST exibir um banner
-  persistente global com mensagem clara ("Seu token do Discogs expirou ou foi
-  revogado") e link direto para a tela de atualização do token em FR-004.
+  horizontal persistente abaixo do header global (visível em todas as rotas
+  autenticadas) com mensagem clara ("Seu token do Discogs expirou ou foi
+  revogado") e link direto para a tela de atualização do token em FR-004. O mesmo
+  padrão de banner (abaixo do header, horizontal, persistente) MUST ser usado para
+  FR-036 (disco arquivado por remoção no Discogs sem reconhecimento do DJ),
+  garantindo consistência visual entre avisos persistentes.
 - **FR-046**: Ao salvar um novo token válido (validado por uma chamada de teste
   bem-sucedida ao Discogs), sistema MUST zerar `discogsCredentialStatus` para `valid`,
   remover o banner, e retomar o agendamento do sync automático no próximo ciclo.
+
+#### Onboarding
+
+- **FR-050**: O onboarding do DJ MUST seguir esta ordem linear e sem voltas:
+  (1) usuário anônimo é redirecionado para `/sign-in` da Clerk; (2) após
+  sign-up/sign-in bem-sucedido, webhook `user.created` provisiona linha em
+  `users`; (3) middleware redireciona usuários com `discogsUsername` OU
+  `discogsTokenEncrypted` nulos para `/onboarding`; (4) em `/onboarding` o
+  DJ preenche `discogsUsername` + Personal Access Token do Discogs; (5)
+  sistema valida o PAT com uma chamada de teste ao Discogs e, em sucesso,
+  persiste os dois campos e dispara o import inicial em background; (6) DJ
+  é redirecionado para `/`.
+- **FR-051**: A tela `/onboarding` MUST exibir mensagens de erro claras e
+  específicas por ponto de falha, cobrindo no mínimo: (a) PAT rejeitado pelo
+  Discogs com HTTP 401 — "Token inválido no Discogs, verifique e tente
+  novamente"; (b) `discogsUsername` inexistente no Discogs — "Usuário
+  Discogs não encontrado"; (c) coleção vazia — "Esta conta Discogs não tem
+  discos na coleção; adicione ao menos um disco no Discogs e tente de novo";
+  (d) Discogs fora do ar ou timeout — "Não foi possível falar com o Discogs
+  agora; tente novamente em alguns minutos"; (e) qualquer outro erro de
+  rede/servidor — mensagem genérica de erro. Em todos os casos a conta
+  Clerk permanece ativa e o DJ pode corrigir e reenviar sem ficar travado.
+- **FR-052**: Enquanto o onboarding não for concluído com sucesso (ou seja,
+  `discogsUsername` OU `discogsTokenEncrypted` permanecem nulos), o middleware
+  de autenticação MUST continuar redirecionando o DJ para `/onboarding` em
+  toda tentativa de acesso a rotas protegidas. Não há schedule automático de
+  retry no servidor: a decisão de tentar novamente é sempre manual (o DJ
+  reenvia o formulário). A conta Clerk permanece ativa indefinidamente até
+  que o onboarding seja concluído ou a conta seja deletada (FR-042/FR-043).
+- **FR-053**: Sistema MUST permitir ao DJ salvar um novo PAT (FR-004) mesmo
+  enquanto há `syncRuns` com `outcome = running` para o usuário. A regra de
+  propagação é: sync em andamento **continua usando o token antigo** (já
+  decriptado em memória ao início do job); a próxima execução de sync/import
+  (automática ou manual) usa o novo token. Não há aborto nem bloqueio da
+  ação de salvar.
+- **FR-053a**: As entidades `playlists` e `playlistTracks` (presentes no schema
+  legado antes do piloto) NEVER aparecem na UI do Sulco durante o piloto: não
+  há rota, componente ou server action que as leia ou modifique. Requisições
+  para quaisquer caminhos começando com `/playlists` MUST retornar 404. A
+  remoção física das tabelas é decisão de iteração futura e fica fora do
+  piloto para evitar migration destrutiva.
+
+- **FR-054**: A suíte de testes do projeto MUST incluir um teste de integração
+  que simule um sync/reimport sobre registros com campos autorais preenchidos
+  (`status`, `shelfLocation`, `notes`, `selected`, `bpm`, `musicalKey`, `energy`,
+  `moods`, `contexts`, `fineGenre`, `references`, `comment`, `isBomb`,
+  `rating`) e verifique que NENHUM desses campos é alterado após o sync. Esse
+  teste MUST rodar no pipeline de CI; uma falha MUST bloquear o merge (é
+  prova mecânica do Princípio I da Constituição, refletindo SC-008).
 
 #### Acessibilidade
 
@@ -280,6 +346,11 @@ permanecer intacto.
 - **FR-049**: Toggles de `status` do disco, `selected` da faixa, `isBomb`, e filtros
   MUST usar semântica ARIA apropriada (`role`, `aria-pressed`/`aria-checked`,
   `aria-label` quando o rótulo for só ícone/emoji).
+- **FR-049a**: Verificação do compliance com FR-047..FR-049 no piloto é **manual**
+  (inspeção ao implementar e em QA da feature); não há gate automatizado em CI.
+  A checagem manual MUST usar, no mínimo, as DevTools do navegador (Accessibility
+  tree + contraste) em cada tela crítica: listagem, `/curadoria`, `/disco/[id]`,
+  `/sets/[id]/montar`, banner de credencial inválida.
 
 #### Coleção e Listagem
 
@@ -287,10 +358,12 @@ permanecer intacto.
   artista, título, ano, selo, gêneros, status e `shelfLocation` quando disponível.
 - **FR-006**: Sistema MUST permitir filtrar a listagem por: status (`unrated`, `active`,
   `discarded`, `all`), gênero, texto livre (artista/título), e presença de faixas com
-  Bomba (tri-estado: `qualquer` / `apenas discos com Bomba` / `apenas discos sem
-  Bomba`, default `qualquer`, consistente com FR-024). Quando o DJ seleciona múltiplos
-  gêneros, a semântica é AND (o disco só aparece se tiver TODOS os gêneros
-  selecionados), consistente com FR-024.
+  Bomba (tri-estado com rótulos uniformes `qualquer` / `apenas Bomba` / `sem Bomba`,
+  default `qualquer`; na listagem de discos, "apenas Bomba" significa "discos que
+  têm ao menos uma faixa com `isBomb = true`" e "sem Bomba" significa "discos sem
+  nenhuma faixa Bomba"). Quando o DJ seleciona múltiplos gêneros, a semântica é
+  AND (o disco só aparece se tiver TODOS os gêneros selecionados), consistente
+  com FR-024.
 - **FR-007**: Sistema MUST oferecer link "Curadoria →" em cada item da listagem que leva a
   `/curadoria` pré-selecionando aquele disco.
 
@@ -324,7 +397,10 @@ permanecer intacto.
   (persistidos por uso prévio) somado às sementes pré-populadas do seed; o DJ MUST
   poder criar um novo termo digitando-o e confirmando (ex: Enter), sem passar por
   tela separada de gerenciamento. Termos são case-insensitive e normalizados
-  (trim + lowercase) antes de comparar/persistir.
+  (trim + lowercase) antes de comparar/persistir. A lista de autocomplete MUST ser
+  deduplicada (case-insensitive) e ordenada como: (1) termos usados pelo DJ em
+  ordem de frequência descendente; (2) sementes ainda não usadas, em ordem
+  alfabética.
 - **FR-017b**: Para `musicalKey`, sistema MUST usar exclusivamente a notação Camelot:
   `1A`–`12A` (tons menores) e `1B`–`12B` (tons maiores), validados por regex
   (`^(?:[1-9]|1[0-2])[AB]$`). O input MUST oferecer um picker visual (wheel Camelot)
@@ -335,6 +411,9 @@ permanecer intacto.
   intervalo MUST ser rejeitados na validação da Server Action com mensagem clara
   ("BPM deve ser um inteiro entre 0 e 250"). O filtro de range em FR-024 opera
   sobre o mesmo intervalo.
+- **FR-017d**: Todo campo de texto livre de curadoria/metadata (`notes`, `briefing`,
+  `comment`, `references`, `fineGenre`) MUST ser limitado a no máximo 5000
+  caracteres na validação da Server Action, com mensagem clara em caso de excesso.
 - **FR-018**: Sistema MUST suportar flag `isBomb` booleana por faixa, independente de
   `energy`, ativada/desativada por toggle explícito.
 - **FR-019**: Sistema MUST exibir o emoji 💣 ao lado de posição/título da faixa em toda
@@ -342,6 +421,24 @@ permanecer intacto.
   montagem, lista do set, bag).
 - **FR-020**: Sistema MUST preservar valores dos campos autorais da faixa quando `selected`
   for desmarcado (dados permanecem no banco, UI esconde).
+- **FR-020a**: Quando o DJ apaga explicitamente o valor de um campo escalar da faixa
+  (`bpm`, `musicalKey`, `energy`, `fineGenre`, `references`, `comment`) deixando
+  o input em branco e confirmando, o sistema MUST persistir como `NULL`. Apagar
+  um valor NÃO desmarca `selected` nem afeta outros campos.
+- **FR-020b**: Cada disco MUST ter um booleano `curated` (default `false`) e um
+  timestamp opcional `curatedAt`. O DJ marca um disco como `curated = true`
+  explicitamente via controle na página `/disco/[id]` quando considera a
+  curadoria de faixas concluída (independe de `status`); o sistema registra
+  `curatedAt = now()` no momento. Desmarcar retorna `curated = false` e zera
+  `curatedAt`. Esses campos são puramente organizacionais (permitem filtrar
+  "discos ainda não curados" na listagem); não afetam candidatos em montagem
+  de set.
+- **FR-020c**: Cada faixa MUST suportar um campo `rating` inteiro opcional no
+  domínio `{1, 2, 3}` correspondente visualmente a `+`, `++`, `+++` (escala
+  qualitativa do DJ, **independente de `energy`**). O campo é editável quando
+  `selected = true`, preservado quando `selected` for desmarcado (mesma regra
+  de FR-020), e aparece como filtro de montagem em `/sets/[id]/montar`
+  (adicionado ao conjunto de filtros de FR-024).
 
 #### Sets
 
@@ -355,9 +452,9 @@ permanecer intacto.
   derivadas de: `tracks` com `selected = true` pertencentes a `records` com `status =
   active`.
 - **FR-024**: Sistema MUST permitir filtrar candidatos combinando: BPM (range), tom
-  (musicalKey), energia (1–5), moods, contextos, Bomba (tri-estado: `qualquer` /
-  `apenas Bomba` / `sem Bomba`, com `qualquer` como default), e texto livre
-  (artista/título/faixa). Para campos multivalorados (moods, contextos, genres),
+  (musicalKey), energia (1–5), rating (1–3), moods, contextos, Bomba (tri-estado:
+  `qualquer` / `apenas Bomba` / `sem Bomba`, com `qualquer` como default), e
+  texto livre (artista/título/faixa). Para campos multivalorados (moods, contextos, genres),
   a semântica MUST ser AND: uma faixa só aparece se possuir TODOS os termos
   selecionados pelo DJ. Campos escalares (BPM range, energia, tom, Bomba) continuam
   sendo combinados com os demais via AND (interseção geral dos filtros ativos).
@@ -367,7 +464,8 @@ permanecer intacto.
   `/sets/[id]/montar` em um campo JSON `montarFiltersJson` na entidade `sets`; ao
   reabrir a tela do mesmo set (mesmo dispositivo ou outro), o estado MUST ser
   restaurado. Salvamento é automático (sem botão explícito) após cada mudança de
-  filtro, respeitando debounce razoável.
+  filtro, com **debounce de 400ms** (intervalo após o qual, sem nova mudança, a
+  persistência é disparada).
 - **FR-025**: Sistema MUST permitir adicionar e remover faixas do set; ao adicionar, a
   faixa sai dos candidatos e entra na lista do set com a ordem do momento de inserção.
 - **FR-026**: Sistema MUST permitir reordenar as faixas do set via drag-and-drop como
@@ -389,11 +487,17 @@ permanecer intacto.
   exibir o status calculado em FR-021 e FR-027.
 - **FR-029**: Remover uma faixa de um set NEVER MUST alterar `selected` ou `isBomb` da
   faixa original.
+- **FR-029a**: Um set MUST aceitar no máximo 300 faixas. Tentativas de adicionar uma
+  faixa além desse limite MUST ser rejeitadas com mensagem clara ("Limite de 300
+  faixas por set atingido"); o set preserva seu estado atual.
 
 #### Sincronização com Discogs
 
 - **FR-030**: Sistema MUST executar import inicial em background após o onboarding, sem
-  bloquear a UI, atualizando a listagem em tempo real conforme discos entram.
+  bloquear a UI, atualizando a listagem **via polling de 3 segundos** enquanto o
+  import está em andamento. O componente de progresso MUST parar de fazer polling
+  automaticamente quando o `syncRun` do tipo `initial_import` chegar a
+  `outcome != 'running'` (ok/erro/parcial/rate_limited).
 - **FR-031**: Sistema MUST respeitar o rate limit autenticado do Discogs (60 req/min);
   ao atingir limite, MUST pausar, registrar e retomar sem perder progresso.
 - **FR-032**: Sistema MUST executar sync automático diário via scheduler server-side
@@ -405,9 +509,10 @@ permanecer intacto.
   para atualizar metadados Discogs de um disco individual.
 - **FR-034a**: Após um reimport bem-sucedido de um disco, o botão "Reimportar este
   disco" daquele disco específico MUST permanecer desabilitado por 60 segundos,
-  exibindo uma mensagem/contagem regressiva ("Aguarde XXs"); transcorrido o
-  cooldown, o botão volta a ficar ativo. O cooldown é por `(userId, recordId)` e
-  NÃO afeta reimports de outros discos nem o sync automático.
+  exibindo texto estático "Aguarde ~60s" (sem contagem descendente animada)
+  enquanto o cooldown vigorar; transcorrido o cooldown, o botão volta a ficar
+  ativo sem exigir reload da página. O cooldown é por `(userId, recordId)` e NÃO
+  afeta reimports de outros discos nem o sync automático.
 - **FR-035**: Sync e reimport MUST atualizar apenas campos originários do Discogs
   (`discogsId`, `artist`, `title`, `year`, `label`, `country`, `format`, `genres`,
   `styles`, `coverUrl`, e `position`/`title`/`duration` de faixas) e NEVER sobrescrever
@@ -432,10 +537,13 @@ permanecer intacto.
 - **FR-039**: Sistema MUST registrar cada execução de sync (automático, manual ou
   reimport) como uma entrada com: timestamp de início/fim, resultado
   (`ok | erro | rate_limited | parcial`), contagem de novos/removidos/conflitos, e
-  mensagem de erro quando aplicável.
+  mensagem de erro quando aplicável. As entradas de `syncRuns` NEVER são purgadas
+  automaticamente — o histórico cresce indefinidamente (exibição é limitada a 20 por
+  FR-040; acesso histórico completo não é funcionalidade do piloto).
 - **FR-040**: Sistema MUST expor um painel in-app "Status de sincronização" acessível
-  pelo header que exibe a última execução, histórico recente, e a lista de conflitos
-  pendentes (discos arquivados por remoção no Discogs e faixas em conflito).
+  pelo header que exibe a última execução, histórico das **últimas 20 execuções** de
+  sync/reimport em ordem decrescente de `startedAt`, e a lista de conflitos pendentes
+  (discos arquivados por remoção no Discogs e faixas em conflito).
 - **FR-041**: Sistema MUST exibir um badge/indicador no header global sempre que houver
   (a) a última execução automática falhada sem reexecução bem-sucedida posterior, ou
   (b) conflitos pendentes não reconhecidos pelo DJ; o badge desaparece quando o DJ
@@ -452,15 +560,17 @@ permanecer intacto.
 - **Disco (`records`)**: Um LP na coleção do DJ. Campos do Discogs:
   `discogsId`, `artist`, `title`, `year`, `label`, `country`, `format`, `genres[]`,
   `styles[]`, `coverUrl`. Campos autorais soberanos: `status` (`unrated | active |
-  discarded`), `shelfLocation`, `notes`. Possui N faixas. **Unicidade**: UNIQUE
+  discarded`), `shelfLocation`, `notes`, `curated` (booleano, FR-020b),
+  `curatedAt` (timestamp opcional). Possui N faixas. **Unicidade**: UNIQUE
   `(userId, discogsId)` — se a coleção Discogs do DJ contiver múltiplas cópias do mesmo
   release, o Sulco guarda apenas 1 registro; múltiplas cópias físicas são descritas
   pelo DJ em `shelfLocation`/`notes`.
 - **Faixa (`tracks`)**: Uma track dentro de um disco. Campos do Discogs: `position`,
   `title`, `duration`. Campos autorais soberanos: `selected`, `bpm` (inteiro `[0,250]`
   opcional), `musicalKey` (notação Camelot `^(?:[1-9]|1[0-2])[AB]$`), `energy`
-  (1–5), `moods[]` (vocabulário híbrido aberto), `contexts[]` (vocabulário híbrido
-  aberto), `fineGenre`, `references`, `comment`, **`isBomb` (novo, booleano
+  (1–5), `rating` (inteiro `{1,2,3}` = `+/++/+++`, independente de `energy`,
+  FR-020c), `moods[]` (vocabulário híbrido aberto), `contexts[]` (vocabulário
+  híbrido aberto), `fineGenre`, `references`, `comment`, **`isBomb` (booleano
   independente de `energy`)**.
 - **Set**: Coletânea ordenada de faixas preparada para um evento. Atributos: `id`, `name`,
   `eventDate` (pode ser nulo), `location`, `briefing`,
@@ -491,17 +601,17 @@ permanecer intacto.
 - **SC-003**: Triar 100 discos em `/curadoria` (decidir `active` ou `discarded`) leva menos
   de 30 minutos usando apenas o modo rápido e atalhos de teclado.
 - **SC-004**: Alterar status de um disco em `/curadoria` e avançar para o próximo leva
-  menos de 1 segundo percebido pelo usuário em condições normais.
-- **SC-005**: Pelo menos 90% dos discos promovidos a `active` durante uma sessão terminam
-  com ao menos uma faixa `selected` (indicador de uso real do produto, não abandono).
+  menos de 1 segundo percebido pelo usuário em **condições normais** (definidas
+  como: sem falhas de rede, Discogs operacional, rate limit não atingido).
 - **SC-006**: Montar um set com 20 faixas a partir de um briefing (criar set, filtrar
   candidatos, selecionar, reordenar) leva menos de 10 minutos.
 - **SC-007**: Uma faixa marcada com Bomba 💣 é visualmente identificada em 100% das
   listagens onde aparece (página do disco, candidatos, set, bag).
 - **SC-008**: Zero casos de sobrescrita acidental de campos autorais por sync do Discogs,
   verificável por teste de integração que simula sync sobre curadoria existente.
-- **SC-009**: Sync automático diário completa em menos de 1 minuto em condições normais
-  (coleção estável, ≤ 5 novos discos/dia).
+- **SC-009**: Sync automático diário completa em menos de 1 minuto em **condições
+  normais** (definidas como: sem falhas de rede, Discogs operacional, rate limit
+  não atingido; coleção estável, ≤ 5 novos discos/dia).
 - **SC-010**: 100% dos discos removidos no Discogs aparecem arquivados (não deletados) no
   Sulco após o próximo sync, com aviso persistente ao usuário.
 
@@ -521,7 +631,17 @@ permanecer intacto.
   `GET /users/{username}/collection/folders/0/releases` e `GET /releases/{id}`. OAuth
   não é usado neste piloto.
 - **Import inicial**: Usuário tolera aguardar ~45 min para coleções grandes; o job é
-  incremental e resumível.
+  incremental e resumível. Validação ratificada pelo próprio DJ do piloto
+  (Felipe); não há botão de "pausar/cancelar import" — o job roda até concluir
+  ou até encontrar erro/rate-limit não-recuperável.
+- **Entrega do webhook Clerk `user.deleted`**: A entrega do evento depende do
+  Svix (infra interna da Clerk), que faz retries com backoff exponencial
+  (~24h). Se o servidor Sulco ficar fora durante toda a janela de retry, o
+  webhook se perde e fica um par órfão: conta Clerk deletada + dados Sulco
+  vivos. No piloto single-user essa probabilidade é baixa e o risco é aceito
+  sem fluxo de reconciliação automática; o DJ pode disparar manualmente
+  "Apagar conta" na UI (FR-043) para limpar dados órfãos. Reconciliação
+  automática via verificação diária de existência na Clerk fica fora do piloto.
 - **Sync diário**: Scheduler server-side (cron) dispara o job uma vez por dia
   independentemente da presença do DJ na app; o job compara apenas a primeira página
   por `date_added desc`; remoções profundas (páginas interiores) dependem de sync
@@ -546,6 +666,18 @@ permanecer intacto.
   recuperabilidade da curadoria depende exclusivamente do backup de infraestrutura do
   banco (snapshot do arquivo SQLite em dev; backup nativo do Turso/libsql em prod).
   Caso o DJ demande export no futuro, fica fora deste piloto.
+- **Disponibilidade (SLO)**: O piloto é single-user e operado em esforço "best-effort"
+  — não há SLO formal de uptime, de sucesso de sync diário, nem de latência de
+  cron. Indisponibilidades pontuais do Vercel Cron, do Discogs ou do Turso são
+  aceitáveis no piloto; nenhum FR ou SC exige disponibilidade garantida. SLO
+  formal fica fora do escopo e deve ser reavaliado ao migrar para SaaS.
+- **Volume e storage**: Com coleção alvo de 2500 discos × ~30 faixas/disco =
+  ~75 000 tracks, o volume total do banco cabe com folga no tier gratuito do
+  Turso/libsql (≤500MB). Storage não é constraint operacional do piloto.
+- **Escopo de conta**: Migração ou transferência de dados autorais (coleção,
+  curadoria, sets) entre contas de DJs diferentes fica **fora do escopo do
+  piloto**. Cada conta Clerk está acoplada 1:1 aos seus dados locais; não há
+  export entre contas nem merge de coleções.
 - **Idioma e localização**: UI é pt-BR hard-coded (strings, rótulos, mensagens de
   erro, formato de data `dd/MM/yyyy`, idioma dos emails da Clerk em pt-BR quando
   disponível). Sem camada de i18n/dicionário no piloto; adicionar outro idioma no

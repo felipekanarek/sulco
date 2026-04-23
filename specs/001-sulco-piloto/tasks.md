@@ -1,0 +1,385 @@
+# Tasks: Sulco — Piloto do Produto Completo
+
+**Input**: Design documents from `/specs/001-sulco-piloto/`
+**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md),
+[data-model.md](data-model.md), [contracts/](contracts/)
+
+**Tests**: Tests ARE REQUIRED for este piloto. FR-054 exige o teste integration
+que verifica Princípio I no CI. Playwright e2e para os fluxos US1/US2/US3 é
+declarado em quickstart.md §9.
+
+**Organization**: Tasks agrupadas por User Story (US1..US4) para implementação
+e entrega incremental. Cada US é independentemente testável ao final de sua
+fase.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: tarefa pode rodar em paralelo com outras `[P]` da mesma fase
+  (arquivos distintos, sem dependência de task incompleta da mesma fase).
+- **[Story]**: US1, US2, US3, US4 (somente em fases 3+).
+
+## Path Conventions
+
+Next.js 15 App Router single-project em `sulco/`. Paths abaixo são relativos
+a `sulco/`. `src/` é o código; `tests/` (a criar) tem `unit/`,
+`integration/`, `e2e/`.
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: Dependências, envs e scaffolding comum a todas as US.
+
+- [ ] T001 Adicionar dependências de auth e observabilidade em `sulco/package.json`: `@clerk/nextjs@^6`, `svix@^1`
+- [ ] T002 [P] Adicionar dependências de drag-and-drop em `sulco/package.json`: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
+- [ ] T003 [P] Adicionar dependências de teste em `sulco/package.json` (devDependencies): `vitest`, `@vitest/ui`, `@playwright/test`, `happy-dom`
+- [ ] T004 Rodar `npm install` em `sulco/` para sincronizar `package-lock.json`
+- [ ] T005 [P] Criar `sulco/vitest.config.ts` configurando alias `@/` → `src/`, ambiente `happy-dom` para componentes, e paths `tests/unit/**` e `tests/integration/**`
+- [ ] T006 [P] Criar `sulco/playwright.config.ts` apontando para `http://localhost:3000`, diretório `tests/e2e`, projeto `chromium` desktop
+- [ ] T007 [P] Adicionar scripts em `sulco/package.json`: `"test": "vitest run"`, `"test:watch": "vitest"`, `"test:e2e": "playwright test"`
+- [ ] T008 [P] Atualizar `sulco/.env.example` listando todas as envs necessárias: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `MASTER_ENCRYPTION_KEY`, `CRON_SECRET`, `DATABASE_URL`, `DATABASE_AUTH_TOKEN` (prod Turso)
+- [ ] T009 [P] Criar `sulco/vercel.json` com `crons: [{ "path": "/api/cron/sync-daily", "schedule": "0 7 * * *" }]` (04:00 America/Sao_Paulo)
+- [ ] T010 [P] Criar diretório `sulco/tests/` com subdiretórios `unit/`, `integration/`, `e2e/`, `fixtures/`
+
+**Checkpoint**: Dependências instaladas, envs documentadas, scaffolding de teste pronto.
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: Alinhar schema com data-model.md, construir libs compartilhadas,
+ligar Clerk + webhook + middleware. **Nenhuma US pode começar sem esta fase.**
+
+### 2.1 — Schema alignment (Princípio III)
+
+- [ ] T011 Atualizar `sulco/src/db/schema.ts` adicionando tabela `users` (id, clerkUserId UNIQUE, email, discogsUsername, discogsTokenEncrypted, discogsCredentialStatus enum `valid`/`invalid`, lastStatusVisitAt timestamp nullable, createdAt, updatedAt)
+- [ ] T012 Atualizar `sulco/src/db/schema.ts` em `records`: adicionar `userId` FK→users(id) onDelete:cascade; trocar UNIQUE de `discogsId` global por índice composto UNIQUE `(userId, discogsId)`; adicionar colunas `archived` boolean default false, `archivedAt` timestamp, `archivedAcknowledgedAt` timestamp nullable (FR-036/FR-041); MANTER colunas existentes `curated`, `curatedAt` (agora refletem FR-020b)
+- [ ] T013 Atualizar `sulco/src/db/schema.ts` em `tracks`: adicionar `isBomb` boolean default false, `conflict` boolean default false, `conflictDetectedAt` timestamp; MANTER `rating` (FR-020c); adicionar UNIQUE `(recordId, position)`
+- [ ] T014 Atualizar `sulco/src/db/schema.ts` em `sets`: adicionar `userId` FK→users(id) onDelete:cascade; adicionar `montarFiltersJson` (text JSON, default `'{}'`); REMOVER coluna `status` (agora derivada por FR-028)
+- [ ] T015 Atualizar `sulco/src/db/schema.ts` adicionando tabela `syncRuns` (id, userId FK cascade, kind enum, targetRecordId, startedAt, finishedAt, outcome enum, newCount, removedCount, conflictCount, errorMessage, lastCheckpointPage, snapshotJson)
+- [ ] T016 Atualizar `sulco/src/db/schema.ts` em `playlists`/`playlistTracks`: manter como estão (FR-053a — fora de escopo mas sem remover)
+- [ ] T017 Exportar tipos derivados atualizados (`User`, `Record`, `Track`, `Set`, `SetTrack`, `SyncRun`) no fim de `sulco/src/db/schema.ts`
+- [ ] T018 Rodar `npm run db:push` em `sulco/` para aplicar o schema; confirmar com `sqlite3 sulco.db '.schema'` que todas as tabelas/colunas novas existem
+
+### 2.2 — Libs compartilhadas
+
+- [ ] T019 [P] Criar `sulco/src/lib/crypto.ts` implementando `encryptPAT(plaintext)` e `decryptPAT(stored)` com AES-256-GCM (`node:crypto`), formato envelope `v1:<iv>:<tag>:<ct>` em base64, lendo chave de `MASTER_ENCRYPTION_KEY`
+- [ ] T020 [P] Criar `sulco/src/lib/tz.ts` com `APP_TZ = 'America/Sao_Paulo'`, `nowInAppTz()`, `deriveSetStatus(eventDate)` retornando `'draft'|'scheduled'|'done'`, `formatForDisplay(date)` no formato `dd/MM/yyyy HH:mm`
+- [ ] T021 [P] Criar `sulco/src/lib/vocabulary.ts` exportando `DEFAULT_MOOD_SEEDS` (10 termos pt-BR) e `DEFAULT_CONTEXT_SEEDS` (8 termos pt-BR) conforme data-model.md
+- [ ] T022 [P] Criar `sulco/src/lib/auth.ts` com `getCurrentUser()` (lê `auth()` da Clerk, resolve ou cria linha em `users` via `clerkUserId`, retorna `{ id, clerkUserId, email, needsOnboarding }`)
+
+### 2.3 — Clerk integration
+
+- [ ] T023 Criar `sulco/src/middleware.ts` usando `clerkMiddleware` do `@clerk/nextjs`: rotas públicas = `/sign-in/*`, `/api/webhooks/clerk`, `/api/cron/sync-daily`; todas as outras exigem auth; se user autenticado mas `needsOnboarding = true`, redireciona para `/onboarding` (exceto já em `/onboarding` ou `/conta`)
+- [ ] T024 Atualizar `sulco/src/app/layout.tsx` envolvendo `<html>` com `<ClerkProvider>` (localização pt-BR), renderizando header global com `<SyncBadge>` (placeholder até US4) e `<DiscogsCredentialBanner>` (placeholder até US4)
+- [ ] T025 Criar `sulco/src/app/sign-in/[[...rest]]/page.tsx` renderizando `<SignIn>` do Clerk com appearance/config em pt-BR
+
+### 2.4 — Clerk webhook endpoint
+
+- [ ] T026 Criar `sulco/src/app/api/webhooks/clerk/route.ts` (POST) que verifica assinatura Svix via `CLERK_WEBHOOK_SECRET`, trata `user.created` (INSERT em `users` ON CONFLICT DO NOTHING), `user.updated` (UPDATE email), `user.deleted` (hard-delete cascade via `DELETE FROM users WHERE clerkUserId=?`); retorna 200 em eventos desconhecidos
+- [ ] T027 Criar `sulco/tests/integration/clerk-webhook.test.ts` cobrindo: assinatura inválida → 400; `user.created` idempotente; `user.deleted` apaga em cascata (records, tracks, sets, setTracks, syncRuns)
+
+### 2.5 — Discogs client (sem os jobs, só o cliente)
+
+- [ ] T028 Criar `sulco/src/lib/discogs/client.ts` com interface `DiscogsClient` (`validateCredential`, `fetchCollectionPage`, `fetchRelease`); implementar token bucket de 60 req/min por `userId`, retry em 429 com `Retry-After` + jitter; header `User-Agent: Sulco/0.1 (+https://sulco.app)`; header `Authorization: Discogs token=<PAT>` após `decryptPAT`
+- [ ] T029 Criar `sulco/src/lib/discogs/index.ts` exportando helpers `markCredentialInvalid(userId)` (UPDATE users SET discogsCredentialStatus='invalid') e helper para emitir logs estruturados JSON conforme research §5
+- [ ] T030 [P] Criar `sulco/tests/unit/discogs-client.test.ts` mockando `fetch` para validar: rate-limit bloqueia quando 60 req consumidas; 429 pausa e retoma; 401 propaga erro específico para `markCredentialInvalid`
+
+**Checkpoint**: Schema alinhado, auth integrada, webhook funcional, cliente Discogs testável. US1..US4 podem começar em paralelo.
+
+---
+
+## Phase 3: User Story 1 — Entrar no produto e ver a coleção autenticada (Priority: P1) 🎯 MVP
+
+**Goal**: DJ cria conta, conclui onboarding (username + PAT), import inicial
+roda em background e ele vê a coleção com filtros funcionando.
+
+**Independent Test**: Criar conta Clerk → preencher onboarding com username + PAT
+válido → verificar que listagem cresce via polling 3s → aplicar filtros de
+status/gênero/Bomba → logout/login preserva estado.
+
+**Referências**: US1-AC1..US1-AC5, FR-001..FR-007, FR-030..FR-031, FR-050..FR-052.
+
+### 3.1 — Onboarding
+
+- [ ] T031 [P] [US1] Criar `sulco/src/app/onboarding/page.tsx` (RSC) com `<OnboardingForm>` (client) contendo inputs `discogsUsername` + `discogsPat` + link externo explicando como gerar PAT no Discogs
+- [ ] T032 [US1] Implementar Server Action `saveDiscogsCredential` em `sulco/src/lib/actions.ts` conforme `contracts/server-actions.md`: Zod validate, chamar `validateCredential`, se 401 retornar erro FR-051(a), outros erros mapeados para FR-051(b/c/d/e), em sucesso cifrar via `encryptPAT` e persistir; ao final disparar `runInitialImport(userId)` em background (não await)
+- [ ] T033 [US1] Adicionar em `sulco/src/app/api/webhooks/clerk/route.ts` criação de linha users em `user.created` já coberta em T026; confirmar que `needsOnboarding` reflete corretamente em `getCurrentUser()`
+- [ ] T034 [P] [US1] Criar `sulco/tests/e2e/onboarding.spec.ts` (Playwright) cobrindo US1-AC1 (sign-up → redirect /onboarding) e caminho feliz de US1-AC2 (PAT válido inicia import)
+- [ ] T035 [P] [US1] Criar `sulco/tests/e2e/onboarding-errors.spec.ts` cobrindo FR-051 (a..e): PAT rejeitado, username inexistente, coleção vazia, timeout Discogs, erro genérico
+
+### 3.2 — Initial import job + progress
+
+- [ ] T036 [US1] Criar `sulco/src/lib/discogs/import.ts` com `runInitialImport(userId, opts?)`: cria syncRun `initial_import`, itera páginas (per_page=100) via cliente Discogs, chama `applyDiscogsUpdate(isNew=true)` a cada release, salva `lastCheckpointPage`; em 429 marca `rate_limited`; em 401 chama `markCredentialInvalid` e aborta
+- [ ] T037 [US1] Criar `sulco/src/lib/discogs/apply-update.ts` com `applyDiscogsUpdate(userId, release, opts)`: upsert em `records` por `(userId, discogsId)`; escreve SOMENTE colunas DISCOGS; faixas novas inseridas com defaults autorais (selected=false, isBomb=false, rating=null, moods=[], contexts=[], etc); faixas existentes recebem UPDATE apenas em `title`/`duration`/`position`; faixas que sumiram do release recebem `conflict=true, conflictDetectedAt=now()`. **Reaparição (FR-037b)**: se uma faixa existente tiver `conflict=true` e agora volta a aparecer no release (match por `(recordId, position)`), o UPDATE também MUST resetar `conflict=false, conflictDetectedAt=null` (preservando TODOS os campos autorais). Se o disco estava `archived=true` e volta a aparecer na coleção Discogs (match por `(userId, discogsId)`), MUST resetar `archived=false, archivedAt=null, archivedAcknowledgedAt=null` (ainda preservando autorais). NEVER criar nova linha quando houver match
+- [ ] T038 [US1] Criar `sulco/src/components/import-progress.tsx` (client): componente que faz polling de 3s para Server Action `getImportProgress(userId)` enquanto existir `syncRun` com `outcome='running'` e `kind='initial_import'`; exibe `X de Y discos` onde Y = total da primeira página retornado pelo Discogs
+- [ ] T039 [US1] Implementar Server Action `getImportProgress(userId)` em `sulco/src/lib/actions.ts` retornando `{ running: boolean, x: number, y: number }` lido de `syncRuns` + count de `records` do usuário
+- [ ] T040 [P] [US1] Criar `sulco/tests/integration/initial-import.test.ts` mockando cliente Discogs (2 páginas, 150 releases) e verificando: cria records com defaults autorais corretos; respeita rate limit; retoma de `lastCheckpointPage`
+
+### 3.3 — Listagem `/` com filtros
+
+- [ ] T041 [US1] Atualizar `sulco/src/app/page.tsx` (RSC) consultando `records` do usuário atual via Drizzle, exibindo grid com capa/artista/título/ano/selo/gêneros/status/shelfLocation; usar `searchParams` para filtros de status/gênero/texto/Bomba tri-estado
+- [ ] T042 [P] [US1] Criar `sulco/src/components/filter-bar.tsx` (client) com controles: Select status (unrated/active/discarded/all), MultiSelect de gêneros (AND), input texto livre, `<BombaFilter>` tri-estado; dispara navegação via `router.push` com novos searchParams
+- [ ] T043 [P] [US1] Criar `sulco/src/components/bomba-filter.tsx` (client) com cicler tri-estado (`qualquer` / `apenas Bomba` / `sem Bomba`) usando ARIA `role="radiogroup"` + labels visíveis; FR-022 uniforme
+- [ ] T044 [P] [US1] Criar `sulco/src/components/record-card.tsx` (RSC) com `<img src={coverUrl} onError>` caindo em `<CoverPlaceholder>` que exibe iniciais do artista; em caso de erro também renderiza link/botão "Reimportar este disco" (FR-034 — ligará em US4)
+- [ ] T045 [P] [US1] Criar `sulco/src/components/cover-placeholder.tsx` (RSC) com box cinza + iniciais do artista em `font-serif`, tamanho/contraste atendendo WCAG AA
+- [ ] T046 [US1] Adicionar em `record-card.tsx` link "Curadoria →" levando a `/curadoria?from=<recordId>` (FR-007 — consumo em US2)
+- [ ] T047 [P] [US1] Criar `sulco/tests/e2e/listagem-filtros.spec.ts` cobrindo US1-AC3 e US1-AC4: aplicar filtros combinados e verificar resultado; desktop-first (viewport 1440x900)
+
+### 3.4 — Persistência + logout/login
+
+- [ ] T048 [US1] Criar `sulco/src/app/layout.tsx` Header: `<SignOutButton>` do Clerk no menu; ao logout + login verificar persistência de records/tracks (já garantido pelo schema user-scoped; adicionar e2e check)
+- [ ] T049 [US1] Criar `sulco/tests/e2e/logout-login.spec.ts` cobrindo US1-AC5
+
+**Checkpoint US1**: MVP entregável. DJ consegue criar conta, fazer onboarding,
+ver coleção importando em tempo real e navegar com filtros. Se tudo parar aqui
+o produto é útil.
+
+---
+
+## Phase 4: User Story 2 — Triar e curar faixas (Priority: P2)
+
+**Goal**: DJ passa pelos discos em `/curadoria` decidindo active/discarded via
+teclado; entra em `/disco/[id]` para marcar faixas `selected` e preencher
+BPM/Camelot/energia/moods/contextos/rating/Bomba.
+
+**Independent Test**: Com US1 completo, abrir `/curadoria` filtro `unrated`,
+passar por 5 discos via teclado A/D/→/←, entrar em um ativo, marcar 3 faixas
+`selected`, preencher todos os campos em uma delas, ativar Bomba, verificar
+persistência.
+
+**Referências**: US2-AC1..US2-AC7, FR-008..FR-020c.
+
+### 4.1 — Curadoria sequencial
+
+- [ ] T050 [US2] Criar `sulco/src/app/curadoria/page.tsx` (RSC) aceitando `searchParams` `status` (default `unrated`), `from` (recordId para pular pra aquele), retornando lista ordenada de `records` do usuário filtrada
+- [ ] T051 [US2] Criar `sulco/src/components/curadoria-view.tsx` (client) que recebe props `records[]` e `currentIndex`, renderiza capa/metadata/tracklist do atual + contador `X de Y`; navegação via keyboard listeners (`A`, `D`, `→`, `←`, `espaço`)
+- [ ] T052 [US2] Implementar Server Action `updateRecordStatus(recordId, status)` em `sulco/src/lib/actions.ts` conforme contrato; persistir e `revalidatePath('/curadoria')`, `revalidatePath('/')`, `revalidatePath('/disco/${recordId}')`
+- [ ] T053 [US2] Em `curadoria-view.tsx`: após `A` ou `D` chamar `updateRecordStatus` com `startTransition`, avançar ao próximo; `→` avança sem alterar; `←` volta; no último disco redirecionar para `/curadoria/concluido` (tela de conclusão FR-015)
+- [ ] T054 [P] [US2] Criar `sulco/src/app/curadoria/concluido/page.tsx` exibindo total triado na sessão (via param) + link "Voltar à coleção"
+- [ ] T055 [P] [US2] Em `curadoria-view.tsx` exibir estado vazio quando `records.length=0` com opção de trocar filtro (FR-014)
+- [ ] T056 [P] [US2] Criar `sulco/tests/e2e/curadoria-keyboard.spec.ts` cobrindo US2-AC1..AC3 (triagem via teclado, navegação bidirecional, skip)
+
+### 4.2 — Detalhe do disco e curadoria de faixas
+
+- [ ] T057 [US2] Atualizar `sulco/src/app/disco/[id]/page.tsx` (RSC) para carregar record + tracks do usuário atual (404 se não for dono); renderizar `<TrackCurationRow>` por faixa
+- [ ] T058 [US2] Criar `sulco/src/components/track-curation-row.tsx` (client) com: toggle `selected`, campos visíveis apenas quando `selected=true` (BPM, `<CamelotWheel>`, energia 1-5, rating 1-3 como `+/++/+++`, moods via `<ChipPicker>`, contextos via `<ChipPicker>`, fineGenre, references, comment), toggle Bomba 💣; renderiza 💣 ao lado de posição/título quando `isBomb=true` (FR-019)
+- [ ] T059 [US2] Implementar Server Action `updateTrackCuration(trackId, recordId, fields)` em `sulco/src/lib/actions.ts` conforme contrato; normalizar moods/contexts (trim + lowercase + dedup); preservar valores quando `selected` cai para false (FR-020); aceitar null explícito para apagar valores escalares (FR-020a)
+- [ ] T060 [P] [US2] Criar `sulco/src/components/camelot-wheel.tsx` (client) com picker visual 1A..12A + 1B..12B + input texto validado por regex Camelot; rejeita notação tradicional com mensagem
+- [ ] T061 [P] [US2] Criar `sulco/src/components/chip-picker.tsx` (client) genérico recebendo `value: string[]`, `onChange`, `suggestions: string[]` (já ordenadas por FR-017a: termos usados + DEFAULT_*_SEEDS alfa), `normalize: (s) => s.trim().toLowerCase()`; criar novo termo ao apertar Enter/vírgula
+- [ ] T062 [US2] Implementar Server Action `listUserVocabulary(kind: 'moods'|'contexts')` em `sulco/src/lib/actions.ts` retornando lista ordenada por FR-017a (DISTINCT + frequency do usuário, mescladas com DEFAULT_* constants, dedup case-insensitive)
+- [ ] T063 [P] [US2] Criar `sulco/src/components/bomba-toggle.tsx` (client) com `role="switch"`, `aria-checked`, `aria-label="Bomba"`; emoji 💣 visualmente destacado
+- [ ] T064 [US2] Atualizar Server Action `updateRecordAuthorFields` em `sulco/src/lib/actions.ts` conforme contrato (inclui `curated`/`curatedAt` de FR-020b); adicionar controle "Marcar como curado" na página `/disco/[id]`
+- [ ] T065 [P] [US2] Criar `sulco/tests/e2e/curadoria-faixas.spec.ts` cobrindo US2-AC4..AC6: marcar selected, preencher campos, toggle Bomba, desmarcar selected preservando dados
+- [ ] T066 [P] [US2] Criar `sulco/tests/unit/vocabulary.test.ts` testando ordenação FR-017a (DJ termos por frequência desc + sementes alfa; dedup case-insensitive)
+
+**Checkpoint US2**: Curadoria completa. Junto com US1 = DJ tem Discogs substituído + curadoria personalizada.
+
+---
+
+## Phase 5: User Story 3 — Criar set e montar bag (Priority: P3)
+
+**Goal**: DJ cria set com briefing, filtra candidatos (faixas selected de discos
+active) em AND, adiciona ao set, reordena com dnd + teclado; vê bag física
+derivada com shelfLocation.
+
+**Independent Test**: Criar set com name+eventDate+briefing, abrir montagem,
+aplicar filtros combinados (BPM range + 2 moods em AND + rating ≥ 2 + Bomba=apenas),
+adicionar 10 faixas de ≥3 discos, reordenar via teclado, abrir `/sets/[id]` e
+confirmar bag com 3 discos únicos e shelfLocation.
+
+**Referências**: US3-AC1..US3-AC7, FR-021..FR-029a, FR-024a.
+
+### 5.1 — CRUD e listagem de sets
+
+- [ ] T067 [US3] Criar `sulco/src/app/sets/page.tsx` (RSC) listando sets do usuário; exibir `<SetCard>` com nome, eventDate formatado em SP, location, status derivado via `deriveSetStatus`
+- [ ] T068 [P] [US3] Criar `sulco/src/components/set-card.tsx` (RSC) com badge de status (`draft`/`scheduled`/`done`) usando token CSS accent conforme estado
+- [ ] T069 [US3] Criar `sulco/src/app/sets/novo/page.tsx` com `<NewSetForm>` (client): inputs name + eventDate (datetime-local opcional) + location + briefing (max 5000); submit chama `createSet`
+- [ ] T070 [US3] Implementar Server Actions `createSet(input)` e `updateSet(setId, fields)` em `sulco/src/lib/actions.ts` conforme contrato; converter `eventDate` datetime-local → UTC via helper `tz.ts` na persistência
+
+### 5.2 — Tela de montagem e filtros
+
+- [ ] T071 [US3] Criar `sulco/src/app/sets/[id]/montar/page.tsx` (RSC): carrega set + `montarFiltersJson` parseado; query candidatos = `tracks JOIN records WHERE records.status='active' AND tracks.selected=true AND (filtros aplicados em AND)`
+- [ ] T072 [US3] Criar `sulco/src/components/montar-filters.tsx` (client) com controles: BPM min/max, `<CamelotWheel>` multi, energia range, rating range, `<ChipPicker>` moods (AND), `<ChipPicker>` contexts (AND), `<BombaFilter>` tri-estado, input texto livre; debounce 400ms; chama `saveMontarFilters` e dispara `router.replace` com searchParams
+- [ ] T073 [US3] Implementar Server Action `saveMontarFilters(setId, filters)` em `sulco/src/lib/actions.ts` conforme contrato; valida Zod e persiste JSON
+- [ ] T074 [US3] Implementar query de candidatos em `sulco/src/lib/queries/montar.ts`: aplica filtros em AND (moods: `json_each(moods) ⊇ selectedMoods`), retorna array de tracks + record metadata; considera limite 300 (FR-029a) ao adicionar
+- [ ] T075 [P] [US3] Criar `sulco/src/components/candidate-row.tsx` (client) exibindo track+record, 💣 se isBomb, botão "Adicionar ao set"
+- [ ] T076 [US3] Implementar Server Actions `addTrackToSet(setId, trackId)` e `removeTrackFromSet(setId, trackId)` em `sulco/src/lib/actions.ts` conforme contrato; `addTrackToSet` verifica limite 300 e rejeita com mensagem; `removeTrackFromSet` NEVER toca `selected`/`isBomb`
+
+### 5.3 — Painel do set em construção + reordenação
+
+- [ ] T077 [US3] Na mesma página `/sets/[id]/montar`, adicionar painel lateral com faixas já no set ordenadas por `setTracks.order`; cada item com botão remover
+- [ ] T078 [US3] Criar `sulco/src/components/sortable-set-list.tsx` (client) usando `@dnd-kit/sortable`: drag-and-drop com sensors mouse + keyboard (setas ↑↓ movem item focado); ARIA `role="listbox"`/`role="option"`; chama `reorderSetTracks` ao final do drag
+- [ ] T079 [US3] Implementar Server Action `reorderSetTracks(setId, trackIds)` em `sulco/src/lib/actions.ts` conforme contrato; transação Drizzle que zera e recria `order`
+
+### 5.4 — Visualização do set + bag física
+
+- [ ] T080 [US3] Criar `sulco/src/app/sets/[id]/page.tsx` (RSC) carregando set + tracks ordenados + bag derivada
+- [ ] T081 [P] [US3] Criar `sulco/src/lib/queries/bag.ts` com `derivePhysicalBag(setId, userId)`: SQL com JOIN records↔tracks↔setTracks, DISTINCT records.id, ORDER BY shelfLocation NULLS LAST, artist
+- [ ] T082 [P] [US3] Criar `sulco/src/components/physical-bag.tsx` (RSC) exibindo lista de discos únicos com cover + artist + title + shelfLocation badge; indicador visual se shelfLocation=null ("sem localização — adicione em /disco/[id]")
+- [ ] T083 [P] [US3] Criar `sulco/tests/e2e/criar-set.spec.ts` cobrindo US3-AC1..AC2 (criação + filtros iniciais)
+- [ ] T084 [P] [US3] Criar `sulco/tests/e2e/montar-set.spec.ts` cobrindo US3-AC3..AC6: filtros combinados AND, add/remove, reordenação por teclado, bag derivada
+- [ ] T085 [P] [US3] Criar `sulco/tests/e2e/set-status-derivation.spec.ts` cobrindo US3-AC7: manipular `eventDate` via formulário e verificar transição automática draft→scheduled→done conforme data
+- [ ] T086 [P] [US3] Criar `sulco/tests/unit/montar-filters.test.ts` testando query builder de filtros AND (moods ALL, contexts ALL, genres ALL); Bomba tri-estado; limite 300
+
+**Checkpoint US3**: Piloto entrega ciclo completo (import → curadoria → set → bag).
+
+---
+
+## Phase 6: User Story 4 — Sync com Discogs preservando curadoria (Priority: P4)
+
+**Goal**: Sync diário automático (cron) + manual + reimport individual, sem
+sobrescrever campos autorais; arquiva discos removidos; marca faixas em
+conflito; painel de status e resolução de conflitos.
+
+**Independent Test**: Com US1 completo, adicionar novo disco no Discogs, clicar
+"Sincronizar agora" → aparece unrated. Remover disco no Discogs, sincronizar →
+arquivado com banner. Editar notes → sync → notes intactos. Teste FR-054 roda
+no CI.
+
+**Referências**: US4-AC1..US4-AC6, FR-031..FR-046, FR-054.
+
+### 6.1 — Jobs de sync (daily/manual/reimport)
+
+- [ ] T087 [US4] Criar `sulco/src/lib/discogs/sync.ts` com `runDailyAutoSync(userId)` e `runManualSync(userId)`: busca primeira página (`date_added desc`); compara `discogsIds` com `snapshotJson` do último syncRun do mesmo kind; novos → `applyDiscogsUpdate(isNew=true)`; sumidos entre snapshots → `archiveRecord`; grava novo `snapshotJson` = IDs atuais; atualiza contagens new/removed/conflict
+- [ ] T088 [US4] Criar `sulco/src/lib/discogs/archive.ts` com `archiveRecord(userId, recordId)`: `UPDATE records SET archived=true, archivedAt=now()`; NEVER toca campos autorais
+- [ ] T089 [US4] Criar `sulco/src/lib/discogs/reimport.ts` com `reimportRecordJob(userId, recordId)`: verifica cooldown (syncRuns kind='reimport_record', target=recordId, finishedAt < now-60s, outcome='ok'); se dentro, retorna `{ outcome: 'rate_limited', retryAfterSeconds }`; senão, `fetchRelease` + `applyDiscogsUpdate(isNew=false)`
+- [ ] T090 [US4] Implementar Server Actions `triggerManualSync()` e `reimportRecord(recordId)` em `sulco/src/lib/actions.ts` conforme contrato; invocar jobs respectivos
+- [ ] T091 [US4] Em `updateRecordStatus` e demais actions do user: garantir que runs concorrentes são detectados (SELECT existing running syncRun antes de criar novo)
+
+### 6.2 — Cron endpoint
+
+- [ ] T092 [US4] Criar `sulco/src/app/api/cron/sync-daily/route.ts` (POST) conforme `contracts/cron-endpoint.md`: valida `authorization: Bearer $CRON_SECRET`; para cada user com credencial válida executa `runDailyAutoSync`; retorna agregado `{ran, ok, rate_limited, erro, durationMs}`
+- [ ] T093 [P] [US4] Criar `sulco/tests/integration/cron-endpoint.test.ts`: assinatura inválida → 401; endpoint executa sync para todos os users elegíveis; user com credential invalid é pulado
+
+### 6.3 — Credential invalid flow
+
+- [ ] T094 [US4] Atualizar `sulco/src/components/discogs-credential-banner.tsx` (client) em layout header: lê `user.discogsCredentialStatus`; se `invalid`, exibe banner horizontal persistente abaixo do header com link para `/conta` (FR-045)
+- [ ] T094a [US4] Criar `sulco/src/components/archived-records-banner.tsx` (RSC) em layout header: query `COUNT(*) FROM records WHERE userId=? AND archived=true AND archivedAcknowledgedAt IS NULL`; se >0, exibe banner horizontal persistente abaixo do header (mesmo estilo visual do credential banner, consistente com FR-045) com texto "N disco(s) foram removidos da sua coleção Discogs" e link para `/status` (FR-036). Banner some quando todos os registros forem reconhecidos (via `acknowledgeArchivedRecord` em T101)
+- [ ] T095 [US4] Garantir que `saveDiscogsCredential` (T032) já faz reset de `discogsCredentialStatus='valid'` ao aceitar novo PAT (FR-046)
+- [ ] T096 [US4] Em `client.ts` (T028), em qualquer 401 do Discogs chamar `markCredentialInvalid(userId)` + criar syncRun com outcome='erro' + mensagem apropriada
+
+### 6.4 — Painel /status e resolução de conflitos
+
+- [ ] T097 [US4] Criar `sulco/src/app/status/page.tsx` (RSC): exibe últimas 20 `syncRuns` do usuário (DESC por startedAt) com kind, outcome, contagens, errorMessage; exibe lista de conflitos pendentes (records com `archived=true AND archivedAcknowledgedAt IS NULL` + tracks com `conflict=true`); na renderização (server-side) atualiza `users.lastStatusVisitAt = now()` via `UPDATE users SET lastStatusVisitAt = now() WHERE id = ?` — isso zera o badge conforme FR-041
+- [ ] T098 [P] [US4] Criar `sulco/src/components/sync-badge.tsx` (RSC, reutilizado em layout header): calcula presença do badge via query: mostra se existe `syncRun` mais recente com `outcome != 'ok'` SEM `syncRun` posterior bem-sucedido, OU `records` com `archived=true AND archivedAcknowledgedAt IS NULL`, OU `tracks` com `conflict=true`, E `MAX(startedAt|archivedAt|conflictDetectedAt) > users.lastStatusVisitAt` (ou `lastStatusVisitAt IS NULL`)
+- [ ] T099 [US4] Implementar Server Action `resolveTrackConflict(trackId, action)` em `sulco/src/lib/actions.ts` conforme contrato; `keep` → UPDATE conflict=false, conflictDetectedAt=null; `discard` → DELETE tracks (cascade setTracks); revalidatePath `/status`, `/disco/[id]`
+- [ ] T100 [P] [US4] Criar `sulco/src/components/conflict-row.tsx` (client) para cada track em conflito: botões "Manter no Sulco" e "Descartar" (com confirmação modal)
+- [ ] T101 [US4] Implementar Server Action `acknowledgeArchivedRecord(recordId)` em `sulco/src/lib/actions.ts`: `UPDATE records SET archivedAcknowledgedAt = now() WHERE id = ? AND userId = ?`; valida ownership; `revalidatePath('/status')` e `revalidatePath('/')`
+- [ ] T101a [P] [US4] Criar `sulco/src/components/archived-record-row.tsx` (client) para cada disco arquivado-não-reconhecido em `/status`: exibe capa/artista/título + botão "Reconhecer" que chama `acknowledgeArchivedRecord`; curadoria do disco permanece acessível via `/disco/[id]` mesmo após reconhecimento (FR-036 "NEVER deleta")
+- [ ] T102 [P] [US4] Criar `sulco/tests/e2e/sync-status-panel.spec.ts` cobrindo US4-AC2, AC4, AC6: sync detecta remoção e arquiva; faixa em conflito oferece manter/descartar; rate limit pausa e registra
+
+### 6.5 — Reimport UI + cooldown
+
+- [ ] T103 [US4] Em `/disco/[id]/page.tsx` adicionar botão "Reimportar este disco" (FR-034); client component que chama `reimportRecord`; após sucesso, desabilita por 60s com texto "Aguarde ~60s" (FR-034a); reabilita sem reload
+- [ ] T104 [US4] No `<CoverPlaceholder>` (T045) adicionar o mesmo botão "Reimportar" (FR-008 edge case) chamando `reimportRecord`
+
+### 6.6 — Princípio I enforcement (FR-054)
+
+- [ ] T105 [US4] Criar `sulco/tests/integration/sync-preserves-author-fields.test.ts` (FR-054): setup de user + record com TODOS os campos autorais preenchidos (status, shelfLocation, notes, curated, curatedAt, selected, bpm, musicalKey, energy, rating, moods, contexts, fineGenre, references, comment, isBomb); mock do Discogs retornando dados diferentes; rodar `runManualSync` e `reimportRecord`; asserções por coluna autoral: valor igual ao original. Também cobrir FR-037b: (a) faixa marcada `conflict=true` que volta no release → `conflict=false` + campos autorais intactos; (b) disco com `archived=true` que volta na coleção → `archived=false, archivedAcknowledgedAt=null` + campos autorais intactos
+- [ ] T106 [US4] Adicionar script em `sulco/package.json`: `"test:constitution": "vitest run tests/integration/sync-preserves-author-fields.test.ts"` como gate separado; documentar em quickstart que este teste é obrigatório pré-merge
+
+**Checkpoint US4**: Sync completo, piloto entregável em produção.
+
+---
+
+## Phase 7: Polish & Cross-Cutting Concerns
+
+**Purpose**: Deleção de conta, playlists 404, seed, a11y manual, UX e limpezas finais.
+
+### 7.1 — Conta e deleção
+
+- [ ] T107 Criar `sulco/src/app/conta/page.tsx` (RSC) exibindo email (read-only), `discogsUsername` (editável), PAT mascarado com botão "Substituir" (abre form igual onboarding), botão "Apagar conta" que abre `<DeleteAccountModal>`
+- [ ] T108 [P] Criar `sulco/src/components/delete-account-modal.tsx` (client) exigindo digitar literal "APAGAR" (FR-043); submit chama `deleteAccount`
+- [ ] T109 Implementar Server Action `deleteAccount({confirm: 'APAGAR'})` em `sulco/src/lib/actions.ts` conforme contrato: aborta syncRuns running; cascade delete via `DELETE FROM users WHERE id=?`; chama `clerkClient.users.deleteUser(clerkUserId)`; redirect `/`
+- [ ] T110 [P] Criar `sulco/tests/integration/delete-account.test.ts` verificando: cascade delete remove records/tracks/sets/setTracks/syncRuns; syncRuns em andamento são abortadas; clerk delete é chamado
+
+### 7.2 — Playlists 404 (FR-053a)
+
+- [ ] T111 Adicionar handler em `sulco/src/middleware.ts` retornando `NextResponse.rewrite('/404')` para qualquer path começando com `/playlists` (FR-053a)
+- [ ] T112 [P] Criar `sulco/tests/e2e/playlists-404.spec.ts` verificando que `/playlists` e `/playlists/novo` retornam 404
+
+### 7.3 — Seed atualizado
+
+- [ ] T113 Atualizar `sulco/src/db/seed.ts`: 30 discos associados a um user de desenvolvimento (criar fixture user com clerkUserId estático); primeiro disco com algumas faixas `selected=true` + valores exemplo em bpm/musicalKey/energy/rating para smoke test; NÃO injetar termos de mood/context (responsabilidade do `DEFAULT_*_SEEDS`)
+- [ ] T114 [P] Verificar que `npm run db:seed` em ambiente limpo resulta em 30 records + ~600 tracks (~20 por disco) sem erros; rodar via `npm run db:reset`
+
+### 7.4 — Verificação manual de acessibilidade (FR-049a)
+
+- [ ] T115 Verificação manual WCAG 2.1 AA via Chrome DevTools (aba Accessibility + Lighthouse) nas telas: `/`, `/curadoria`, `/disco/[id]`, `/sets/[id]/montar`, banner `<DiscogsCredentialBanner>`; registrar screenshots de contraste ≥ 4.5:1 para texto normal e ≥ 3:1 para UI/texto grande em `docs/a11y-audit-20260422.md`
+- [ ] T116 [P] Auditar ARIA em toggles (`<BombaToggle>`, `<BombaFilter>`, drag-and-drop do set) via Chrome DevTools Accessibility tree; cada um deve expor `role`, `aria-pressed`/`aria-checked`/`aria-selected`, `aria-label` apropriado
+
+### 7.5 — CLAUDE.md sync
+
+- [ ] T117 Atualizar `sulco/CLAUDE.md` seção "O que ainda não existe": remover incrementos 1/2/3 já cobertos neste piloto; manter "Incremento 4 — PWA / mobile" como único item futuro
+- [ ] T118 [P] Atualizar `sulco/CLAUDE.md` seção "Histórico de decisões": adicionar linha "Auth: Clerk (Abril 2026)" com motivo "free tier cobre piloto indefinidamente; migração para NextAuth viável se virar SaaS"
+
+### 7.6 — Quickstart e documentação de operação
+
+- [ ] T119 Atualizar `sulco/README.md` com link para quickstart e exemplo de invocação local do cron: `curl -X POST http://localhost:3000/api/cron/sync-daily -H "authorization: Bearer $CRON_SECRET"`
+- [ ] T120 [P] Validar quickstart.md end-to-end rodando todos os passos em uma máquina limpa + screenshots em `docs/quickstart-walkthrough/`
+
+### 7.7 — Constitution final check
+
+- [ ] T121 Rodar `npm run test:constitution` em CI config (`.github/workflows/ci.yml` ou equivalente) para garantir FR-054 bloqueia merge; criar o workflow file se ainda não existir
+- [ ] T122 [P] Confirmar que `npm run build` e `npm test` passam antes de fechar piloto
+
+---
+
+## Dependencies & Execution Order
+
+### Phase completion order
+
+1. **Phase 1 (Setup)** → **Phase 2 (Foundational)** — rigidamente sequencial; nenhuma US pode começar sem Phase 2
+2. **Phase 3 (US1)** é prioridade máxima — MVP. Se US1 concluir, produto é entregável mesmo sozinho
+3. **Phase 4 (US2)** depende de US1.3 (`/` listagem) apenas para navegação ("Curadoria →"); T050..T056 podem rodar em paralelo com T041..T049 da US1 se alguém pegar a parte de curadoria independentemente
+4. **Phase 5 (US3)** depende de US2 (`tracks.selected=true` e `records.status='active'` são pré-requisitos dos candidatos); NÃO pode iniciar sem US2 concluída
+5. **Phase 6 (US4)** depende de US1 (import inicial já existente). Pode iniciar em paralelo com US2 se houver 2 devs, mas `runInitialImport` (T036) é pré-requisito para `runDailyAutoSync` reutilizar lógica
+6. **Phase 7 (Polish)** é última; 7.6 (quickstart validation) exige todo o resto verde
+
+### Parallel opportunities
+
+**Dentro de Phase 1**: T002, T003, T005, T006, T007, T008, T009, T010 (todos `[P]`) — 8 tasks em paralelo
+**Dentro de Phase 2.2**: T019, T020, T021, T022 (todos `[P]`) — 4 libs independentes
+**Dentro de US1**: T034, T035, T042, T043, T044, T045, T047 (todos `[P]`) após core RSCs estarem prontos
+**Dentro de US2**: T054, T055, T056, T060, T061, T063, T065, T066 (`[P]`)
+**Dentro de US3**: T068, T075, T081, T082, T083, T084, T085, T086 (`[P]`)
+**Dentro de US4**: T093, T098, T100, T102 (`[P]`)
+**Dentro de Phase 7**: T108, T110, T112, T114, T116, T118, T120, T122 (`[P]`)
+
+### Independent Test Criteria
+
+- **US1**: Signup → onboarding → import → listagem com filtros — entregável standalone
+- **US2**: Requer US1 (precisa ter records); entregável standalone após US1 (curadoria funcional, sem sets)
+- **US3**: Requer US1+US2 (precisa records active + tracks selected); entregável standalone após
+- **US4**: Requer US1 (estruturas de records/tracks); sync/reimport/resolve funcionam standalone após US1
+
+### MVP Scope
+
+**MVP mínimo = Phase 1 + Phase 2 + Phase 3 (US1)**. Entregável útil sozinho: DJ
+autentica, onboarding, vê coleção com filtros. Sem curadoria fina, sem sets,
+sem sync automático — mas já substitui "abrir Discogs" para ver a coleção
+com filtros de status/Bomba. Se o piloto parar aqui por qualquer razão, o
+trabalho não foi desperdiçado.
+
+### Task Metrics
+
+- **Total**: 124 tasks (T001..T122 + T094a + T101a)
+- **Setup (Phase 1)**: 10 tasks
+- **Foundational (Phase 2)**: 20 tasks
+- **US1 (Phase 3)**: 19 tasks
+- **US2 (Phase 4)**: 17 tasks
+- **US3 (Phase 5)**: 20 tasks
+- **US4 (Phase 6)**: 22 tasks (inclui T094a banner de arquivados e T101a row de reconhecimento)
+- **Polish (Phase 7)**: 16 tasks
+- **Parallelizáveis** (`[P]`): ~57 tasks
+
+### Implementation Strategy
+
+1. **MVP primeiro** (Phases 1+2+3) — parar, validar, ajustar spec se necessário.
+2. **US2** é o segundo maior diferencial do produto — deve rodar logo após MVP.
+3. **US3** entrega o output final (bag) — mas depende de US2 concluído.
+4. **US4** é prioridade mais baixa porque o piloto pode operar temporariamente
+   só com import inicial; porém **FR-054 (teste CI de Princípio I)** deve ser
+   escrito cedo (mesmo antes de US4) como guardrail enquanto sync é implementado.
+5. **Polish** (Phase 7) só depois de US1..US4 verdes.
