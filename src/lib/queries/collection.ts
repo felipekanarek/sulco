@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, desc, eq, exists, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
@@ -101,7 +101,6 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
       styles: records.styles,
       status: records.status,
       shelfLocation: records.shelfLocation,
-      hasBomb: sql<number>`EXISTS (SELECT 1 FROM ${tracks} WHERE ${tracks.recordId} = ${records.id} AND ${tracks.isBomb} = 1)`,
       tracksTotal: sql<number>`(SELECT COUNT(*) FROM ${tracks} WHERE ${tracks.recordId} = ${records.id})`,
       tracksSelected: sql<number>`(SELECT COUNT(*) FROM ${tracks} WHERE ${tracks.recordId} = ${records.id} AND ${tracks.selected} = 1)`,
     })
@@ -109,11 +108,22 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
     .where(and(...conds))
     .orderBy(desc(records.importedAt));
 
+  if (rows.length === 0) return [];
+
+  // Busca separada de IDs com Bomba — mais confiável que subquery em select.
+  const recordIds = rows.map((r) => r.id);
+  const bombRows = await db
+    .select({ recordId: tracks.recordId })
+    .from(tracks)
+    .where(and(inArray(tracks.recordId, recordIds), eq(tracks.isBomb, true)))
+    .groupBy(tracks.recordId);
+  const bombSet = new Set(bombRows.map((b) => b.recordId));
+
   return rows.map((r) => ({
     ...r,
     genres: r.genres ?? [],
     styles: r.styles ?? [],
-    hasBomb: Boolean(r.hasBomb),
+    hasBomb: bombSet.has(r.id),
     tracksTotal: Number(r.tracksTotal ?? 0),
     tracksSelected: Number(r.tracksSelected ?? 0),
   }));
