@@ -57,10 +57,23 @@ export function RecordRow({ record }: RecordRowProps) {
         <p className="label-tech mb-1 truncate" title={record.artist}>
           {record.artist}
         </p>
-        <h3 className="font-serif italic text-[22px] font-medium tracking-tight leading-tight mb-2">
-          <Link href={`/disco/${record.id}`} className="hover:text-accent transition-colors">
+        <h3 className="font-serif italic text-[22px] font-medium tracking-tight leading-tight mb-2 flex items-center gap-2 flex-wrap">
+          <Link
+            href={`/disco/${record.id}`}
+            className="hover:text-accent transition-colors"
+          >
             {record.title}
           </Link>
+          {record.hasBomb ? (
+            <span
+              className="inline-flex items-center gap-1 font-mono not-italic text-[10px] uppercase tracking-[0.12em] text-accent border border-accent px-2 py-0.5 rounded-sm bg-accent/5"
+              title="Contém ao menos uma faixa marcada como Bomba"
+              aria-label="Disco com Bomba"
+            >
+              <span aria-hidden>💣</span>
+              <span>Bomba</span>
+            </span>
+          ) : null}
         </h3>
         <p className="label-tech truncate" title={metaLine}>
           {metaLine || '—'}
@@ -69,7 +82,10 @@ export function RecordRow({ record }: RecordRowProps) {
 
       <div className="min-w-0">
         {genresText ? (
-          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink mb-1 truncate" title={record.genres.join(', ')}>
+          <p
+            className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink mb-1 truncate"
+            title={record.genres.join(', ')}
+          >
             {genresText}
           </p>
         ) : null}
@@ -89,15 +105,6 @@ export function RecordRow({ record }: RecordRowProps) {
           ) : (
             <span>—</span>
           )}
-          {record.hasBomb ? (
-            <span
-              className="inline-flex items-center gap-1 text-accent border border-accent/40 px-2 py-0.5 rounded-sm"
-              title="Contém ao menos uma faixa marcada como Bomba"
-            >
-              <span aria-hidden>💣</span>
-              <span>Bomba</span>
-            </span>
-          ) : null}
           {record.shelfLocation ? (
             <span className="text-ink-mute">· {record.shelfLocation}</span>
           ) : null}
