@@ -14,9 +14,14 @@ import { eq } from 'drizzle-orm';
 import * as schema from './schema';
 
 const DATABASE_URL = process.env.DATABASE_URL ?? 'file:./sulco.db';
+const DATABASE_AUTH_TOKEN = process.env.DATABASE_AUTH_TOKEN;
 
 async function main() {
-  const client = createClient({ url: DATABASE_URL });
+  const client = createClient(
+    DATABASE_AUTH_TOKEN
+      ? { url: DATABASE_URL, authToken: DATABASE_AUTH_TOKEN }
+      : { url: DATABASE_URL },
+  );
   const db = drizzle(client, { schema });
 
   // user fixture (clerkUserId estático — só bate se Clerk estiver
