@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns, users } from '@/db/schema';
@@ -113,11 +114,16 @@ export async function saveDiscogsCredential(
   // Sucesso: credencial válida e coleção não-vazia.
   await markCredentialValid(user.id);
 
-  // Dispara import inicial em background — intencionalmente não `await`.
+  // Dispara import inicial em background — em serverless (Vercel), `after()`
+  // mantém o worker vivo após a response ser retornada (até ~5min em Hobby).
   // FR-030: o DJ não fica bloqueado esperando; o componente <ImportProgress>
   // faz polling a cada 3s no lado do cliente.
-  runInitialImport(user.id).catch((err) => {
-    console.error('[sulco] runInitialImport fundo falhou:', err);
+  after(async () => {
+    try {
+      await runInitialImport(user.id);
+    } catch (err) {
+      console.error('[sulco] runInitialImport fundo falhou:', err);
+    }
   });
 
   revalidatePath('/onboarding');
