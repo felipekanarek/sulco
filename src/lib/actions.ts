@@ -247,11 +247,12 @@ export async function getImportProgress(): Promise<ImportProgress> {
   // dispara mais um chunk via after() pra o progresso avançar sozinho.
   // runInitialImport é idempotente (checa outcome='running' antes de criar
   // novo syncRun), então duas chamadas concorrentes não colidem.
+  const isZombieErro =
+    row.outcome === 'erro' && /(run zumbi|killed on restart)/i.test(row.errorMessage ?? '');
+  const snapshotMissing = !row.snapshotJson; // run morreu antes da primeira fetch
   const needsResume =
-    (row.outcome === 'parcial' ||
-      row.outcome === 'rate_limited' ||
-      (row.outcome === 'erro' && /(run zumbi|killed on restart)/i.test(row.errorMessage ?? ''))) &&
-    x < y;
+    (row.outcome === 'parcial' || row.outcome === 'rate_limited' || isZombieErro) &&
+    (x < y || snapshotMissing);
 
   if (needsResume) {
     after(async () => {
