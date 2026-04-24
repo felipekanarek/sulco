@@ -3,6 +3,36 @@ import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 
+/**
+ * Comparador natural de posições de faixa Discogs.
+ *
+ * Extrai lado (letra) + número e ordena por lado primeiro. Formatos
+ * comuns: "A1", "B2" (LP padrão), "1A", "1B" (EPs compilados), "1",
+ * "2", "10" (CD), "A" (medley single-track).
+ *
+ * Regras:
+ * 1. Lado (A < B < C...) vem primeiro; posições sem letra (CD) têm
+ *    side="" e agrupam antes.
+ * 2. Dentro do mesmo lado, número crescente (1 < 2 < 10, numérico,
+ *    não lexicográfico).
+ * 3. Tiebreaker por string bruta pra estabilidade.
+ */
+export function compareTrackPositions(a: string, b: string): number {
+  const parse = (p: string) => {
+    const sideMatch = p.match(/[A-Za-z]+/);
+    const trackMatch = p.match(/\d+/);
+    return {
+      side: sideMatch ? sideMatch[0].toUpperCase() : '',
+      track: trackMatch ? parseInt(trackMatch[0], 10) : 0,
+    };
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  if (pa.side !== pb.side) return pa.side.localeCompare(pb.side);
+  if (pa.track !== pb.track) return pa.track - pb.track;
+  return a.localeCompare(b);
+}
+
 export type CuradoriaStatusFilter = 'unrated' | 'active' | 'discarded' | 'all';
 
 export type CuradoriaDisc = {
@@ -71,15 +101,17 @@ export async function loadDisc(
   if (row.length === 0) return null;
   const r = row[0];
 
-  const trackRows = await db
+  const trackRowsRaw = await db
     .select()
     .from(tracks)
-    .where(eq(tracks.recordId, recordId))
-    .orderBy(
-      // Ordena por position textualmente; suficiente para "A1, A2, B1, B2..."
-      sql`${tracks.position} COLLATE NOCASE`,
-      asc(tracks.id),
-    );
+    .where(eq(tracks.recordId, recordId));
+
+  // Ordena lado primeiro, depois número: A1, A2, B1, B2 mesmo quando
+  // Discogs manda os dados como "1A, 1B, 2A, 2B" ou CDs com "1, 10, 2".
+  const trackRows = trackRowsRaw.sort((a, b) => {
+    const c = compareTrackPositions(a.position, b.position);
+    return c !== 0 ? c : a.id - b.id;
+  });
 
   return {
     id: r.id,
