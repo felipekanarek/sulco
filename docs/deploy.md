@@ -110,9 +110,15 @@ Na aba *Settings → Environment Variables*, adicione **marcando cada uma como S
 | `CLERK_WEBHOOK_SECRET`            | whsec_...                                        | Prod         |
 | `MASTER_ENCRYPTION_KEY`           | base64 (32 bytes decodificados)                  | Prod+Preview |
 | `CRON_SECRET`                     | base64                                           | Prod         |
+| `OWNER_EMAIL`                     | email do owner (mesmo cadastrado no Clerk Allowlist) | Prod+Preview |
 
 > `NEXT_PUBLIC_*` ficam expostas no bundle — é o design da Clerk (publishable
 > key é pública por natureza). Demais **precisam** ser sensitive.
+>
+> `OWNER_EMAIL` (002-multi-conta): identifica o dono do piloto. Primeiro
+> user com email verificado igual a esse valor ganha `users.is_owner=true`
+> automaticamente via webhook Clerk (ver [docs/convites.md](convites.md)).
+> Não precisa ser sensitive — é um identificador, não um segredo.
 
 ### 5.3. Deploy inicial
 

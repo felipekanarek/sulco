@@ -16,11 +16,37 @@ export const users = sqliteTable(
       .notNull()
       .default('valid'),
     lastStatusVisitAt: integer('last_status_visit_at', { mode: 'timestamp' }),
+    // 002-multi-conta: travas de autorização (FR-012, FR-001..003)
+    isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
+    allowlisted: integer('allowlisted', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
   },
   (t) => ({
     clerkUserIdUnique: uniqueIndex('users_clerk_user_id_unique').on(t.clerkUserId),
+  }),
+);
+
+/* ============================================================
+   INVITES — allowlist interna (FR-001, 002-multi-conta)
+   Pivot 2026-04-23: Clerk Allowlist é feature Pro; mantemos aqui.
+   ============================================================ */
+export const invites = sqliteTable(
+  'invites',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    email: text('email').notNull(),
+    addedByUserId: integer('added_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => ({
+    // LOWER(email) é aplicado na lógica de app; o índice UNIQUE em email
+    // cru protege contra duplicatas exatas.
+    emailUnique: uniqueIndex('invites_email_unique').on(t.email),
   }),
 );
 
@@ -183,6 +209,11 @@ export const syncRuns = sqliteTable(
    ============================================================ */
 export const playlists = sqliteTable('playlists', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  // 002-multi-conta: fecha dívida do audit (FR-008). Mesmo que rotas
+  // /playlists* sigam 404, garante isolamento caso sejam reativadas.
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
   createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
@@ -197,6 +228,11 @@ export const playlistTracks = sqliteTable(
     trackId: integer('track_id')
       .notNull()
       .references(() => tracks.id, { onDelete: 'cascade' }),
+    // 002-multi-conta: redundante com playlists.userId mas reforça
+    // isolamento a nível de constraint (PT1 invariante em data-model).
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     order: integer('order').notNull().default(0),
   },
   (t) => ({ pk: primaryKey({ columns: [t.playlistId, t.trackId] }) }),
@@ -209,6 +245,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   records: many(records),
   sets: many(sets),
   syncRuns: many(syncRuns),
+  playlists: many(playlists),
+  invitesAdded: many(invites),
 }));
 
 export const recordsRelations = relations(records, ({ one, many }) => ({
@@ -236,7 +274,8 @@ export const syncRunsRelations = relations(syncRuns, ({ one }) => ({
   user: one(users, { fields: [syncRuns.userId], references: [users.id] }),
 }));
 
-export const playlistsRelations = relations(playlists, ({ many }) => ({
+export const playlistsRelations = relations(playlists, ({ one, many }) => ({
+  user: one(users, { fields: [playlists.userId], references: [users.id] }),
   playlistTracks: many(playlistTracks),
 }));
 
@@ -246,6 +285,14 @@ export const playlistTracksRelations = relations(playlistTracks, ({ one }) => ({
     references: [playlists.id],
   }),
   track: one(tracks, { fields: [playlistTracks.trackId], references: [tracks.id] }),
+  user: one(users, { fields: [playlistTracks.userId], references: [users.id] }),
+}));
+
+export const invitesRelations = relations(invites, ({ one }) => ({
+  addedBy: one(users, {
+    fields: [invites.addedByUserId],
+    references: [users.id],
+  }),
 }));
 
 /* ============================================================
@@ -263,3 +310,5 @@ export type SetTrack = typeof setTracks.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
 export type NewSyncRun = typeof syncRuns.$inferInsert;
 export type Playlist = typeof playlists.$inferSelect;
+export type Invite = typeof invites.$inferSelect;
+export type NewInvite = typeof invites.$inferInsert;

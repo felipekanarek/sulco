@@ -3,10 +3,10 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { asc, and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { records, syncRuns, users } from '@/db/schema';
-import { requireCurrentUser } from '@/lib/auth';
+import { invites, records, syncRuns, users } from '@/db/schema';
+import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { encryptPAT } from '@/lib/crypto';
 import { markCredentialValid } from '@/lib/discogs';
 import {
@@ -1001,3 +1001,78 @@ export async function deleteAccount(
   revalidatePath('/');
   return { ok: true };
 }
+
+/* ============================================================
+   addInvite / removeInvite / listInvites — FR-001, FR-002, FR-003
+   (002-multi-conta) — gestão da allowlist interna. Só owner pode chamar.
+   ============================================================ */
+
+const inviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Email inválido.').max(254),
+});
+
+export async function addInvite(input: { email: string }): Promise<ActionResult> {
+  await requireOwner();
+  const parsed = inviteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Email inválido.' };
+  }
+  const email = parsed.data.email;
+
+  await db
+    .insert(invites)
+    .values({ email })
+    .onConflictDoNothing({ target: invites.email });
+
+  // Promove retroativamente qualquer user existente com esse email
+  // (caso a pessoa tenha criado conta antes de ser convidada).
+  await db
+    .update(users)
+    .set({ allowlisted: true, updatedAt: new Date() })
+    .where(sql`LOWER(${users.email}) = ${email}`);
+
+  revalidatePath('/admin/convites');
+  revalidatePath('/admin');
+  return { ok: true };
+}
+
+export async function removeInvite(input: { email: string }): Promise<ActionResult> {
+  await requireOwner();
+  const parsed = inviteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Email inválido.' };
+  }
+  const email = parsed.data.email;
+
+  await db.delete(invites).where(sql`LOWER(${invites.email}) = ${email}`);
+
+  // Desaloca users com esse email EXCETO owner (invariante I4 do data-model).
+  await db
+    .update(users)
+    .set({ allowlisted: false, updatedAt: new Date() })
+    .where(
+      and(
+        sql`LOWER(${users.email}) = ${email}`,
+        eq(users.isOwner, false),
+      ),
+    );
+
+  revalidatePath('/admin/convites');
+  revalidatePath('/admin');
+  return { ok: true };
+}
+
+export async function listInvites(): Promise<
+  { id: number; email: string; createdAt: Date | null }[]
+> {
+  await requireOwner();
+  return db
+    .select({
+      id: invites.id,
+      email: invites.email,
+      createdAt: invites.createdAt,
+    })
+    .from(invites)
+    .orderBy(asc(invites.createdAt));
+}
+

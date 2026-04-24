@@ -1,8 +1,25 @@
 import 'server-only';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
+import { notFound, redirect } from 'next/navigation';
 import { db } from '@/db';
 import { users } from '@/db/schema';
+
+/**
+ * Email do owner do piloto (FR-012, 002-multi-conta). Lido de env.
+ * Em produção deve estar presente; o webhook Clerk usa esse valor
+ * para promover o primeiro user cujo email verified bata com ele.
+ * Em dev é opcional — sem ele, `/admin` fica inacessível até alguém
+ * ser manualmente marcado `is_owner=true` no Turso.
+ */
+export const OWNER_EMAIL: string | undefined =
+  process.env.OWNER_EMAIL?.trim().toLowerCase() || undefined;
+
+if (!OWNER_EMAIL && process.env.NODE_ENV === 'production') {
+  // Log loud em prod sem derrubar o processo — falha só quando alguém
+  // tentar usar recursos admin.
+  console.warn('[auth] OWNER_EMAIL não configurado em produção. Painel /admin ficará inacessível até alguém ter is_owner=true no DB.');
+}
 
 export type CurrentUser = {
   id: number;
@@ -12,6 +29,8 @@ export type CurrentUser = {
   discogsTokenEncrypted: string | null;
   discogsCredentialStatus: 'valid' | 'invalid';
   needsOnboarding: boolean;
+  isOwner: boolean;
+  allowlisted: boolean;
 };
 
 /**
@@ -79,14 +98,44 @@ function toCurrentUser(u: typeof users.$inferSelect): CurrentUser {
     discogsTokenEncrypted: u.discogsTokenEncrypted,
     discogsCredentialStatus: u.discogsCredentialStatus,
     needsOnboarding: !u.discogsUsername || !u.discogsTokenEncrypted,
+    isOwner: u.isOwner,
+    allowlisted: u.allowlisted,
   };
 }
 
-/** Versão "ou lança" — usar em rotas que já passam pelo middleware protegido. */
+/**
+ * Versão "ou lança" — usar em rotas que já passam pelo middleware protegido.
+ *
+ * 002-multi-conta: também enforce allowlisted. Se user não está allowlisted,
+ * redireciona para `/convite-fechado`. Quem não deve ser interceptado
+ * (ex: a página `/convite-fechado` em si) não chama este helper.
+ */
 export async function requireCurrentUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) {
     throw new Error('Not authenticated');
   }
+  if (!user.allowlisted) {
+    redirect('/convite-fechado');
+  }
   return user;
+}
+
+/**
+ * Guard de rota admin (FR-011, 002-multi-conta). Chama `notFound()` —
+ * que renderiza o 404 padrão do Next — se o user atual não for owner.
+ * Usar no topo de pages em `/admin/*`.
+ */
+export async function requireOwner(): Promise<CurrentUser> {
+  const user = await requireCurrentUser();
+  if (!user.isOwner) {
+    notFound();
+  }
+  return user;
+}
+
+/** Predicate variant sem throw, útil pra condicionar UI em outras telas. */
+export async function isCurrentUserOwner(): Promise<boolean> {
+  const user = await getCurrentUser();
+  return user?.isOwner ?? false;
 }

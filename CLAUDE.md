@@ -220,24 +220,32 @@ quando houver produto para isso.
 | Fuso horário | UTC at-rest, `America/Sao_Paulo` na UI | FR-028/Q4 sessão 4 — status de set derivado de eventDate |
 
 <!-- SPECKIT START -->
-Current active feature: **001-sulco-piloto**
+Current active feature: **002-multi-conta**
 
 Authoritative planning artifacts (read these before making changes that
-affect the pilot):
+affect the multi-conta rollout):
 
-- Plan: [specs/001-sulco-piloto/plan.md](specs/001-sulco-piloto/plan.md)
-- Spec: [specs/001-sulco-piloto/spec.md](specs/001-sulco-piloto/spec.md)
-- Data model: [specs/001-sulco-piloto/data-model.md](specs/001-sulco-piloto/data-model.md)
-- Contracts: [specs/001-sulco-piloto/contracts/](specs/001-sulco-piloto/contracts/)
-- Research: [specs/001-sulco-piloto/research.md](specs/001-sulco-piloto/research.md)
-- Quickstart: [specs/001-sulco-piloto/quickstart.md](specs/001-sulco-piloto/quickstart.md)
+- Plan: [specs/002-multi-conta/plan.md](specs/002-multi-conta/plan.md)
+- Spec: [specs/002-multi-conta/spec.md](specs/002-multi-conta/spec.md)
+- Data model: [specs/002-multi-conta/data-model.md](specs/002-multi-conta/data-model.md)
+- Contracts: [specs/002-multi-conta/contracts/](specs/002-multi-conta/contracts/)
+- Research: [specs/002-multi-conta/research.md](specs/002-multi-conta/research.md)
+- Quickstart: [specs/002-multi-conta/quickstart.md](specs/002-multi-conta/quickstart.md)
 
-Key deltas vs. the original CLAUDE.md stack note:
-- Auth: Clerk is now in scope (not "Nenhuma agora").
-- Schema gains `users` (Clerk-anchored) and `syncRuns`; `records` gains
-  `archived`, `archivedAt`; `tracks` gains `isBomb`, `conflict`,
-  `conflictDetectedAt`; `sets` loses persisted `status` (derived from
-  `eventDate` in `America/Sao_Paulo`) and gains `montarFiltersJson`.
-- UNIQUE `(userId, discogsId)` on `records`.
-- New libs: `@clerk/nextjs`, `@dnd-kit/core`+`/sortable`, `svix`.
+Prior feature (completed, frozen): **001-sulco-piloto**
+- [specs/001-sulco-piloto/](specs/001-sulco-piloto/) — piloto single-user.
+
+Key deltas introduced by 002:
+- `users` gains `is_owner` boolean (default false) — primeiro user com
+  email igual a `OWNER_EMAIL` e verified vira owner, âncora por
+  clerkUserId.
+- `playlists` e `playlist_tracks` ganham `user_id NOT NULL` FK
+  com `ON DELETE CASCADE`, fechando dívida do audit (mesmo com as
+  rotas `/playlists*` seguindo 404).
+- Novas rotas: `/admin` (apenas owner — 404 caso contrário) e
+  `/convite-fechado` (pública, renderizada após rejeição da Clerk
+  Allowlist).
+- Env vars novas: `OWNER_EMAIL` (Vercel).
+- Signup passa a exigir allowlist no Clerk Dashboard — setup manual
+  documentado em [docs/convites.md](docs/convites.md).
 <!-- SPECKIT END -->

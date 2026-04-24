@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { users, syncRuns } from '@/db/schema';
+import { users, syncRuns, invites } from '@/db/schema';
+import { OWNER_EMAIL } from '@/lib/auth';
+
+type ClerkEmailAddress = {
+  id: string;
+  email_address: string;
+  verification?: { status?: string } | null;
+};
 
 type ClerkUserData = {
   id: string;
-  email_addresses?: { email_address: string; id: string }[];
+  email_addresses?: ClerkEmailAddress[];
   primary_email_address_id?: string | null;
   deleted?: boolean;
 };
@@ -15,6 +22,48 @@ type ClerkEvent = {
   type: string;
   data: ClerkUserData;
 };
+
+function extractPrimaryEmail(data: ClerkUserData): {
+  email: string;
+  verified: boolean;
+} {
+  const primary =
+    data.email_addresses?.find((e) => e.id === data.primary_email_address_id) ??
+    data.email_addresses?.[0];
+  return {
+    email: primary?.email_address ?? '',
+    verified: primary?.verification?.status === 'verified',
+  };
+}
+
+/**
+ * Checa se o email está na allowlist interna (002-multi-conta).
+ * Case-insensitive.
+ */
+async function isEmailInvited(email: string): Promise<boolean> {
+  if (!email) return false;
+  const rows = await db
+    .select({ id: invites.id })
+    .from(invites)
+    .where(sql`LOWER(${invites.email}) = LOWER(${email})`)
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * Decide se este user qualifica pra promoção a owner (FR-012).
+ * Condições: email verified + bate com OWNER_EMAIL + ainda ninguém é owner.
+ */
+async function qualifiesAsOwner(email: string, verified: boolean): Promise<boolean> {
+  if (!verified || !email || !OWNER_EMAIL) return false;
+  if (email.toLowerCase() !== OWNER_EMAIL) return false;
+  const existingOwner = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.isOwner, true))
+    .limit(1);
+  return existingOwner.length === 0;
+}
 
 export async function POST(req: NextRequest) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -48,24 +97,61 @@ export async function POST(req: NextRequest) {
 
   try {
     switch (evt.type) {
-      case 'user.created':
+      case 'user.created': {
+        const clerkUserId = evt.data.id;
+        const { email, verified } = extractPrimaryEmail(evt.data);
+
+        const [invited, isOwner] = await Promise.all([
+          isEmailInvited(email),
+          qualifiesAsOwner(email, verified),
+        ]);
+
+        // Owner sempre allowlisted; demais dependem de invites.
+        const allowlisted = isOwner || invited;
+
+        await db
+          .insert(users)
+          .values({
+            clerkUserId,
+            email,
+            isOwner,
+            allowlisted,
+          })
+          .onConflictDoNothing({ target: users.clerkUserId });
+        break;
+      }
+
       case 'user.updated': {
-        const { id, email_addresses, primary_email_address_id } = evt.data;
-        const email =
-          email_addresses?.find((e) => e.id === primary_email_address_id)?.email_address ??
-          email_addresses?.[0]?.email_address ??
-          '';
-        if (evt.type === 'user.created') {
-          await db
-            .insert(users)
-            .values({ clerkUserId: id, email })
-            .onConflictDoNothing({ target: users.clerkUserId });
-        } else {
-          await db
-            .update(users)
-            .set({ email, updatedAt: new Date() })
-            .where(eq(users.clerkUserId, id));
-        }
+        const clerkUserId = evt.data.id;
+        const { email, verified } = extractPrimaryEmail(evt.data);
+
+        // Re-avalia allowlisted (email pode ter mudado) e promove owner
+        // se acabou de verificar.
+        const [invited, isOwnerCandidate] = await Promise.all([
+          isEmailInvited(email),
+          qualifiesAsOwner(email, verified),
+        ]);
+
+        // Se já é owner, mantém. Caso contrário, só vira owner se qualifica.
+        const existing = await db
+          .select({ id: users.id, isOwner: users.isOwner })
+          .from(users)
+          .where(eq(users.clerkUserId, clerkUserId))
+          .limit(1);
+
+        const alreadyOwner = existing[0]?.isOwner ?? false;
+        const nextIsOwner = alreadyOwner || isOwnerCandidate;
+        const nextAllowlisted = nextIsOwner || invited;
+
+        await db
+          .update(users)
+          .set({
+            email,
+            isOwner: nextIsOwner,
+            allowlisted: nextAllowlisted,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.clerkUserId, clerkUserId));
         break;
       }
 
@@ -87,7 +173,7 @@ export async function POST(req: NextRequest) {
               errorMessage: 'Conta deletada',
               finishedAt: new Date(),
             })
-            .where(eq(syncRuns.userId, userId));
+            .where(and(eq(syncRuns.userId, userId), eq(syncRuns.outcome, 'running')));
           await db.delete(users).where(eq(users.id, userId));
         }
         break;
