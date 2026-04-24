@@ -201,8 +201,23 @@ Variável de ambiente: `ANTHROPIC_API_KEY` em `.env.local`.
 
 ### Incremento futuro 3 — Playlists (blocos reutilizáveis)
 Atualmente **fora do escopo do piloto** (FR-053a). Schema já tem as tabelas
-`playlists` e `playlist_tracks`, mas rotas `/playlists*` retornam 404. Ativar
-quando houver produto para isso.
+`playlists` e `playlist_tracks` — agora com `user_id NOT NULL` FK CASCADE
+(fechado no 002). Rotas `/playlists*` seguem 404 até haver produto para isso.
+
+### Incremento futuro 4 — Notificações por email (convites + alertas)
+Hoje o owner adiciona email em `/admin/convites` mas o sistema NÃO
+dispara email automático para o convidado. O owner precisa compartilhar a URL
+manualmente (WhatsApp, email pessoal etc.).
+
+Escopo sugerido quando vier a vez:
+- Integrar Resend (ou similar) via Server Action ao `addInvite`
+- Template simples em pt-BR: "Você foi convidado para o Sulco — acesse `<URL>`"
+- Opcional: alerta pro owner quando convidado conclui onboarding ou
+  quando algum import trava (observabilidade ativa — hoje explicitamente
+  fora do 002 spec)
+- Env var nova: `RESEND_API_KEY` (sensitive na Vercel)
+
+Registrado a pedido em 2026-04-23 como follow-up do 002-multi-conta.
 
 ---
 
@@ -218,6 +233,9 @@ quando houver produto para isso.
 | Deploy futuro | Vercel + Turso | Turso = libsql com sync multi-device quando necessário |
 | Drag-and-drop | `@dnd-kit/sortable` | Keyboard sensor nativo + ARIA correto para FR-049 |
 | Fuso horário | UTC at-rest, `America/Sao_Paulo` na UI | FR-028/Q4 sessão 4 — status de set derivado de eventDate |
+| Allowlist (002) | Tabela própria `invites` em vez de Clerk Allowlist | Clerk Allowlist é feature Pro (~US$25/mês); piloto 2-5 amigos não justifica; owner gere via `/admin/convites` |
+| Owner (002) | Bit `users.is_owner` travado via `clerkUserId` após 1º match `OWNER_EMAIL` verified | Evita ataque de "trocar email no Clerk pra virar admin" sem exigir UI/role system completo |
+| Enforcement allowlist (002) | `requireCurrentUser` redirect pra `/convite-fechado` | Mais simples que DB query no middleware (Edge runtime não suporta libsql); roda só em rotas que pedem user autenticado |
 
 <!-- SPECKIT START -->
 Current active feature: **002-multi-conta**

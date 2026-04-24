@@ -1,19 +1,27 @@
 # Quickstart walkthrough — Sulco Piloto
 
 Roteiro de validação ponta-a-ponta executado em máquina limpa. Cada passo
-aqui deve levar ao fluxo descrito; discrepâncias indicam regressão.
+aqui deve levar ao fluxo descrito; discrepâncias indicam regressão. Este
+walkthrough cobre o **piloto (001)** — em modo multi-conta (002), cada
+convidado valida os passos abaixo para sua própria coleção.
 
 **Pré-requisitos**: seguir `README.md` para setup. Este doc supõe:
 - `.env.local` com chaves Clerk válidas + secrets gerados
+- `OWNER_EMAIL` configurado (002-multi-conta)
 - `npm run db:reset` executado (banco com seed fresco)
 - `npm run dev` rodando em :3000
+
+Em prod, o convidado precisa ter o email na tabela `invites` antes de
+criar conta — ver [convites.md](./convites.md).
 
 ## 1. Signup + onboarding (US1)
 
 1. Acessar http://localhost:3000
 2. Redirect para `/sign-in` (middleware)
 3. Clicar em "Sign up", cadastrar email + senha
-4. Pós-signup → `/` redireciona para `/onboarding`
+4. Pós-signup:
+   - Se email **está em `invites`** OU é `OWNER_EMAIL` → `/` redireciona para `/onboarding` (002 passa pela check `allowlisted`)
+   - Se email **NÃO está em `invites`** → redirect pra `/convite-fechado` com mensagem em pt-BR
 5. Preencher `discogsUsername` + PAT
 6. Salvar → validação chama API Discogs uma vez
 7. Se OK → `/` com import inicial em background
@@ -78,8 +86,29 @@ aqui deve levar ao fluxo descrito; discrepâncias indicam regressão.
 ## 9. Playlists 404
 
 - `/playlists` → HTTP 404 (FR-053a, middleware rewrite)
+- Schema tem `playlists.user_id` + `playlist_tracks.user_id` NOT NULL
+  desde 002 (dívida audit fechada) — mesmo fora da UI, isolamento
+  garantido caso rota seja reativada
 
-## 10. A11y manual
+## 10. Multi-conta / admin (002)
+
+1. Logado como **owner** (email = `OWNER_EMAIL`):
+   - `/admin` → tabela com todas as contas, badge "OK" / "Atenção"
+   - Clicar em "Convites →" → `/admin/convites`
+   - Adicionar email teste → aparece na lista
+   - Remover → some
+2. Logado como **convidado não-owner**:
+   - `/admin` → 404 puro
+   - `/admin/convites` → 404 puro
+3. Anônimo (sem sessão):
+   - `/admin` → redirect para `/sign-in`
+   - `/convite-fechado` → página pública acessível
+4. User com email fora da allowlist (simular criando conta Clerk com email
+   não-convidado):
+   - Após signup Clerk, ao acessar `/` → redirect para `/convite-fechado`
+   - Conteúdo em pt-BR, botão "Solicitar acesso" abre mailto ao owner
+
+## 11. A11y manual
 
 - Ver `docs/a11y-audit.md` para checklist completo
 - Meta: Lighthouse a11y ≥ 95 em telas críticas

@@ -93,16 +93,16 @@ para `/convite-fechado` na próxima request.
   `contracts/invites.md` §4)
 - [X] T011 [US1] Adicionar `/convite-fechado` e `/admin`, `/admin/convites`
   ao tratamento do middleware (pública / protegida+owner respectivamente)
-- [ ] T012 [US1] Escrever teste `tests/integration/allowlist-flow.test.ts`:
+- [X] T012 [US1] Escrever teste `tests/integration/allowlist-flow.test.ts`:
   - user criado com email em invites → allowlisted=true
   - user criado sem invite → allowlisted=false
   - addInvite promove user existente retroativamente
   - removeInvite desaloca user (exceto owner)
-- [ ] T013 [US1] Escrever teste `tests/integration/owner-promotion.test.ts`:
+- [X] T013 [US1] Escrever teste `tests/integration/owner-promotion.test.ts`:
   - email=OWNER_EMAIL verified → is_owner=true E allowlisted=true
   - segundo user com mesmo email (simulado) não promove
   - email=OWNER_EMAIL não-verified não promove
-- [ ] T014 [US1] Escrever teste `tests/integration/multi-user-isolation.test.ts`:
+- [X] T014 [US1] Escrever teste `tests/integration/multi-user-isolation.test.ts`:
   dois users com records/sets próprios; nenhuma query retorna dados
   cruzados mesmo forçando IDs
 
@@ -172,10 +172,10 @@ logado como não-owner → 404.
 
 ### Implementation
 
-- [ ] T024 [US4] Verificação prévia: `turso db shell sulco-prod
+- [X] T024 [US4] Verificação prévia: `turso db shell sulco-prod
   "SELECT COUNT(*) FROM playlists; SELECT COUNT(*) FROM playlist_tracks;"`
   — confirmar 0 linhas antes da migração (já planejado em T006 schema)
-- [ ] T025 [US4] Escrever teste `tests/integration/playlists-scoping.test.ts`:
+- [X] T025 [US4] Escrever teste `tests/integration/playlists-scoping.test.ts`:
   - INSERT sem `user_id` falha (NOT NULL)
   - INSERT com `user_id` válido sucede
   - DELETE de user em cascata remove playlists + playlist_tracks
@@ -187,15 +187,15 @@ logado como não-owner → 404.
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T026 [P] Atualizar `README.md` com seção "Convidados" linkando
+- [X] T026 [P] Atualizar `README.md` com seção "Convidados" linkando
   `docs/convites.md`
-- [ ] T027 [P] Atualizar `docs/quickstart-walkthrough.md` com passo
+- [X] T027 [P] Atualizar `docs/quickstart-walkthrough.md` com passo
   de convite (após onboarding do owner)
-- [ ] T028 [P] Atualizar `CLAUDE.md` seção "Histórico de decisões"
+- [X] T028 [P] Atualizar `CLAUDE.md` seção "Histórico de decisões"
   com linha sobre allowlist interna vs. Clerk Pro
-- [ ] T029 Rodar `specs/002-multi-conta/quickstart.md` ponta-a-ponta
+- [X] T029 Rodar `specs/002-multi-conta/quickstart.md` ponta-a-ponta
   com owner + 1 convidado real
-- [ ] T030 Executar `npx tsc --noEmit`, `npm test`,
+- [X] T030 Executar `npx tsc --noEmit`, `npm test`,
   `npm run test:constitution` e confirmar zero regressões
 - [ ] T031 Deploy: `vercel deploy --prod --yes`; validar smoke
   (/admin renderiza só pro owner; /convite-fechado acessível)

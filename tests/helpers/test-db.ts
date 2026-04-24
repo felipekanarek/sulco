@@ -15,8 +15,10 @@ export async function createTestDb() {
 }
 
 async function applyDdl(client: Client) {
+  // Habilita FK enforcement — libsql/sqlite default é OFF.
+  await client.execute('PRAGMA foreign_keys = ON');
   const stmts = [
-    // users
+    // users (002-multi-conta: is_owner + allowlisted)
     `CREATE TABLE users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       clerk_user_id TEXT NOT NULL,
@@ -25,10 +27,21 @@ async function applyDdl(client: Client) {
       discogs_token_encrypted TEXT,
       discogs_credential_status TEXT DEFAULT 'valid' NOT NULL,
       last_status_visit_at INTEGER,
+      is_owner INTEGER DEFAULT 0 NOT NULL,
+      allowlisted INTEGER DEFAULT 0 NOT NULL,
       created_at INTEGER DEFAULT (unixepoch()),
       updated_at INTEGER DEFAULT (unixepoch())
     )`,
     `CREATE UNIQUE INDEX users_clerk_user_id_unique ON users (clerk_user_id)`,
+
+    // invites (002-multi-conta: allowlist interna)
+    `CREATE TABLE invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      added_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER DEFAULT (unixepoch()) NOT NULL
+    )`,
+    `CREATE UNIQUE INDEX invites_email_unique ON invites (email)`,
 
     // records
     `CREATE TABLE records (
@@ -123,9 +136,10 @@ async function applyDdl(client: Client) {
     `CREATE INDEX sync_runs_user_started_idx ON sync_runs (user_id, started_at)`,
     `CREATE INDEX sync_runs_user_outcome_idx ON sync_runs (user_id, outcome)`,
 
-    // playlists (legacy)
+    // playlists (002: ganhou user_id NOT NULL CASCADE)
     `CREATE TABLE playlists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       description TEXT,
       created_at INTEGER DEFAULT (unixepoch())
@@ -133,6 +147,7 @@ async function applyDdl(client: Client) {
     `CREATE TABLE playlist_tracks (
       playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
       track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       "order" INTEGER DEFAULT 0 NOT NULL,
       PRIMARY KEY (playlist_id, track_id)
     )`,

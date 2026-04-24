@@ -68,15 +68,33 @@ curl -X POST http://localhost:3000/api/cron/sync-daily \
 Em prod, a Vercel chama automaticamente às 07:00 UTC (04:00 America/Sao_Paulo)
 conforme `vercel.json`.
 
+## Convidados (002-multi-conta)
+
+O Sulco roda em modo **invite-only** — só emails pré-aprovados conseguem
+usar o app. Arquitetura: tabela `invites` no Turso + coluna
+`users.allowlisted` + middleware que redireciona não-allowlisted pra
+`/convite-fechado`.
+
+**Gestão**: https://sulco.vercel.app/admin/convites (apenas owner).
+Passo-a-passo detalhado em [docs/convites.md](./docs/convites.md).
+
+**Owner**: definido pela env `OWNER_EMAIL` na Vercel. Primeiro user cujo
+email verified bate com esse valor é promovido (travado por `clerkUserId`).
+Apenas o owner acessa `/admin` e `/admin/convites`; demais recebem 404.
+
 ## Estrutura
 
 Ver [CLAUDE.md](./CLAUDE.md) para stack, modelo de dados e regras de
-negócio, e [specs/001-sulco-piloto/](./specs/001-sulco-piloto/) para spec,
-plan, data-model, contracts e tasks.
+negócio, e [specs/](./specs/) para spec, plan, data-model, contracts e
+tasks de cada incremento:
+
+- [001-sulco-piloto/](./specs/001-sulco-piloto/) — piloto single-user
+- [002-multi-conta/](./specs/002-multi-conta/) — invite-only + allowlist + /admin
 
 ## Próximos passos
 
 - [ ] Homologação ponta-a-ponta do sync Discogs (Phase 6) em condições reais
+- [ ] Notificações por email (envio automático ao convidar) — ver CLAUDE.md
 - [ ] Briefing inteligente com IA (Anthropic SDK + prompt caching)
 - [ ] PWA / mobile (`next-pwa`, swipe em /curadoria)
 - [ ] Playlists (blocos reutilizáveis) — schema pronto, UI fora do piloto

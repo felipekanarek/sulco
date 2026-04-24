@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { users, syncRuns, invites } from '@/db/schema';
+import { users, syncRuns } from '@/db/schema';
 import { OWNER_EMAIL } from '@/lib/auth';
+import { isEmailInvited, qualifiesAsOwner } from '@/lib/allowlist';
 
 type ClerkEmailAddress = {
   id: string;
@@ -34,35 +35,6 @@ function extractPrimaryEmail(data: ClerkUserData): {
     email: primary?.email_address ?? '',
     verified: primary?.verification?.status === 'verified',
   };
-}
-
-/**
- * Checa se o email está na allowlist interna (002-multi-conta).
- * Case-insensitive.
- */
-async function isEmailInvited(email: string): Promise<boolean> {
-  if (!email) return false;
-  const rows = await db
-    .select({ id: invites.id })
-    .from(invites)
-    .where(sql`LOWER(${invites.email}) = LOWER(${email})`)
-    .limit(1);
-  return rows.length > 0;
-}
-
-/**
- * Decide se este user qualifica pra promoção a owner (FR-012).
- * Condições: email verified + bate com OWNER_EMAIL + ainda ninguém é owner.
- */
-async function qualifiesAsOwner(email: string, verified: boolean): Promise<boolean> {
-  if (!verified || !email || !OWNER_EMAIL) return false;
-  if (email.toLowerCase() !== OWNER_EMAIL) return false;
-  const existingOwner = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.isOwner, true))
-    .limit(1);
-  return existingOwner.length === 0;
 }
 
 export async function POST(req: NextRequest) {
@@ -102,8 +74,8 @@ export async function POST(req: NextRequest) {
         const { email, verified } = extractPrimaryEmail(evt.data);
 
         const [invited, isOwner] = await Promise.all([
-          isEmailInvited(email),
-          qualifiesAsOwner(email, verified),
+          isEmailInvited(db, email),
+          qualifiesAsOwner(db, { email, verified, ownerEmail: OWNER_EMAIL }),
         ]);
 
         // Owner sempre allowlisted; demais dependem de invites.
@@ -128,8 +100,8 @@ export async function POST(req: NextRequest) {
         // Re-avalia allowlisted (email pode ter mudado) e promove owner
         // se acabou de verificar.
         const [invited, isOwnerCandidate] = await Promise.all([
-          isEmailInvited(email),
-          qualifiesAsOwner(email, verified),
+          isEmailInvited(db, email),
+          qualifiesAsOwner(db, { email, verified, ownerEmail: OWNER_EMAIL }),
         ]);
 
         // Se já é owner, mantém. Caso contrário, só vira owner se qualifica.
