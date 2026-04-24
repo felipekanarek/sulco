@@ -339,34 +339,33 @@ Registrado a pedido em 2026-04-24.
 | Allowlist (002) | Tabela própria `invites` em vez de Clerk Allowlist | Clerk Allowlist é feature Pro (~US$25/mês); piloto 2-5 amigos não justifica; owner gere via `/admin/convites` |
 | Owner (002) | Bit `users.is_owner` travado via `clerkUserId` após 1º match `OWNER_EMAIL` verified | Evita ataque de "trocar email no Clerk pra virar admin" sem exigir UI/role system completo |
 | Enforcement allowlist (002) | `requireCurrentUser` redirect pra `/convite-fechado` | Mais simples que DB query no middleware (Edge runtime não suporta libsql); roda só em rotas que pedem user autenticado |
+| Chip visual (003) | `<Chip variant="mood\|context\|ghost" />` | Uniforme pra todos os tags de metadado; moods preenchidos accent, contexts sóbrios borda, ghost pra `+N mais`. Reusa tokens existentes. |
+| Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **002-multi-conta**
+Current active feature: **003-faixas-ricas-montar**
 
-Authoritative planning artifacts (read these before making changes that
-affect the multi-conta rollout):
+Authoritative planning artifacts (read these before making changes
+to the candidate card ou query de candidatos da tela de montar set):
 
-- Plan: [specs/002-multi-conta/plan.md](specs/002-multi-conta/plan.md)
-- Spec: [specs/002-multi-conta/spec.md](specs/002-multi-conta/spec.md)
-- Data model: [specs/002-multi-conta/data-model.md](specs/002-multi-conta/data-model.md)
-- Contracts: [specs/002-multi-conta/contracts/](specs/002-multi-conta/contracts/)
-- Research: [specs/002-multi-conta/research.md](specs/002-multi-conta/research.md)
-- Quickstart: [specs/002-multi-conta/quickstart.md](specs/002-multi-conta/quickstart.md)
+- Plan: [specs/003-faixas-ricas-montar/plan.md](specs/003-faixas-ricas-montar/plan.md)
+- Spec: [specs/003-faixas-ricas-montar/spec.md](specs/003-faixas-ricas-montar/spec.md)
+- Data model: [specs/003-faixas-ricas-montar/data-model.md](specs/003-faixas-ricas-montar/data-model.md)
+- Contracts: [specs/003-faixas-ricas-montar/contracts/](specs/003-faixas-ricas-montar/contracts/)
+- Research: [specs/003-faixas-ricas-montar/research.md](specs/003-faixas-ricas-montar/research.md)
+- Quickstart: [specs/003-faixas-ricas-montar/quickstart.md](specs/003-faixas-ricas-montar/quickstart.md)
 
-Prior feature (completed, frozen): **001-sulco-piloto**
-- [specs/001-sulco-piloto/](specs/001-sulco-piloto/) — piloto single-user.
+Prior features (completed, frozen):
+- [001-sulco-piloto/](specs/001-sulco-piloto/) — piloto single-user
+- [002-multi-conta/](specs/002-multi-conta/) — invite-only + /admin
 
-Key deltas introduced by 002:
-- `users` gains `is_owner` boolean (default false) — primeiro user com
-  email igual a `OWNER_EMAIL` e verified vira owner, âncora por
-  clerkUserId.
-- `playlists` e `playlist_tracks` ganham `user_id NOT NULL` FK
-  com `ON DELETE CASCADE`, fechando dívida do audit (mesmo com as
-  rotas `/playlists*` seguindo 404).
-- Novas rotas: `/admin` (apenas owner — 404 caso contrário) e
-  `/convite-fechado` (pública, renderizada após rejeição da Clerk
-  Allowlist).
-- Env vars novas: `OWNER_EMAIL` (Vercel).
-- Signup passa a exigir allowlist no Clerk Dashboard — setup manual
-  documentado em [docs/convites.md](docs/convites.md).
+Key points of 003:
+- **Zero mudança de schema** — todos os campos já existem no piloto
+- Query `listMontarCandidates`/`queryCandidates` ganha `references` e
+  `recordNotes` no SELECT + no tipo `Candidate`
+- Componente `candidate-row.tsx` refatorado pra modo compacto/expandido;
+  chip overflow em 4 + `+N mais`
+- Novo componente `<Chip variant="mood|context|ghost">` reusável
+- Estado `expanded` em `useState` local — não persiste entre sessões
+- Princípio I preservado: zero writes em campos autorais nesta tela
 <!-- SPECKIT END -->

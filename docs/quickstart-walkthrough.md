@@ -55,11 +55,22 @@ criar conta — ver [convites.md](./convites.md).
 3. Redireciona para `/sets/[id]/montar`
 4. Filter bar: BPM range, Camelot multi, energy range, rating range,
    moods AND, contexts AND, Bomba tri-estado, texto
-5. Adicionar candidatos via botão `+` (bag física atualiza instantaneamente)
-6. Remover via `×` na sidebar direita
-7. Arrastar ⋮⋮ ou Tab+Espaço+setas para reordenar
-8. "Finalizar →" → `/sets/[id]` com setlist numerada + bag física derivada
-9. Status derivado do eventDate: Rascunho (vazio) / Agendado (futuro) / Realizado (passado)
+5. **Card de candidato (003-faixas-ricas-montar)** mostra em modo
+   compacto: rating `+/++/+++` (com `+++` em vermelho), Bomba,
+   fineGenre, chips coloridos de moods + borda sóbria de contexts
+   (até 4 por grupo + `+N mais`), e comment truncado em itálico
+6. Clicar chevron `▸` expande inline: references, shelfLocation
+   com 📍, notes do disco, comment full + todos os chips em wrap
+7. Adicionar candidatos via botão `+` (bag física atualiza
+   instantaneamente); card permanece na lista com borda verde `✓`
+   e botão "remover" inline; estado expand/compact preservado
+8. Remover via `×` na sidebar direita OU pelo botão "remover" no
+   próprio card
+9. Arrastar ⋮⋮ ou Tab+Espaço+setas para reordenar
+10. "Finalizar →" → `/sets/[id]` com setlist numerada + bag física
+    derivada
+11. Status derivado do eventDate: Rascunho (vazio) / Agendado (futuro)
+    / Realizado (passado)
 
 ## 6. Sync + conflitos (US4)
 

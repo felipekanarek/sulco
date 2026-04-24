@@ -29,6 +29,7 @@ export type Candidate = {
   contexts: string[];
   fineGenre: string | null;
   comment: string | null;
+  references: string | null;
   isBomb: boolean;
   // record context
   recordId: number;
@@ -36,6 +37,7 @@ export type Candidate = {
   recordTitle: string;
   coverUrl: string | null;
   shelfLocation: string | null;
+  recordNotes: string | null;
 };
 
 /**
@@ -109,12 +111,14 @@ export async function queryCandidates(
       contexts: tracks.contexts,
       fineGenre: tracks.fineGenre,
       comment: tracks.comment,
+      references: tracks.references,
       isBomb: tracks.isBomb,
       recordId: records.id,
       artist: records.artist,
       recordTitle: records.title,
       coverUrl: records.coverUrl,
       shelfLocation: records.shelfLocation,
+      recordNotes: records.notes,
     })
     .from(tracks)
     .innerJoin(records, eq(records.id, tracks.recordId))
