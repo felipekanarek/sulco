@@ -8,8 +8,6 @@ const MB_BASE = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = 'Sulco/0.1 ( marcus@infoprice.co )';
 const REQUEST_TIMEOUT_MS = 10_000;
 const RATE_LIMIT_GAP_MS = 1_100;
-const MIN_RELEASE_SCORE = 90;
-
 let lastRequestAt = 0;
 
 async function rateLimit(): Promise<void> {
@@ -34,23 +32,36 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
   }
 }
 
-type MBSearchResponse = {
-  releases?: Array<{
-    id: string;
-    score?: number;
-    title?: string;
+type MBUrlLookupResponse = {
+  id?: string;
+  relations?: Array<{
+    type?: string;
+    'target-type'?: string;
+    release?: { id?: string; title?: string };
   }>;
 };
 
 /**
- * Busca o MBID da release em MusicBrainz correspondente ao Discogs
- * release ID. Retorna `null` se não achou ou se score < MIN_RELEASE_SCORE.
+ * Resolve o MBID da release MusicBrainz equivalente à release Discogs.
  *
- * Lança `Error` em 503 persistente ou timeout (caller decide retry).
+ * **Implementação**: consulta o endpoint `/url?resource=<discogs-url>`
+ * do MusicBrainz, que retorna a entidade URL do Discogs registrada no MB
+ * junto com as relações (inclusive `discogs` release-rels). Isso é o
+ * canonical lookup pra "dado este Discogs ID, qual MBID?" — o LHS da
+ * relação é o Discogs URL, o RHS é a release MB. Ver:
+ * https://musicbrainz.org/doc/MusicBrainz_API#url
+ *
+ * NÃO usamos `/release?query=discogs:{id}`: esse query Lucene não
+ * indexa o field `discogs` como filtro (`discogs` vira keyword no
+ * body search) e retorna centenas de garbage matches score=100.
+ *
+ * Retorna `null` se a URL Discogs não tem entry no MB ou se nenhuma
+ * relação `discogs`→release existe.
  */
 export async function searchReleaseByDiscogsId(discogsReleaseId: number): Promise<string | null> {
   await rateLimit();
-  const url = `${MB_BASE}/release?query=${encodeURIComponent(`discogs:${discogsReleaseId}`)}&fmt=json&limit=3`;
+  const discogsUrl = `https://www.discogs.com/release/${discogsReleaseId}`;
+  const url = `${MB_BASE}/url?resource=${encodeURIComponent(discogsUrl)}&inc=release-rels&fmt=json`;
   let res = await fetchWithTimeout(url);
   if (res.status === 503) {
     await new Promise((r) => setTimeout(r, 2_200));
@@ -59,13 +70,13 @@ export async function searchReleaseByDiscogsId(discogsReleaseId: number): Promis
   }
   if (res.status === 404) return null;
   if (!res.ok) {
-    throw new Error(`MB search failed: ${res.status}`);
+    throw new Error(`MB url lookup failed: ${res.status}`);
   }
-  const body = (await res.json()) as MBSearchResponse;
-  const first = body.releases?.[0];
-  if (!first) return null;
-  if (typeof first.score === 'number' && first.score < MIN_RELEASE_SCORE) return null;
-  return first.id;
+  const body = (await res.json()) as MBUrlLookupResponse;
+  const release = body.relations?.find(
+    (r) => r.type === 'discogs' && r.release?.id,
+  )?.release;
+  return release?.id ?? null;
 }
 
 type MBReleaseFetchResponse = {
