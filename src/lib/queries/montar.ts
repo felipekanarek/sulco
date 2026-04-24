@@ -38,6 +38,8 @@ export type Candidate = {
   coverUrl: string | null;
   shelfLocation: string | null;
   recordNotes: string | null;
+  recordGenres: string[];
+  recordStyles: string[];
 };
 
 /**
@@ -119,6 +121,8 @@ export async function queryCandidates(
       coverUrl: records.coverUrl,
       shelfLocation: records.shelfLocation,
       recordNotes: records.notes,
+      recordGenres: records.genres,
+      recordStyles: records.styles,
     })
     .from(tracks)
     .innerJoin(records, eq(records.id, tracks.recordId))
@@ -130,6 +134,8 @@ export async function queryCandidates(
     ...r,
     moods: (r.moods ?? []) as string[],
     contexts: (r.contexts ?? []) as string[],
+    recordGenres: (r.recordGenres ?? []) as string[],
+    recordStyles: (r.recordStyles ?? []) as string[],
   }));
 }
 

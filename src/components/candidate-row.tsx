@@ -134,8 +134,32 @@ export function CandidateRow({
           <span className="text-ink-soft">{candidate.recordTitle}</span>
         </p>
 
+        {candidate.recordGenres.length > 0 || candidate.recordStyles.length > 0 ? (
+          <p
+            className="mt-0.5 truncate"
+            title={[...candidate.recordGenres, ...candidate.recordStyles].join(
+              ' · ',
+            )}
+          >
+            {candidate.recordGenres.length > 0 ? (
+              <span className="label-tech text-ink">
+                {candidate.recordGenres.slice(0, 3).join(' · ')}
+              </span>
+            ) : null}
+            {candidate.recordGenres.length > 0 &&
+            candidate.recordStyles.length > 0 ? (
+              <span className="font-mono text-[10px] text-ink-mute mx-1">·</span>
+            ) : null}
+            {candidate.recordStyles.length > 0 ? (
+              <span className="font-serif italic text-[13px] text-ink-soft">
+                {candidate.recordStyles.slice(0, 3).join(' · ')}
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+
         {candidate.fineGenre ? (
-          <p className="label-tech text-ink-soft mt-0.5 truncate">
+          <p className="label-tech text-ink-soft mt-0.5 truncate" title="Gênero refinado (curadoria)">
             {candidate.fineGenre}
           </p>
         ) : null}
