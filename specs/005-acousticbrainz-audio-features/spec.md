@@ -313,7 +313,13 @@ conferindo que os números batem com consultas diretas ao banco.
   do usuário e tenta enriquecer faixas elegíveis.
 - **FR-015**: Rotina MUST pular faixas cuja última tentativa de
   enriquecimento foi bem-sucedida e os dados de origem não mudaram.
-- **FR-016**: Rotina MUST pular discos arquivados (`archived=true`).
+- **FR-016**: Rotina MUST pular apenas discos **arquivados**
+  (`archived=true`). Discos com `status` = `'unrated'`, `'active'` ou
+  `'discarded'` são **todos elegíveis** — o valor principal da feature
+  é ajudar na triagem, que acontece justamente sobre discos `unrated`.
+  Ordem de processamento: `active` primeiro, `unrated` depois,
+  `discarded` por último — assim quando DJ marca um disco como
+  `active`, ele tende a ser enriquecido na execução seguinte.
 - **FR-017**: Rotina MUST isolar por usuário — acervo de um DJ nunca
   interfere no de outro, mesmo quando compartilham a mesma release.
 - **FR-018**: Rotina MUST rodar em dois gatilhos automáticos sem

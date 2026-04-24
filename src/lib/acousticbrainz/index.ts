@@ -6,7 +6,7 @@ import 'server-only';
 // pós-import (src/lib/discogs/apply-update).
 // Ver specs/005-acousticbrainz-audio-features/contracts/server-actions.md.
 
-import { and, eq, isNull, or, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, lt, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns, tracks } from '@/db/schema';
 import { compareTrackPositions } from '@/lib/queries/curadoria';
@@ -202,7 +202,11 @@ export async function enrichRecord(userId: number, recordId: number): Promise<Re
 
   const rec = recRows[0];
   if (!rec) return summary;
-  if (rec.archived || rec.status !== 'active') return summary;
+  // 005 FR-016: pula só archived (spec não exige filtro de status).
+  // Discos 'unrated' também são elegíveis pra entregar sugestão na
+  // triagem, que é onde o DJ mais precisa (insight da sessão dev
+  // 2026-04-24 smoke test).
+  if (rec.archived) return summary;
 
   // Faixas elegíveis: source IS NULL E (nunca tentou OU tentou há >30 dias)
   const cutoff = Math.floor(Date.now() / 1000) - RETRY_WINDOW_SECONDS;
@@ -312,23 +316,38 @@ export async function enrichUserBacklog(userId: number, opts: BacklogOpts = {}):
   };
 
   try {
-    // Discos elegíveis: ativos, não arquivados, com ao menos 1 track
-    // elegível. Select distinto de records com subquery.
+    // Discos elegíveis: não arquivados, com ao menos 1 track elegível.
+    // FR-016: spec só exige pular archived. Status 'unrated'/'discarded'
+    // entram — valor principal da feature é ajudar na triagem.
+    // Ordenação: 'active' primeiro (DJ já marcou pra curar); depois
+    // 'unrated' (maioria do acervo); 'discarded' por último.
     const cutoff = Math.floor(Date.now() / 1000) - RETRY_WINDOW_SECONDS;
     const eligibleRecords = await db
-      .selectDistinct({ id: records.id })
+      .selectDistinct({
+        id: records.id,
+        status: records.status,
+      })
       .from(records)
       .innerJoin(tracks, eq(tracks.recordId, records.id))
       .where(
         and(
           eq(records.userId, userId),
           eq(records.archived, false),
-          eq(records.status, 'active'),
           isNull(tracks.audioFeaturesSource),
           or(
             isNull(tracks.audioFeaturesSyncedAt),
             lt(tracks.audioFeaturesSyncedAt, new Date(cutoff * 1000)),
           ),
+        ),
+      )
+      .orderBy(
+        desc(
+          sql`CASE ${records.status}
+                WHEN 'active'    THEN 2
+                WHEN 'unrated'   THEN 1
+                WHEN 'discarded' THEN 0
+                ELSE 0
+              END`,
         ),
       );
 
