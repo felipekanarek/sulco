@@ -256,6 +256,37 @@ trabalho. Meta: metade do tempo de curadoria pra discos com match.
 
 Registrado a pedido em 2026-04-24.
 
+### Incremento futuro 6 — Fluxo de exclusão de álbum da coleção
+Hoje o Sulco só arquiva discos que saíram do Discogs (Princípio IV —
+Preservar em vez de destruir). Falta um fluxo explícito pro DJ
+**remover manualmente** um disco que ele não quer mais ver, por
+qualquer motivo (desistiu, vendeu, comprou errado).
+
+Escopo sugerido:
+- Botão "Remover da coleção" em `/disco/[id]`, na sidebar com as
+  demais ações de conta (abaixo de "Reimportar este disco")
+- Modal de confirmação — tipo o de delete account — exigindo digitar
+  o título do disco pra confirmar. Mensagem explícita: "Isso vai
+  apagar este disco, todas as faixas e sua curadoria (BPM, tom,
+  Bomba, comentários). Set history preservado só se o disco não
+  estava em nenhum set finalizado."
+- Decisão pra tomar no spec: **cascade delete total** (tracks +
+  set_tracks que referenciem) vs **preservar em sets finalizados**
+  (mantém track + marca record como soft-deleted)
+- Opção "também remover do Discogs" com checkbox? Provavelmente não
+  — Sulco não deve mutar o Discogs do DJ sem escopo explícito.
+- Se o disco estiver arquivado (veio do Discogs mas foi removido
+  de lá), o botão pode ser mais direto ("Apagar permanentemente")
+- Auditoria: registrar em `sync_runs` kind='manual_delete' pra
+  histórico
+- Edge cases: set em andamento ("Montar set") tem track do disco
+  → avisar antes de apagar
+
+Princípio I permanece: só o DJ pode iniciar essa ação (soberania),
+e a ação é irreversível (cascade). Zero impacto no Discogs do DJ.
+
+Registrado a pedido em 2026-04-24.
+
 ---
 
 ## Histórico de decisões de arquitetura
