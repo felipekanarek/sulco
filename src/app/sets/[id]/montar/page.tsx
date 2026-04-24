@@ -61,8 +61,11 @@ export default async function MontarSetPage({
   const inSetTracks = await listSetTracks(setId, user.id);
   const inSetIds = new Set(inSetTracks.map((t) => t.trackId));
 
+  // 003 FR-014a: faixas já na bag NÃO são excluídas da lista de
+  // candidatos. Elas seguem visíveis, marcadas via `alreadyIn` prop,
+  // pra DJ manter contexto (avaliar outras do mesmo disco etc.).
   const [candidates, moodSuggestions, contextSuggestions] = await Promise.all([
-    queryCandidates(user.id, filters, { excludeTrackIds: Array.from(inSetIds) }),
+    queryCandidates(user.id, filters),
     listSelectedVocab(user.id, 'moods'),
     listSelectedVocab(user.id, 'contexts'),
   ]);
