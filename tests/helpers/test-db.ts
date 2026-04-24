@@ -70,7 +70,7 @@ async function applyDdl(client: Client) {
     `CREATE INDEX records_user_status_idx ON records (user_id, status)`,
     `CREATE INDEX records_user_archived_idx ON records (user_id, archived)`,
 
-    // tracks
+    // tracks (005: mbid, audio_features_source, audio_features_synced_at)
     `CREATE TABLE tracks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
@@ -88,12 +88,16 @@ async function applyDdl(client: Client) {
       "references" TEXT,
       comment TEXT,
       is_bomb INTEGER DEFAULT 0 NOT NULL,
+      mbid TEXT,
+      audio_features_source TEXT,
+      audio_features_synced_at INTEGER,
       conflict INTEGER DEFAULT 0 NOT NULL,
       conflict_detected_at INTEGER,
       updated_at INTEGER DEFAULT (unixepoch())
     )`,
     `CREATE UNIQUE INDEX tracks_record_position_unique ON tracks (record_id, position)`,
     `CREATE INDEX tracks_record_selected_idx ON tracks (record_id, selected)`,
+    `CREATE INDEX tracks_af_backlog_idx ON tracks (audio_features_source, audio_features_synced_at)`,
 
     // sets
     `CREATE TABLE sets (

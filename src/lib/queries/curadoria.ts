@@ -64,6 +64,8 @@ export type CuradoriaDisc = {
     references: string | null;
     comment: string | null;
     isBomb: boolean;
+    // 005 — audio features source flag
+    audioFeaturesSource: 'acousticbrainz' | 'manual' | null;
   }[];
 };
 
@@ -142,6 +144,7 @@ export async function loadDisc(
       references: t.references,
       comment: t.comment,
       isBomb: t.isBomb,
+      audioFeaturesSource: t.audioFeaturesSource,
     })),
   };
 }

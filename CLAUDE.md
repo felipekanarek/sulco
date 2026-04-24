@@ -219,42 +219,73 @@ Escopo sugerido quando vier a vez:
 
 Registrado a pedido em 2026-04-23 como follow-up do 002-multi-conta.
 
-### Incremento futuro 5 — Spotify audio hints (BPM/tom/energia + preview)
-Arquivo: `src/lib/spotify/` (ainda não criado).
+### Incremento futuro 5 — Audio features via AcousticBrainz (BPM/tom/energia)
+Arquivo: `src/lib/acousticbrainz/` (ainda não criado).
 
-Objetivo: acelerar curadoria de 2500 discos puxando sugestões de BPM,
-tom (Camelot), energia via Spotify `audio-features` API, e expor
-botão de preview (link-out pro Spotify Web Player).
+Objetivo: acelerar curadoria de 2500 discos pré-preenchendo ghost
+fields (bpm, tom, energia, moods) a partir de dados públicos,
+respeitando Princípio I (nunca sobrescrever campos autorais).
+
+**Contexto (2026-04-24):** o plano original era Spotify `audio-features`
+API. Inviabilizado pela deprecação de 2024-11-27 — endpoints fechados
+pra apps novos independente do tier da conta do usuário (Premium não
+resolve). Pivot pra AcousticBrainz que (a) é público sem auth,
+(b) indexa por MBID, (c) tem ~70-80% de cobertura pro acervo vinil
+pós-1980 do Felipe.
 
 Escopo sugerido:
-- OAuth 2.0 PKCE por user; token cifrado com `MASTER_ENCRYPTION_KEY`
-  (mesmo padrão do PAT Discogs)
-- Matching Discogs → Spotify album: ISRC quando disponível, fallback
-  artist+title+year com top-3 candidates pro DJ escolher
-- Faixas auto-linkadas por position+title após match do álbum
-- Colunas separadas em `tracks`: `spotify_track_id`, `spotify_bpm`,
-  `spotify_key`, `spotify_energy` — **nunca** sobrescrevem campos
-  autorais (Princípio I)
-- UI `/disco/[id]`: botão "Buscar no Spotify" + sugestões exibidas
-  como dica ("Spotify sugere: 120 BPM / 8A / E3") com botão 1-click
-  "Usar essa sugestão" que copia pros campos do DJ (ação explícita)
-- Preview: botão "▶️ Ouvir" abre `spotify:track:X` em nova aba
-  (sem SDK embed pra não exigir Premium)
+- Ponte de resolução: `records.releaseId` (Discogs, já existe) →
+  extrair ISRCs da release → resolver MBID via MusicBrainz
+  `/isrc/{isrc}` → consultar AcousticBrainz `/low-level` e `/high-level`
+- Colunas novas em `tracks`: `mbid`, `audioFeaturesSource`,
+  `audioFeaturesSyncedAt` (ghost fields bpm/musicalKey/energy/moods
+  já existem via 001)
+- Pré-preenchimento **apenas** onde campo autoral é `null` (Princípio I)
+- Sem UX de "sugestão + aceitar" — ghost fields já cobrem o padrão
+  de "preencher se vazio, manter se DJ editou"
+- Reaproveita `sync-daily` cron existente
+- UX: badge discreto no `/disco/[id]` indicando origem
+  ("via AcousticBrainz" vs. "editado por você")
 
-Env vars novas: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
-`SPOTIFY_REDIRECT_URI`.
+Fora do escopo:
+- Sincronização reversa (DJ editar → atualizar AcousticBrainz)
+- Download em batch do dump completo AcousticBrainz
+- Fallback pra outras fontes quando MBID não resolve
 
-Fora do escopo mesmo desse incremento:
-- Sync automático de audio-features em reimport
-- Busca inversa Spotify → Discogs
-- Import de playlists Spotify
-- Export de sets pra Spotify
-- Spotify Web Playback SDK inline
+Estimativa: ~2-3 phases, ~20 tasks; 2-3 dias. Meta: reduzir tempo
+de curadoria manual em ~40% pros discos com MBID resolvível.
 
-Estimativa: maior que o 002 (~3-4 phases, ~35 tasks); 3-4 dias de
-trabalho. Meta: metade do tempo de curadoria pra discos com match.
+Registrado a pedido em 2026-04-24 (versão Spotify arquivada em
+`specs/004-spotify-audio-hints-ARQUIVADO/`).
 
-Registrado a pedido em 2026-04-24.
+### Incremento futuro 5b — Preview de áudio (Deezer + YouTube fallback)
+Arquivo: `src/lib/preview/` (ainda não criado).
+
+Objetivo: permitir ouvir 30s das faixas durante montagem do set,
+inline no `/sets/[id]/montar`, sem precisar sair do Sulco.
+
+**Contexto:** originalmente parte do plano Spotify (inviabilizado —
+`preview_url` também deprecado). Pivot pra combo:
+- **Deezer Public API:** preview_url 30s ainda ativo em 2026, sem auth
+  para busca pública. Match por artist+title ou ISRC (quando existir
+  via 5a). Drop-in replacement.
+- **YouTube link-out:** fallback universal quando Deezer não acha.
+  URL de busca padrão (`youtube.com/results?search_query=...`), sem
+  API key. Abre em nova aba.
+
+Escopo sugerido:
+- Server action que resolve preview URL por (artist, title, isrc?)
+  → cache em `tracks.previewUrl` + `previewUrlCachedAt`
+- Botão `▶` inline no `CandidateRow` no /montar
+- Se Deezer não tem: fallback visual "Abrir no YouTube →"
+- Sem player SDK embed — `<audio>` nativo
+
+Dependência: ideal rodar DEPOIS do 5a (ISRC melhora match do Deezer),
+mas não bloqueante.
+
+Estimativa: ~1-2 phases, ~10-12 tasks; 1-2 dias.
+
+Registrado a pedido em 2026-04-24 como split do 004 original.
 
 ### Incremento futuro 6 — Fluxo de exclusão de álbum da coleção
 Hoje o Sulco só arquiva discos que saíram do Discogs (Princípio IV —
@@ -343,29 +374,43 @@ Registrado a pedido em 2026-04-24.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **003-faixas-ricas-montar**
+Current active feature: **005-acousticbrainz-audio-features**
 
 Authoritative planning artifacts (read these before making changes
-to the candidate card ou query de candidatos da tela de montar set):
+to audio features enrichment, schema de tracks, ou cadeia Discogs →
+MusicBrainz → AcousticBrainz):
 
-- Plan: [specs/003-faixas-ricas-montar/plan.md](specs/003-faixas-ricas-montar/plan.md)
-- Spec: [specs/003-faixas-ricas-montar/spec.md](specs/003-faixas-ricas-montar/spec.md)
-- Data model: [specs/003-faixas-ricas-montar/data-model.md](specs/003-faixas-ricas-montar/data-model.md)
-- Contracts: [specs/003-faixas-ricas-montar/contracts/](specs/003-faixas-ricas-montar/contracts/)
-- Research: [specs/003-faixas-ricas-montar/research.md](specs/003-faixas-ricas-montar/research.md)
-- Quickstart: [specs/003-faixas-ricas-montar/quickstart.md](specs/003-faixas-ricas-montar/quickstart.md)
+- Plan: [specs/005-acousticbrainz-audio-features/plan.md](specs/005-acousticbrainz-audio-features/plan.md)
+- Spec: [specs/005-acousticbrainz-audio-features/spec.md](specs/005-acousticbrainz-audio-features/spec.md)
+- Data model: [specs/005-acousticbrainz-audio-features/data-model.md](specs/005-acousticbrainz-audio-features/data-model.md)
+- Contracts: [specs/005-acousticbrainz-audio-features/contracts/](specs/005-acousticbrainz-audio-features/contracts/)
+- Research: [specs/005-acousticbrainz-audio-features/research.md](specs/005-acousticbrainz-audio-features/research.md)
+- Quickstart: [specs/005-acousticbrainz-audio-features/quickstart.md](specs/005-acousticbrainz-audio-features/quickstart.md)
 
 Prior features (completed, frozen):
 - [001-sulco-piloto/](specs/001-sulco-piloto/) — piloto single-user
 - [002-multi-conta/](specs/002-multi-conta/) — invite-only + /admin
+- [003-faixas-ricas-montar/](specs/003-faixas-ricas-montar/) — candidatos ricos no /montar
+- [004-spotify-audio-hints-ARQUIVADO/](specs/004-spotify-audio-hints-ARQUIVADO/) — bloqueado (API deprecada)
 
-Key points of 003:
-- **Zero mudança de schema** — todos os campos já existem no piloto
-- Query `listMontarCandidates`/`queryCandidates` ganha `references` e
-  `recordNotes` no SELECT + no tipo `Candidate`
-- Componente `candidate-row.tsx` refatorado pra modo compacto/expandido;
-  chip overflow em 4 + `+N mais`
-- Novo componente `<Chip variant="mood|context|ghost">` reusável
-- Estado `expanded` em `useState` local — não persiste entre sessões
-- Princípio I preservado: zero writes em campos autorais nesta tela
+Key points of 005:
+- **Schema delta aditivo**: 3 colunas novas em `tracks` (`mbid`,
+  `audioFeaturesSource`, `audioFeaturesSyncedAt`) + 1 valor novo no
+  enum `syncRuns.kind` (`'audio_features'`)
+- **Princípio I NON-NEGOTIABLE**: null-guard via `WHERE
+  audio_features_source IS NULL` no UPDATE + `COALESCE` por campo.
+  Qualquer edição manual vira `source = 'manual'` e trava o bloco
+  inteiro (bpm/musicalKey/energy/moods) contra futuras sugestões.
+- Cadeia: `records.discogsId` → MusicBrainz (`/release?query=discogs:…`
+  → `/release/{mbid}?inc=recordings`) → AcousticBrainz
+  (`/{mbid}/low-level` + `/high-level`). NÃO persistimos ISRC neste
+  round.
+- Gatilhos: cron diário existente (backlog) + trigger fire-and-forget
+  pós-import-sync (discos novos)
+- Módulo novo em `src/lib/acousticbrainz/`; zero dependência externa
+  nova (fetch nativo)
+- Rate limit: MB 1 req/s com User-Agent correto; AB ~2 req/s
+- Conversão Camelot na escrita (tabela em `camelot.ts`); energy
+  derivado de `mood_aggressive.probability`; moods threshold ≥0.7
+  sem tradução
 <!-- SPECKIT END -->

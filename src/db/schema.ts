@@ -117,6 +117,12 @@ export const tracks = sqliteTable(
     references: text('references'),
     comment: text('comment'),
     isBomb: integer('is_bomb', { mode: 'boolean' }).notNull().default(false),
+    // 005-acousticbrainz-audio-features
+    mbid: text('mbid'),
+    audioFeaturesSource: text('audio_features_source', {
+      enum: ['acousticbrainz', 'manual'],
+    }),
+    audioFeaturesSyncedAt: integer('audio_features_synced_at', { mode: 'timestamp' }),
     // SYS (conflito — FR-037)
     conflict: integer('conflict', { mode: 'boolean' }).notNull().default(false),
     conflictDetectedAt: integer('conflict_detected_at', { mode: 'timestamp' }),
@@ -125,6 +131,10 @@ export const tracks = sqliteTable(
   (t) => ({
     recordPositionUnique: uniqueIndex('tracks_record_position_unique').on(t.recordId, t.position),
     recordSelectedIdx: index('tracks_record_selected_idx').on(t.recordId, t.selected),
+    audioFeaturesBacklogIdx: index('tracks_af_backlog_idx').on(
+      t.audioFeaturesSource,
+      t.audioFeaturesSyncedAt,
+    ),
   }),
 );
 
@@ -175,7 +185,7 @@ export const syncRuns = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     kind: text('kind', {
-      enum: ['initial_import', 'daily_auto', 'manual', 'reimport_record'],
+      enum: ['initial_import', 'daily_auto', 'manual', 'reimport_record', 'audio_features'],
     }).notNull(),
     targetRecordId: integer('target_record_id').references(() => records.id, {
       onDelete: 'set null',

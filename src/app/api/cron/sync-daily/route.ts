@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import { runDailyAutoSync } from '@/lib/discogs/sync';
+import { enrichUserBacklog } from '@/lib/acousticbrainz';
 
 /**
  * POST /api/cron/sync-daily — FR-032, contracts/cron-endpoint.md.
@@ -55,6 +56,10 @@ export async function POST(req: NextRequest) {
   let okCount = 0;
   let rateLimitedCount = 0;
   let errCount = 0;
+  // 005: estatísticas agregadas do enriquecimento pós-sync
+  let enrichedRecords = 0;
+  let enrichedTracksUpdated = 0;
+  let enrichErrors = 0;
 
   for (const userId of runnable) {
     try {
@@ -66,6 +71,21 @@ export async function POST(req: NextRequest) {
       console.error(`[cron] user ${userId} falhou`, err);
       errCount += 1;
     }
+
+    // 005 — FR-018 (a): roda enriquecimento pós-sync.
+    // Isolado em try/catch próprio pra NÃO bloquear o loop do próximo
+    // user (SC-006: falha de AB não afeta sync Discogs nem outros users).
+    try {
+      const enrichSummary = await enrichUserBacklog(userId, {
+        maxDurationMs: 15 * 60 * 1000,
+      });
+      enrichedRecords += enrichSummary.recordsProcessed;
+      enrichedTracksUpdated += enrichSummary.tracksUpdated;
+      enrichErrors += enrichSummary.errors;
+    } catch (err) {
+      console.warn(`[cron-enrich] user ${userId} falhou`, err);
+      enrichErrors += 1;
+    }
   }
 
   return NextResponse.json(
@@ -75,6 +95,11 @@ export async function POST(req: NextRequest) {
       rate_limited: rateLimitedCount,
       erro: errCount,
       durationMs: Date.now() - started,
+      enrich: {
+        recordsProcessed: enrichedRecords,
+        tracksUpdated: enrichedTracksUpdated,
+        errors: enrichErrors,
+      },
     },
     { status: 200 },
   );

@@ -2,6 +2,7 @@ import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
+import { enrichRecord } from '@/lib/acousticbrainz';
 import type { DiscogsRelease } from './client';
 
 /**
@@ -165,6 +166,21 @@ export async function applyDiscogsUpdate(
         .set({ conflict: true, conflictDetectedAt: new Date() })
         .where(eq(tracks.id, local.id));
     }
+  }
+
+  // 005: trigger imediato de enriquecimento pós-sync (FR-018, FR-018a).
+  // Fire-and-forget — NÃO aguardar a promise pra não bloquear o import.
+  // Se a promise for descartada pelo Vercel antes de resolver, o cron
+  // diário pega no dia seguinte (fallback via query de elegibilidade).
+  // Só dispara se houve mudança de tracks (novas ou updates), pra evitar
+  // trabalho inútil em reimports idempotentes.
+  if (created || incomingByPosition.size > 0) {
+    enrichRecord(userId, recordId).catch((err) => {
+      console.warn('[enrich-immediate]', {
+        recordId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   return { recordId, created };
