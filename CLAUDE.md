@@ -219,6 +219,43 @@ Escopo sugerido quando vier a vez:
 
 Registrado a pedido em 2026-04-23 como follow-up do 002-multi-conta.
 
+### Incremento futuro 5 — Spotify audio hints (BPM/tom/energia + preview)
+Arquivo: `src/lib/spotify/` (ainda não criado).
+
+Objetivo: acelerar curadoria de 2500 discos puxando sugestões de BPM,
+tom (Camelot), energia via Spotify `audio-features` API, e expor
+botão de preview (link-out pro Spotify Web Player).
+
+Escopo sugerido:
+- OAuth 2.0 PKCE por user; token cifrado com `MASTER_ENCRYPTION_KEY`
+  (mesmo padrão do PAT Discogs)
+- Matching Discogs → Spotify album: ISRC quando disponível, fallback
+  artist+title+year com top-3 candidates pro DJ escolher
+- Faixas auto-linkadas por position+title após match do álbum
+- Colunas separadas em `tracks`: `spotify_track_id`, `spotify_bpm`,
+  `spotify_key`, `spotify_energy` — **nunca** sobrescrevem campos
+  autorais (Princípio I)
+- UI `/disco/[id]`: botão "Buscar no Spotify" + sugestões exibidas
+  como dica ("Spotify sugere: 120 BPM / 8A / E3") com botão 1-click
+  "Usar essa sugestão" que copia pros campos do DJ (ação explícita)
+- Preview: botão "▶️ Ouvir" abre `spotify:track:X` em nova aba
+  (sem SDK embed pra não exigir Premium)
+
+Env vars novas: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+`SPOTIFY_REDIRECT_URI`.
+
+Fora do escopo mesmo desse incremento:
+- Sync automático de audio-features em reimport
+- Busca inversa Spotify → Discogs
+- Import de playlists Spotify
+- Export de sets pra Spotify
+- Spotify Web Playback SDK inline
+
+Estimativa: maior que o 002 (~3-4 phases, ~35 tasks); 3-4 dias de
+trabalho. Meta: metade do tempo de curadoria pra discos com match.
+
+Registrado a pedido em 2026-04-24.
+
 ---
 
 ## Histórico de decisões de arquitetura
