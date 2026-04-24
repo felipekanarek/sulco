@@ -64,6 +64,12 @@ export default async function RecordDetailPage({
           </p>
           <h1 className="title-display text-[36px]">Em discoteca</h1>
         </div>
+        <Link
+          href="/"
+          className="font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 rounded-sm hover:bg-accent transition-colors whitespace-nowrap"
+        >
+          ✓ Concluir e voltar à coleção
+        </Link>
       </section>
 
       <div className="grid grid-cols-[380px_1fr] gap-16 items-start">
