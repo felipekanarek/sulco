@@ -197,7 +197,7 @@ logado como não-owner → 404.
   com owner + 1 convidado real
 - [X] T030 Executar `npx tsc --noEmit`, `npm test`,
   `npm run test:constitution` e confirmar zero regressões
-- [ ] T031 Deploy: `vercel deploy --prod --yes`; validar smoke
+- [X] T031 Deploy: `vercel deploy --prod --yes`; validar smoke
   (/admin renderiza só pro owner; /convite-fechado acessível)
 
 ---
