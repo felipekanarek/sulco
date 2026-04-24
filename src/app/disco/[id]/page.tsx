@@ -170,6 +170,22 @@ export default async function RecordDetailPage({
               </div>
             ))
           )}
+
+          {/* CTA de conclusão — todas as edições já foram salvas
+              automaticamente via Server Actions; o botão é puramente
+              navegacional, mas fecha o ciclo "curadoria deste disco". */}
+          <div className="border-t border-line pt-8 mt-10 flex items-center justify-between gap-6">
+            <p className="font-serif italic text-[14px] text-ink-mute leading-relaxed">
+              Todas as alterações já foram salvas. Volte à coleção quando
+              terminar com este disco.
+            </p>
+            <Link
+              href="/"
+              className="font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 rounded-sm hover:bg-accent transition-colors whitespace-nowrap"
+            >
+              ✓ Concluir e voltar à coleção
+            </Link>
+          </div>
         </section>
       </div>
     </div>
