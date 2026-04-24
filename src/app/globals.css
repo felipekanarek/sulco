@@ -71,18 +71,10 @@ input, select, textarea, button { font-family: inherit; }
   color: var(--ink-soft);
 }
 
-/* Capa fake com efeito de vinil */
+/* Container de capa — background cinza neutro aparece só quando não há
+   imagem real (CoverPlaceholder ocupa o vazio). Sem overlay de vinil. */
 .cover {
-  background: linear-gradient(135deg, #2d2923 0%, #4a4438 50%, #6b6352 100%);
+  background: var(--paper-raised);
   position: relative;
-  border-radius: 2px;
-}
-.cover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 50%, transparent 28%, rgba(0,0,0,0.35) 28.5%, rgba(0,0,0,0.35) 29%, transparent 29.5%),
-    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 60%);
   border-radius: 2px;
 }
