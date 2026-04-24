@@ -287,6 +287,41 @@ e a ação é irreversível (cascade). Zero impacto no Discogs do DJ.
 
 Registrado a pedido em 2026-04-24.
 
+### Incremento futuro 7 — Faixas ricas na tela "Montar set"
+A tela `/sets/[id]/montar` hoje mostra só metadados básicos por candidata
+(artista, título, BPM, tom, energia). Mas é **exatamente no momento de
+montar o set** que os campos autorais mais ricos importam: `moods`,
+`contexts`, `fineGenre`, `references`, `comment`, `rating`, `shelfLocation`,
+`notes` do disco. Hoje o DJ precisa sair dessa tela pra relembrar o que
+anotou de cada faixa — quebra o fluxo.
+
+Escopo sugerido:
+- Card de faixa candidato expandido por default (ou expansível
+  inline): mostrar todos os campos autorais em layout denso mas
+  legível, seguindo identidade editorial
+- Moods e contexts como chips coloridos/categorizados (consistência
+  com `chip-picker`)
+- `comment` e `references` em itálico pequeno, destacados visualmente
+  (são o que mais ajuda a lembrar "ah, é aquela faixa")
+- `fineGenre` como label separada, diferenciada do `genres[]` do
+  Discogs
+- `shelfLocation` + `notes` do disco (do record, não da track)
+  visíveis como contexto da estante onde pegar
+- `rating` (+/++/+++) em destaque próximo ao nome — atalho visual
+  pra priorizar no olho
+- Botão de colapsar/expandir pra quem prefere a visão compacta atual
+- Desempenho: verificar se o query de candidatos já traz esses
+  campos; se não, expandir `listMontarCandidates` pra incluir
+
+Não-goals neste incremento:
+- Edição inline de curadoria aqui (continua sendo em /disco/[id])
+- Filtros adicionais além do que já existe (BPM, Camelot, energy,
+  rating, moods AND, contexts AND, Bomba, texto)
+
+Esforço: pequeno-médio (1-2 dias). UI-heavy, sem mudança de schema.
+
+Registrado a pedido em 2026-04-24.
+
 ---
 
 ## Histórico de decisões de arquitetura
