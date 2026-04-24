@@ -12,6 +12,7 @@ import { ptBR } from '@clerk/localizations';
 import { DiscogsCredentialBanner } from '@/components/discogs-credential-banner';
 import { ArchivedRecordsBanner } from '@/components/archived-records-banner';
 import { SyncBadge } from '@/components/sync-badge';
+import { ImportPoller } from '@/components/import-poller';
 
 export const metadata: Metadata = {
   title: 'Sulco — curadoria de vinil para DJs',
@@ -27,6 +28,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Banners globais (FR-045, FR-036) — RSC lê DB a cada request */}
           <DiscogsCredentialBanner />
           <ArchivedRecordsBanner />
+          {/* Poller silencioso — mantém import progredindo em qualquer rota */}
+          <ImportPoller />
           <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
           <footer className="border-t border-line py-6">
             <div className="max-w-[1240px] mx-auto px-8">
