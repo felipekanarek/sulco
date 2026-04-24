@@ -101,8 +101,6 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
       styles: records.styles,
       status: records.status,
       shelfLocation: records.shelfLocation,
-      tracksTotal: sql<number>`(SELECT COUNT(*) FROM ${tracks} WHERE ${tracks.recordId} = ${records.id})`,
-      tracksSelected: sql<number>`(SELECT COUNT(*) FROM ${tracks} WHERE ${tracks.recordId} = ${records.id} AND ${tracks.selected} = 1)`,
     })
     .from(records)
     .where(and(...conds))
@@ -110,8 +108,29 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
 
   if (rows.length === 0) return [];
 
-  // Busca separada de IDs com Bomba — mais confiável que subquery em select.
   const recordIds = rows.map((r) => r.id);
+
+  // Agregações de tracks por disco — query separada com GROUP BY é
+  // MUITO mais confiável que subquery-in-select no drizzle+libsql
+  // (mesmo problema que já tinha acontecido com `hasBomb`).
+  const trackAggRows = await db
+    .select({
+      recordId: tracks.recordId,
+      total: sql<number>`COUNT(*)`,
+      selected: sql<number>`SUM(CASE WHEN ${tracks.selected} = 1 THEN 1 ELSE 0 END)`,
+    })
+    .from(tracks)
+    .where(inArray(tracks.recordId, recordIds))
+    .groupBy(tracks.recordId);
+  const trackAggMap = new Map<number, { total: number; selected: number }>();
+  for (const r of trackAggRows) {
+    trackAggMap.set(r.recordId, {
+      total: Number(r.total ?? 0),
+      selected: Number(r.selected ?? 0),
+    });
+  }
+
+  // Busca separada de IDs com Bomba — mais confiável que subquery em select.
   const bombRows = await db
     .select({ recordId: tracks.recordId })
     .from(tracks)
@@ -119,14 +138,17 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
     .groupBy(tracks.recordId);
   const bombSet = new Set(bombRows.map((b) => b.recordId));
 
-  return rows.map((r) => ({
-    ...r,
-    genres: r.genres ?? [],
-    styles: r.styles ?? [],
-    hasBomb: bombSet.has(r.id),
-    tracksTotal: Number(r.tracksTotal ?? 0),
-    tracksSelected: Number(r.tracksSelected ?? 0),
-  }));
+  return rows.map((r) => {
+    const agg = trackAggMap.get(r.id) ?? { total: 0, selected: 0 };
+    return {
+      ...r,
+      genres: (r.genres ?? []) as string[],
+      styles: (r.styles ?? []) as string[],
+      hasBomb: bombSet.has(r.id),
+      tracksTotal: agg.total,
+      tracksSelected: agg.selected,
+    };
+  });
 }
 
 export async function collectionCounts(userId: number): Promise<CollectionCounts> {

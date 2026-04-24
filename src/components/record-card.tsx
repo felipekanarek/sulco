@@ -55,6 +55,19 @@ export function RecordRow({ record }: RecordRowProps) {
         <p className="label-tech mb-1 truncate flex items-center gap-2" title={record.artist}>
           <span className="truncate">{record.artist}</span>
           {record.hasBomb ? <BombaBadge size="md" /> : null}
+          {record.tracksTotal > 0 ? (
+            <span
+              className="font-mono text-[11px] tabular-nums text-ink-mute whitespace-nowrap"
+              aria-label={`${record.tracksSelected} de ${record.tracksTotal} faixas selecionadas`}
+              title="Faixas selecionadas"
+            >
+              ·{' '}
+              <span className="text-accent font-semibold">
+                {record.tracksSelected}
+              </span>
+              /{record.tracksTotal} faixas
+            </span>
+          ) : null}
         </p>
         <h3 className="font-serif italic text-[22px] font-medium tracking-tight leading-tight mb-2 truncate">
           <Link
@@ -97,17 +110,6 @@ export function RecordRow({ record }: RecordRowProps) {
 
       <div className="flex flex-col items-end gap-2">
         <StatusBadge status={record.status} />
-        <p
-          className="font-mono text-[13px] tabular-nums text-ink leading-tight"
-          aria-label={`${record.tracksSelected} de ${record.tracksTotal} faixas selecionadas`}
-          title="Faixas selecionadas"
-        >
-          <span className="font-semibold">{record.tracksSelected}</span>
-          <span className="text-ink-mute">/{record.tracksTotal}</span>
-          <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
-            faixas
-          </span>
-        </p>
         <Link
           href={`/disco/${record.id}`}
           className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
