@@ -395,6 +395,22 @@ export async function updateTrackCuration(
       .filter((c) => c.length > 0 && !seen.has(c) && seen.add(c));
   }
 
+  // 005 — FR-006b + FR-012 + FR-013: edição manual em qualquer um dos
+  // 4 campos de audio features (incluindo `{ bpm: null }` = limpar)
+  // move `audioFeaturesSource` pra 'manual' e trava o bloco. Detecção
+  // via presença de chave no input ORIGINAL, não no parsed (que converte
+  // ausência em undefined). Isso distingue `{ trackId }` (sem intenção)
+  // de `{ trackId, bpm: null }` (intenção de limpar).
+  const inputKeys = input as Record<string, unknown>;
+  const touchedAudioFeature =
+    'bpm' in inputKeys ||
+    'musicalKey' in inputKeys ||
+    'energy' in inputKeys ||
+    'moods' in inputKeys;
+  if (touchedAudioFeature) {
+    payload.audioFeaturesSource = 'manual';
+  }
+
   await db
     .update(tracksTable)
     .set(payload)

@@ -90,10 +90,56 @@ tasks de cada incremento:
 
 - [001-sulco-piloto/](./specs/001-sulco-piloto/) — piloto single-user
 - [002-multi-conta/](./specs/002-multi-conta/) — invite-only + allowlist + /admin
+- [003-faixas-ricas-montar/](./specs/003-faixas-ricas-montar/) — candidatos ricos no /montar
+- [005-acousticbrainz-audio-features/](./specs/005-acousticbrainz-audio-features/) — pré-preenchimento de BPM/tom/energia/moods via MusicBrainz → AcousticBrainz, respeitando Princípio I
+
+## Audio features (005)
+
+Enriquecimento automático de faixas via catálogos públicos. Pipeline:
+
+```
+records.discogsId → MusicBrainz (1 req/s, UA Sulco/0.1 ( marcus@infoprice.co ))
+                  → recordings MBID
+                  → AcousticBrainz (/low-level + /high-level)
+                  → tracks.{bpm,musicalKey,energy,moods}
+```
+
+Três camadas de proteção do Princípio I (campos autorais nunca
+sobrescritos):
+
+1. **Backfill one-shot** (`scripts/backfill-audio-features-source.ts`):
+   marca toda track com audio features legadas como
+   `audio_features_source='manual'` antes do primeiro enrich.
+2. **Null-guard SQL**: `UPDATE ... WHERE audio_features_source IS NULL`
+   no writer (`src/lib/acousticbrainz/write.ts`).
+3. **COALESCE por campo**: valor existente é preservado mesmo em race.
+
+Gatilhos: cron diário existente (`/api/cron/sync-daily`) + trigger
+fire-and-forget pós-import/sync Discogs (`src/lib/discogs/apply-update.ts`).
+
+Utilitários:
+
+```bash
+# Backfill (OBRIGATÓRIO antes do primeiro deploy em produção)
+npx tsx scripts/backfill-audio-features-source.ts
+
+# Enriquecer 1 disco ad-hoc (debug / quickstart)
+npx tsx scripts/enrich-record.ts <userId> <recordId>
+```
+
+UI: badge "sugestão · acousticbrainz" aparece no `/disco/[id]` ao lado
+das tags de bpm/tom/energia/moods quando a track ainda não foi
+confirmada pelo DJ. Editar qualquer um dos 4 campos trava o bloco
+inteiro (vira `'manual'`).
+
+Observabilidade: seção "Audio features" em `/status` mostra cobertura
+por campo (total + sugestão + confirmadas) + última execução.
 
 ## Próximos passos
 
 - [ ] Homologação ponta-a-ponta do sync Discogs (Phase 6) em condições reais
+- [ ] Homologação ponta-a-ponta do 005 em acervo real (MB+AB com rede aberta — quickstart §1–7)
+- [ ] Preview de áudio (Deezer + YouTube link-out) — incremento 5b no roadmap
 - [ ] Notificações por email (envio automático ao convidar) — ver CLAUDE.md
 - [ ] Briefing inteligente com IA (Anthropic SDK + prompt caching)
 - [ ] PWA / mobile (`next-pwa`, swipe em /curadoria)

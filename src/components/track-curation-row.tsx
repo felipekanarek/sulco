@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { updateTrackCuration } from '@/lib/actions';
+import { AudioFeaturesBadge } from './audio-features-badge';
 import { BombaToggle } from './bomba-toggle';
 import { CamelotWheel } from './camelot-wheel';
 import { ChipPicker } from './chip-picker';
@@ -22,6 +23,7 @@ export type TrackData = {
   references: string | null;
   comment: string | null;
   isBomb: boolean;
+  audioFeaturesSource: 'acousticbrainz' | 'manual' | null;
 };
 
 type Props = {
@@ -120,7 +122,7 @@ export function TrackCurationRow({
           local.fineGenre ||
           local.moods.length > 0 ||
           local.contexts.length > 0) ? (
-          <div className="flex gap-2 flex-wrap mb-2">
+          <div className="flex gap-2 flex-wrap items-center mb-2">
             {local.bpm ? <Tag>{local.bpm} BPM</Tag> : null}
             {local.musicalKey ? <Tag variant="ink">{local.musicalKey}</Tag> : null}
             {local.energy ? <Tag>energia {local.energy}</Tag> : null}
@@ -135,6 +137,7 @@ export function TrackCurationRow({
                 {c}
               </Tag>
             ))}
+            <AudioFeaturesBadge source={local.audioFeaturesSource} />
           </div>
         ) : null}
 
