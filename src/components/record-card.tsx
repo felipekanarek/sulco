@@ -97,19 +97,17 @@ export function RecordRow({ record }: RecordRowProps) {
 
       <div className="flex flex-col items-end gap-2">
         <StatusBadge status={record.status} />
-        {record.tracksTotal > 0 ? (
-          <p
-            className="font-mono text-[13px] tabular-nums text-ink leading-tight"
-            aria-label={`${record.tracksSelected} de ${record.tracksTotal} faixas selecionadas`}
-            title="Faixas selecionadas"
-          >
-            <span className="font-semibold">{record.tracksSelected}</span>
-            <span className="text-ink-mute">/{record.tracksTotal}</span>
-            <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
-              faixas
-            </span>
-          </p>
-        ) : null}
+        <p
+          className="font-mono text-[13px] tabular-nums text-ink leading-tight"
+          aria-label={`${record.tracksSelected} de ${record.tracksTotal} faixas selecionadas`}
+          title="Faixas selecionadas"
+        >
+          <span className="font-semibold">{record.tracksSelected}</span>
+          <span className="text-ink-mute">/{record.tracksTotal}</span>
+          <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+            faixas
+          </span>
+        </p>
         <Link
           href={`/disco/${record.id}`}
           className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
