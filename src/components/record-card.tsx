@@ -84,19 +84,8 @@ export function RecordRow({ record }: RecordRowProps) {
         >
           {stylesText || '—'}
         </p>
-        <p className="label-tech flex flex-wrap items-center gap-x-2 gap-y-1">
-          {record.tracksTotal > 0 ? (
-            <span>
-              <span className="text-ink font-medium">{record.tracksSelected}</span>
-              <span className="text-ink-mute">/{record.tracksTotal}</span>
-              <span className="text-ink-mute"> selecionadas</span>
-            </span>
-          ) : (
-            <span>—</span>
-          )}
-          {record.shelfLocation ? (
-            <span className="text-ink-mute">· {record.shelfLocation}</span>
-          ) : null}
+        <p className="label-tech flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-mute">
+          {record.shelfLocation ? <span>{record.shelfLocation}</span> : null}
           {coverFailed ? (
             <span className="inline-flex items-center gap-1">
               <span className="text-warn">capa?</span>
@@ -108,6 +97,19 @@ export function RecordRow({ record }: RecordRowProps) {
 
       <div className="flex flex-col items-end gap-2">
         <StatusBadge status={record.status} />
+        {record.tracksTotal > 0 ? (
+          <p
+            className="font-mono text-[13px] tabular-nums text-ink leading-tight"
+            aria-label={`${record.tracksSelected} de ${record.tracksTotal} faixas selecionadas`}
+            title="Faixas selecionadas"
+          >
+            <span className="font-semibold">{record.tracksSelected}</span>
+            <span className="text-ink-mute">/{record.tracksTotal}</span>
+            <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+              faixas
+            </span>
+          </p>
+        ) : null}
         <Link
           href={`/disco/${record.id}`}
           className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
