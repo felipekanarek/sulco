@@ -220,19 +220,8 @@ export async function getImportProgress(): Promise<ImportProgress> {
 
   const row = latest[0];
 
-  // Runs zumbis (processo morreu sem finalizar) não devem aparecer como
-  // "erro" visível ao DJ — esse é um estado transiente que o fallback em
-  // `/` retoma. Trata como `idle` para o ImportProgressCard se comportar
-  // como "nenhum import visível" e permitir o fallback disparar novo run.
-  const isZombieResidual =
-    (row.outcome === 'erro' || row.outcome === 'parcial') &&
-    typeof row.errorMessage === 'string' &&
-    /(run zumbi|killed on restart)/i.test(row.errorMessage);
-
-  if (isZombieResidual) {
-    return { running: false, x, y: x, outcome: 'idle', errorMessage: null };
-  }
-
+  // Resolve y (totalItems) primeiro — precisamos dele pra decidir
+  // needsResume abaixo.
   let y = x;
   if (row.snapshotJson) {
     try {
@@ -243,15 +232,21 @@ export async function getImportProgress(): Promise<ImportProgress> {
     }
   }
 
-  // Continuation automática: se o import não concluiu e não há nada rodando,
-  // dispara mais um chunk via after() pra o progresso avançar sozinho.
-  // runInitialImport é idempotente (checa outcome='running' antes de criar
-  // novo syncRun), então duas chamadas concorrentes não colidem.
+  // Runs zumbis (processo morreu sem finalizar) são estado transiente:
+  // o worker morreu, precisamos retomar. O polling global chama este
+  // função a cada 10s; aqui é onde o ciclo "worker morre → novo worker"
+  // se auto-fecha, em qualquer rota aberta.
   const isZombieErro =
     row.outcome === 'erro' && /(run zumbi|killed on restart)/i.test(row.errorMessage ?? '');
-  const snapshotMissing = !row.snapshotJson; // run morreu antes da primeira fetch
+  const isZombieParcial =
+    row.outcome === 'parcial' && /(run zumbi|killed on restart)/i.test(row.errorMessage ?? '');
+  const snapshotMissing = !row.snapshotJson;
+
   const needsResume =
-    (row.outcome === 'parcial' || row.outcome === 'rate_limited' || isZombieErro) &&
+    (row.outcome === 'parcial' ||
+      row.outcome === 'rate_limited' ||
+      isZombieErro ||
+      isZombieParcial) &&
     (x < y || snapshotMissing);
 
   if (needsResume) {
@@ -264,12 +259,20 @@ export async function getImportProgress(): Promise<ImportProgress> {
     });
   }
 
+  // UI: zumbi residual é transiente, não expõe mensagem de erro ao DJ.
+  // Mostra "idle" com x atual enquanto o novo worker sobe.
+  const isZombieResidual = isZombieErro || isZombieParcial;
+
   return {
     running: row.outcome === 'running' || needsResume,
     x,
     y,
-    outcome: needsResume ? 'running' : row.outcome,
-    errorMessage: row.errorMessage,
+    outcome: needsResume
+      ? 'running'
+      : isZombieResidual
+        ? 'idle'
+        : row.outcome,
+    errorMessage: isZombieResidual ? null : row.errorMessage,
   };
 }
 
