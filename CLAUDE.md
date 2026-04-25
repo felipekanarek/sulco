@@ -368,6 +368,63 @@ em /status, que dispara `loadStatusSnapshot` → `killZombieSyncRuns`.
 
 Status: **fechado**. Commit `<NEW>`.
 
+### Incremento futuro 9 — Batch de enrich sob demanda no /conta (multi-user)
+Reportado em 2026-04-25 após sessão de batch manual contra acervo do
+Felipe (1140+ faixas BR enriquecidas). Estado atual: o pipeline 005
+on-demand (D) já funciona pra qualquer user — botão "Buscar sugestões"
+em `/disco/[id]` é multi-user safe via ownership check. **Mas** acervo
+recém-importado começa 100% vazio de audio features; cobertura cresce
+disco-a-disco conforme curadoria. Cobertura inicial leva semanas.
+
+Solução proposta pra próximos DJs (C+D combinados):
+
+**C — Batch sob demanda em /conta**: novo botão "🪄 Buscar sugestões
+pra todo o acervo" em `/conta`. DJ clica uma vez (após onboarding
+estabilizar), processo passa pelo backlog completo do user em
+background. Próximo dia: cobertura razoável já populada antes do DJ
+abrir os discos.
+
+**D — On-demand disco-a-disco** (já em prod): backstop default pra
+discos que C não cobriu (vinil obscuro sem MB match) ou pra
+re-tentativas após 30 dias.
+
+Constraints técnicos do C em Vercel Hobby (60s max em Server Actions):
+
+Não dá pra processar 2500 discos × 3-5s/disco num único request.
+Três caminhos viáveis:
+
+1. **Cron + flag (recomendado)**: Server Action grava
+   `users.enrich_requested_at = now()` (coluna nova). Cron diário lê
+   users com flag, processa um por vez via `enrichUserBacklog`
+   (re-adicionar a função removida no refactor on-demand), limpa flag
+   ao terminar. UX: "Solicitação registrada — rodará nas próximas 24h
+   (cron 04:00 SP)".
+
+2. **Chunking iterativo**: Server Action processa ~15 discos (cap em
+   45s), retorna `{ processed, remaining }`. DJ clica de novo até
+   terminar. UI mostra progresso. Mais click-heavy mas evita
+   dependência de cron.
+
+3. **Background queue dedicada (Inngest/QStash)**: profissional,
+   custo extra. Justificável apenas se SaaS público.
+
+Recomendação: caminho 1 (cron+flag) porque:
+- Reusa infra de cron diário existente
+- Re-introduz `enrichUserBacklog` SÓ pra esse caso (não roda diariamente
+  pra todos como antes)
+- DJ não precisa ficar clicando
+- Custo: 1 coluna nova em `users` + 1 trecho no cron + Server Action
+  + UI minimalista em `/conta`
+
+Esforço: meio dia. Schema delta aditivo (1 coluna). Sem risco de
+regressão (Princípio I + null-guard inalterados).
+
+Quando fazer: quando terceiro DJ entrar no piloto (escala manual fica
+chata). Hoje (2 users) batch via script ad-hoc é viável — já
+documentado em `scripts/_enrich-batch.mjs`.
+
+Registrado a pedido em 2026-04-25.
+
 ### Incremento futuro 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
 Reportado em 2026-04-24 após Felipe abrir os filtros expandidos:
 ~150 estilos catalogados (MPB 1210, SAMBA 759 ... SYNTHWAVE 1, TWIST 1,
