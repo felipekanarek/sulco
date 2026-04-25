@@ -384,37 +384,19 @@ quer abortar manual).
 Esforço: pequeno (~1h dev). Sem mudança de schema. Risco baixo —
 killZombieSyncRuns já é idempotente.
 
-### Bug 9 — Filtros de coleção precisam de busca em Estilos/Gêneros
-Reportado em 2026-04-24. A tela `/colecao` (listagem dos discos
-sincronizados) hoje filtra por status (`unrated`/`active`/`discarded`),
-mas não tem como **buscar/filtrar por gênero ou estilo**. Felipe
-relata: com 2594 discos majoritariamente brasileiros, faltar filtro
-de "MPB", "Samba", "Disco", "Funk", "Soul-jazz" etc. limita a
-exploração — DJ precisa saber o nome exato do disco/artista pra
-encontrar.
+### Bug 9 — Filtros de coleção em Estilos/Gêneros (✅ já implementado)
+Reportado e investigado em 2026-04-24: descoberto que `<FilterBar>` em
+`src/components/filter-bar.tsx` JÁ implementa filtros multi-select de
+gênero E estilo, alimentados por `listUserGenres`/`listUserStyles`
+(`src/lib/queries/collection.ts`). Disponível na home (`/`) via
+searchParams `?genre=X&style=Y`. Funcional em prod.
 
-Refatoração sugerida:
-- Adicionar campo de busca/filtro multi-select em `/colecao`
-  alimentado pelo vocabulário existente em `records.genres` e
-  `records.styles` (JSON arrays)
-- Semântica: OR dentro do mesmo campo (discos com gênero `Jazz` OU
-  `Funk` aparecem) — espelha o feedback memory `filter_semantics`
-  pra listagem
-- Fonte de sugestões: agregar todos os termos distintos usados no
-  acervo do user (`SELECT json_each.value FROM records, json_each(genres)`)
-- Reuso: `<ChipPicker>` ou `<Chip>` já existem (003); pode adaptar
-- Persistência: query string (`?genres=Jazz&styles=Soul-Jazz`) pra
-  link compartilhável
+Possível motivo do report ter passado: filtros podem estar visualmente
+discretos ou escondidos sob algum dropdown que requer scroll. Se isso
+for o caso, abrir entrada nova (Bug 9b — UX de descoberta dos filtros)
+em vez de re-implementar.
 
-Escopo opcional:
-- Filtro por país (`records.country`)
-- Filtro por década (`records.year`)
-- Combinar com filtro de status existente
-
-Sem mudança de schema. Esforço: ~1 dia (UI-heavy, query existente
-em `queries/collection.ts` ganha cláusulas extras).
-
-Registrado a pedido em 2026-04-24.
+Status: **fechado sem código**.
 
 ### Bug 10 — Curadoria aleatória deveria abrir disco direto
 Reportado em 2026-04-24. Hoje a tela `/curadoria` é uma triagem
