@@ -552,6 +552,38 @@ export async function enrichRecordOnDemand(
 }
 
 /* ============================================================
+   pickRandomUnratedRecord — 006 (curadoria aleatória)
+   Sorteia 1 record unrated do acervo do user e devolve o id.
+   Cliente faz router.push pra evitar Server Action redirect throw.
+   ============================================================ */
+
+export async function pickRandomUnratedRecord(): Promise<
+  ActionResult<{ recordId: number } | { recordId: null }>
+> {
+  const user = await requireCurrentUser();
+
+  // ORDER BY RANDOM() LIMIT 1 sobre records do user com status='unrated'
+  // e archived=false. Multi-user isolation via records.userId.
+  const row = await db
+    .select({ id: records.id })
+    .from(records)
+    .where(
+      and(
+        eq(records.userId, user.id),
+        eq(records.archived, false),
+        eq(records.status, 'unrated'),
+      ),
+    )
+    .orderBy(sql`RANDOM()`)
+    .limit(1);
+
+  if (row.length === 0) {
+    return { ok: true, data: { recordId: null } };
+  }
+  return { ok: true, data: { recordId: row[0].id } };
+}
+
+/* ============================================================
    createSet / updateSet — FR-022, FR-027, FR-028 (T070)
    eventDate armazenado em UTC; conversão vem do input datetime-local
    do cliente (que já envia ISO UTC via new Date().toISOString()).

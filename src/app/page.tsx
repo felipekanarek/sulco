@@ -8,6 +8,7 @@ import { getImportProgress } from '@/lib/actions';
 export const maxDuration = 60;
 import { ImportProgressCard } from '@/components/import-progress';
 import { FilterBar, type StatusFilter } from '@/components/filter-bar';
+import { RandomCurationButton } from '@/components/random-curation-button';
 import { RecordRow } from '@/components/record-card';
 import { RecordGridCard } from '@/components/record-grid-card';
 import { ViewToggle, type ViewMode } from '@/components/view-toggle';
@@ -102,12 +103,15 @@ export default async function CollectionPage({
         counts={counts}
       />
 
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-line-soft">
+      <div className="flex items-center justify-between mb-4 pb-2 border-b border-line-soft gap-4">
         <p className="label-tech">
           Mostrando {rows.length.toLocaleString('pt-BR')} de {counts.total.toLocaleString('pt-BR')}
           {hasFilters ? ' (filtrado)' : ''}
         </p>
-        <ViewToggle value={view} />
+        <div className="flex items-center gap-3">
+          <RandomCurationButton />
+          <ViewToggle value={view} />
+        </div>
       </div>
 
       {rows.length === 0 ? (
