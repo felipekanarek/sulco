@@ -81,6 +81,12 @@ Esperado: cron termina ok, atualiza records.
   APENAS para discos que ainda não existem em `records` do user
   (`isNew = true`). Pra discos já existentes, pular `fetchRelease` e
   pular `applyDiscogsUpdate`.
+- **FR-001b** (Bug 12): Antes de marcar disco como archived, sistema
+  MUST validar via Discogs Collection API (`existsInUserCollection`)
+  se o disco ainda está na coleção do user. Se sim (200), NÃO archive
+  — disco foi apenas empurrado pra fora da 1ª página por novos
+  adicionados, não removido. Se 404, archive como antes. Custo: 1 req
+  Discogs por candidato a archive (ordem de unidades).
 - **FR-002**: Comportamento de detecção de removidos MUST permanecer
   inalterado — comparação `prevIds (snapshot anterior) − currentIds
   (1ª página atual)` continua o mesmo.

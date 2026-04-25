@@ -6,6 +6,7 @@ import { killZombieSyncRuns } from './zombie';
 import {
   DiscogsAuthError,
   DiscogsError,
+  existsInUserCollection,
   fetchCollectionPage,
   fetchRelease,
 } from './client';
@@ -121,30 +122,48 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
       if (res.created) newCount += 1;
     }
 
-    // Remoções: discos que estavam no snapshot anterior E não estão mais
-    // na página atual. Só marca archived para os que estavam ATIVOS (snapshot
-    // anterior reflete o que tinha visto na primeira página). FR-036: archive,
-    // nunca delete, preserva autorais.
+    // 007/Bug 12: discos que estavam no snapshot anterior E não estão
+    // na 1ª página atual NÃO necessariamente foram removidos do Discogs
+    // — podem ter sido empurrados pra fora da janela por novos discos
+    // (que entram no topo via date_added desc). Antes de archive, valida
+    // via Discogs Collection API (1 req por candidato).
+    //
+    // Custo: ≤ N candidatos × ~1s (rate limit Discogs). Pra Felipe com
+    // 5 removidos reais + 2 falsos = 7s overhead — aceitável.
     if (prevIds) {
       for (const oldId of prevIds) {
-        if (!currentSet.has(oldId)) {
-          // busca o record local com esse discogsId
-          const target = await db
-            .select({ id: records.id })
-            .from(records)
-            .where(
-              and(
-                eq(records.userId, userId),
-                eq(records.discogsId, oldId),
-                eq(records.archived, false),
-              ),
-            )
-            .limit(1);
-          if (target.length > 0) {
-            await archiveRecord(userId, target[0].id);
-            removedCount += 1;
-          }
+        if (currentSet.has(oldId)) continue; // ainda na 1ª página
+        // Pega o record local correspondente
+        const target = await db
+          .select({ id: records.id })
+          .from(records)
+          .where(
+            and(
+              eq(records.userId, userId),
+              eq(records.discogsId, oldId),
+              eq(records.archived, false),
+            ),
+          )
+          .limit(1);
+        if (target.length === 0) continue;
+
+        // Validação anti-falso-positivo: confirmar com Discogs se ainda
+        // existe na coleção. Se sim, foi só empurrado pra fora da 1ª
+        // página (não removido). Se não (404), archive.
+        let stillInCollection: boolean;
+        try {
+          stillInCollection = await existsInUserCollection(userId, oldId);
+        } catch (err) {
+          // Erro transitório na API — não archive por garantia
+          console.warn('[sync] check coleção falhou pra', oldId, err);
+          continue;
         }
+        if (stillInCollection) {
+          // Falso-positivo de fora-da-página. Não archivar.
+          continue;
+        }
+        await archiveRecord(userId, target[0].id);
+        removedCount += 1;
       }
     }
 

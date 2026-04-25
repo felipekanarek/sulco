@@ -170,6 +170,13 @@ Nenhum no momento.
   → 100s de requests Discogs → timeout 60s. Fix: skip `fetchRelease`
   quando disco já existe em `records`. Snapshot fallback manual↔daily_auto
   pra herdar primeira execução.
+- **Bug 12** — Sync archives falso-positivo quando disco é empurrado
+  pra fora da 1ª página por novos adicionados — ✅ commit junto com 007.
+  Discogs ordena coleção `date_added desc`. Quando user adiciona N novos,
+  os últimos N do snapshot anterior caem pra página 2+ e parecem
+  "removidos". Fix: antes de archive, valida via
+  `existsInUserCollection` (Discogs API 200/404). Se ainda na coleção,
+  não archive — só foi empurrado.
 
 ---
 
