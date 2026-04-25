@@ -53,7 +53,7 @@ function Header() {
           <Show when="signed-in">
             <NavLink href="/">Coleção</NavLink>
             <NavLink href="/sets">Sets</NavLink>
-            <NavLink href="/status">Status</NavLink>
+            <NavLink href="/status">Sync</NavLink>
           </Show>
         </nav>
         <span className="label-tech flex items-center gap-3">
