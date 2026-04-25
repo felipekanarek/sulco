@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns } from '@/db/schema';
 import { killZombieSyncRuns } from './zombie';
@@ -52,32 +52,10 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
     };
   }
 
-  // 007/Bug 11: snapshot anterior compartilhável entre manual/daily_auto
-  // (ambos representam estado completo da 1ª página da coleção).
-  // initial_import salva `{totalItems}`, não array de IDs — ignorado.
-  // reimport_record é por-disco — não entra no fallback.
-  const snapshotKindFallback: SyncKind[] =
-    kind === 'manual'
-      ? ['manual', 'daily_auto']
-      : ['daily_auto', 'manual'];
-  const previous = await db
-    .select({ kind: syncRuns.kind, snapshotJson: syncRuns.snapshotJson })
-    .from(syncRuns)
-    .where(
-      and(
-        eq(syncRuns.userId, userId),
-        inArray(syncRuns.kind, snapshotKindFallback),
-        eq(syncRuns.outcome, 'ok'),
-      ),
-    )
-    .orderBy(desc(syncRuns.startedAt))
-    .limit(1);
-  const prevIds = parseSnapshotIds(previous[0]?.snapshotJson ?? null);
-  console.info(
-    previous[0]
-      ? `[sync] ${kind} herdou snapshot de kind=${previous[0].kind} com ${prevIds?.length ?? 0} ids`
-      : `[sync] ${kind} sem snapshot anterior — pula detecção de removidos nesta execução`,
-  );
+  // 007 (segunda iteração): snapshot anterior NÃO é mais necessário pra
+  // detectar removidos. Sync agora compara localIds (records.discogsId
+  // ativos) vs currentIds (paginação completa Discogs). Snapshot continua
+  // sendo gravado ao final pra histórico/debug, mas não é LIDO.
 
   const inserted = await db
     .insert(syncRuns)
@@ -95,76 +73,82 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
   let conflictCount = 0;
 
   try {
-    const page = await fetchCollectionPage(userId, { page: 1, perPage: PER_PAGE });
-    const currentIds = page.releases.map((r) => r.id);
+    // 007/Bug 12 (segunda iteração): pagina a coleção INTEIRA pra
+    // detectar removidos corretamente. Sync incremental originalmente
+    // só pegava 1ª página, o que falhava pra discos antigos removidos
+    // (estavam em página 2+ → snapshot nem sabia). Acervos típicos
+    // do Sulco têm 20–30 páginas (2000-3000 discos × 100/página) →
+    // ~30s de fetches sequenciais (rate limit Discogs ~1 req/s). Cabe
+    // em Vercel Lambda 60s + budget pros novos/archives.
+    const firstPage = await fetchCollectionPage(userId, {
+      page: 1,
+      perPage: PER_PAGE,
+    });
+    const currentIds: number[] = firstPage.releases.map((r) => r.id);
+    const totalPages = firstPage.pagination.pages;
+    for (let p = 2; p <= totalPages; p++) {
+      const next = await fetchCollectionPage(userId, {
+        page: p,
+        perPage: PER_PAGE,
+      });
+      for (const r of next.releases) currentIds.push(r.id);
+    }
     const currentSet = new Set(currentIds);
 
-    // IDs locais que já existiam ANTES deste sync (para detectar novos vs. update)
+    // IDs locais que já existiam ANTES deste sync
     const localRows = await db
       .select({ discogsId: records.discogsId })
       .from(records)
       .where(and(eq(records.userId, userId), eq(records.archived, false)));
     const localIds = new Set(localRows.map((r) => r.discogsId));
 
-    // 007/Bug 11: chama `fetchRelease` APENAS pra discos novos (ainda
-    // não existem em `records`). Pra existentes, pular — assumimos
-    // metadata Discogs estável após import inicial. DJ pode forçar
-    // refresh de disco específico via botão "Reimportar este disco"
-    // (kind='reimport_record', fluxo separado).
-    //
-    // Sem este filtro, sync incremental fazia 100 requests Discogs
-    // por execução (1 por disco da 1ª página), estourando rate limit
-    // ~1 req/s × 100 = 100s → Vercel Lambda timeout 60s → run zumbi.
-    for (const rel of page.releases) {
-      if (localIds.has(rel.id)) continue; // existente, pular
-      const full = await fetchRelease(userId, rel.id);
+    // 007/Bug 11: fetchRelease APENAS pra discos novos. Pra os já
+    // existentes em `records`, pular — assumimos metadata Discogs
+    // estável após import inicial. DJ pode forçar refresh via botão
+    // "Reimportar este disco" (kind='reimport_record').
+    for (const releaseId of currentIds) {
+      if (localIds.has(releaseId)) continue;
+      const full = await fetchRelease(userId, releaseId);
       const res = await applyDiscogsUpdate(userId, full, { isNew: true });
       if (res.created) newCount += 1;
     }
 
-    // 007/Bug 12: discos que estavam no snapshot anterior E não estão
-    // na 1ª página atual NÃO necessariamente foram removidos do Discogs
-    // — podem ter sido empurrados pra fora da janela por novos discos
-    // (que entram no topo via date_added desc). Antes de archive, valida
-    // via Discogs Collection API (1 req por candidato).
-    //
-    // Custo: ≤ N candidatos × ~1s (rate limit Discogs). Pra Felipe com
-    // 5 removidos reais + 2 falsos = 7s overhead — aceitável.
-    if (prevIds) {
-      for (const oldId of prevIds) {
-        if (currentSet.has(oldId)) continue; // ainda na 1ª página
-        // Pega o record local correspondente
-        const target = await db
-          .select({ id: records.id })
-          .from(records)
-          .where(
-            and(
-              eq(records.userId, userId),
-              eq(records.discogsId, oldId),
-              eq(records.archived, false),
-            ),
-          )
-          .limit(1);
-        if (target.length === 0) continue;
+    // Removidos: discos em `records` (ativo, não-archived) que não
+    // estão mais em currentIds (= sumiram da coleção Discogs).
+    // Validação extra via existsInUserCollection pra defesa em
+    // profundidade contra falso-positivo (ex: race entre paginação
+    // e o user adicionando/removendo durante o sync). Custo: 1 req
+    // por candidato a archive — geralmente unidades.
+    for (const localId of localIds) {
+      if (currentSet.has(localId)) continue;
+      const target = await db
+        .select({ id: records.id })
+        .from(records)
+        .where(
+          and(
+            eq(records.userId, userId),
+            eq(records.discogsId, localId),
+            eq(records.archived, false),
+          ),
+        )
+        .limit(1);
+      if (target.length === 0) continue;
 
-        // Validação anti-falso-positivo: confirmar com Discogs se ainda
-        // existe na coleção. Se sim, foi só empurrado pra fora da 1ª
-        // página (não removido). Se não (404), archive.
-        let stillInCollection: boolean;
-        try {
-          stillInCollection = await existsInUserCollection(userId, oldId);
-        } catch (err) {
-          // Erro transitório na API — não archive por garantia
-          console.warn('[sync] check coleção falhou pra', oldId, err);
-          continue;
-        }
-        if (stillInCollection) {
-          // Falso-positivo de fora-da-página. Não archivar.
-          continue;
-        }
-        await archiveRecord(userId, target[0].id);
-        removedCount += 1;
+      let stillInCollection: boolean;
+      try {
+        stillInCollection = await existsInUserCollection(userId, localId);
+      } catch (err) {
+        console.warn('[sync] check coleção falhou pra', localId, err);
+        continue;
       }
+      if (stillInCollection) {
+        // Discrepância — disco sumiu da paginação mas API confirma
+        // que existe. Pode ser race com user editando coleção.
+        // Por segurança, não archive.
+        continue;
+      }
+      await archiveRecord(userId, target[0].id);
+      removedCount += 1;
     }
 
     // Conflitos acumulados — conta tracks com conflict=true criados neste run
@@ -239,16 +223,3 @@ export async function runManualSync(userId: number): Promise<SyncOutcome> {
   return runIncrementalSync(userId, 'manual');
 }
 
-function parseSnapshotIds(raw: string | null): number[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'number')) {
-      return parsed;
-    }
-    // Compatibilidade com `initial_import` que guarda { totalItems: N }
-    return null;
-  } catch {
-    return null;
-  }
-}
