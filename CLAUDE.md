@@ -353,6 +353,97 @@ Esforço: pequeno-médio (1-2 dias). UI-heavy, sem mudança de schema.
 
 Registrado a pedido em 2026-04-24.
 
+### Bug 8 — Sync manual trava em "em andamento" quando processo morre silenciosamente
+Reportado em 2026-04-24. DJ clica "Sincronizar agora" em `/status`,
+sync começa mas processo morre (provavelmente Vercel Lambda timeout
+ou erro não capturado), `sync_runs.outcome` fica em `running` sem
+`finished_at`. UI mostra "em execução" indefinidamente.
+
+Existe `killZombieSyncRuns` em `src/lib/discogs/zombie.ts` que mata
+runs >15 min, MAS só é chamado quando outra tentativa de sync inicia
+(`runIncrementalSync` → `killZombieSyncRuns` → checa concorrência).
+Se o DJ apenas observa `/status` sem clicar de novo, fica preso.
+
+Mitigação aplicada hoje: query SQL manual matando run #262.
+
+Fix sugerido (em ordem de complexidade):
+- (a) **Server-side**: chamar `killZombieSyncRuns(userId)` no início
+  de `loadStatusSnapshot` em `queries/status.ts`. Custo: 1 query
+  extra por carregamento da página `/status`. Pro DJ que abre
+  /status sempre que quer ver status, libera zombies passivamente.
+- (b) **UI**: botão "cancelar/marcar como falha" exposto no
+  `<ManualSyncButton>` ou `<SyncBadge>` quando run em `running` há
+  >15 min. Ação explícita do DJ.
+- (c) **Eventual consistency**: cron próprio batendo a cada hora pra
+  matar zombies. Overkill pro piloto.
+
+Recomendação: (a) é simples e cobre 100% dos casos. Opção (b) ainda
+útil pra runs que não são zombie mas estão demorando muito (DJ
+quer abortar manual).
+
+Esforço: pequeno (~1h dev). Sem mudança de schema. Risco baixo —
+killZombieSyncRuns já é idempotente.
+
+### Bug 9 — Filtros de coleção precisam de busca em Estilos/Gêneros
+Reportado em 2026-04-24. A tela `/colecao` (listagem dos discos
+sincronizados) hoje filtra por status (`unrated`/`active`/`discarded`),
+mas não tem como **buscar/filtrar por gênero ou estilo**. Felipe
+relata: com 2594 discos majoritariamente brasileiros, faltar filtro
+de "MPB", "Samba", "Disco", "Funk", "Soul-jazz" etc. limita a
+exploração — DJ precisa saber o nome exato do disco/artista pra
+encontrar.
+
+Refatoração sugerida:
+- Adicionar campo de busca/filtro multi-select em `/colecao`
+  alimentado pelo vocabulário existente em `records.genres` e
+  `records.styles` (JSON arrays)
+- Semântica: OR dentro do mesmo campo (discos com gênero `Jazz` OU
+  `Funk` aparecem) — espelha o feedback memory `filter_semantics`
+  pra listagem
+- Fonte de sugestões: agregar todos os termos distintos usados no
+  acervo do user (`SELECT json_each.value FROM records, json_each(genres)`)
+- Reuso: `<ChipPicker>` ou `<Chip>` já existem (003); pode adaptar
+- Persistência: query string (`?genres=Jazz&styles=Soul-Jazz`) pra
+  link compartilhável
+
+Escopo opcional:
+- Filtro por país (`records.country`)
+- Filtro por década (`records.year`)
+- Combinar com filtro de status existente
+
+Sem mudança de schema. Esforço: ~1 dia (UI-heavy, query existente
+em `queries/collection.ts` ganha cláusulas extras).
+
+Registrado a pedido em 2026-04-24.
+
+### Bug 10 — Curadoria aleatória deveria abrir disco direto
+Reportado em 2026-04-24. Hoje a tela `/curadoria` é uma triagem
+sequencial (lista os IDs ordenada por `importedAt`, navega 1 por 1).
+DJ quer um modo "**curadoria aleatória**": clica e cai direto na
+tela do disco escolhido (`/disco/[id]`), sem passar pela tela
+intermediária de triagem.
+
+Refatoração sugerida:
+- Botão/atalho "Curar disco aleatório" no header ou na home
+- Server Action que escolhe `records.id` aleatório respeitando
+  filtros do DJ (status='unrated' por default — focar no que falta
+  curar; opcional 'all') + ownership (`user_id`) + arquivamento
+  (`archived=0`) + redireciona pro `/disco/[id]`
+- Pode reaproveitar `loadCuradoriaIds(userId, statusFilter)` que já
+  filtra corretamente; pega item aleatório e redirect
+- Estado da triagem sequencial fica intacto pra quem usa o fluxo
+  ordenado
+
+Refinamento opcional:
+- Modo "**aleatório por gênero**" — escolhe disco aleatório dentro
+  de filtro pré-aplicado (precisa do bug 9 antes)
+- Lembrar último disco mostrado e evitar sortear o mesmo na sequência
+
+Sem mudança de schema. Esforço: pequeno (~2-3h). Reusa
+`loadCuradoriaIds` existente.
+
+Registrado a pedido em 2026-04-24.
+
 ---
 
 ## Histórico de decisões de arquitetura
