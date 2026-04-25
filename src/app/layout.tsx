@@ -52,7 +52,6 @@ function Header() {
         <nav className="flex gap-10 justify-center">
           <Show when="signed-in">
             <NavLink href="/">Coleção</NavLink>
-            <NavLink href="/curadoria">Curadoria</NavLink>
             <NavLink href="/sets">Sets</NavLink>
             <NavLink href="/status">Status</NavLink>
           </Show>
