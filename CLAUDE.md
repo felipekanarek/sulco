@@ -384,6 +384,64 @@ quer abortar manual).
 Esforço: pequeno (~1h dev). Sem mudança de schema. Risco baixo —
 killZombieSyncRuns já é idempotente.
 
+### Incremento futuro 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
+Reportado em 2026-04-24 após Felipe abrir os filtros expandidos:
+~150 estilos catalogados (MPB 1210, SAMBA 759 ... SYNTHWAVE 1, TWIST 1,
+YÉ-YÉ 1) viraram parede de chips intransitável.
+
+Tentativa **rejeitada e revertida** (commit 9a860b8 → 5f63098):
+adicionar campo de busca type-ahead inline embaixo do FacetRow
+quando expandido. Resultado visual ficou ruim — chip wall + input
+extra acima quebrou a hierarquia da página.
+
+Direções a explorar (ordem decrescente de afinidade com estética
+do projeto):
+
+1. **Combobox/dropdown sofisticado** — substituir o pattern atual
+   "+N mais" por um único trigger "+ adicionar gênero/estilo" que
+   abre uma popover (Headless UI Listbox / Radix Combobox / shadcn
+   Command) com busca type-ahead, lista virtualizada, navegação por
+   teclado (↑↓ Enter Esc). Selecionados continuam como chips inline
+   (compactos, removíveis com ×). Padrão moderno de filtro
+   multi-select usado em Linear, Notion, Github. Não fica
+   inline/poluindo a página.
+
+2. **Drawer/sheet lateral** — botão "Filtros" abre um painel à
+   direita (estilo Notion sidebar) com TODOS os filtros agrupados:
+   status, gênero, estilo, país, década. Permite scroll dedicado e
+   busca por seção. Bom pra acervos grandes mas exige
+   redesenho da home.
+
+3. **Categorização hierárquica** — mapear estilos pra famílias
+   (Funk/Soul → Soul, Disco, Funk, Soul-Jazz...). Discogs tem
+   categorização própria mas mapeamento manual do vocabulário do
+   acervo é trabalhoso. Reduz cognitive load mas custa manutenção.
+
+4. **Search-only** — esconder a lista totalmente e expor apenas
+   campo de busca tipo "Adicionar estilo... (digite pra ver
+   sugestões)". Mais radical; perde discoverability dos top-10.
+
+Recomendação: opção 1 (Combobox/popover). Reusa primitivas que já
+existem (chips inline pra selecionados são o padrão atual), só
+substitui a lista expandida por um popover com busca. Esforço
+~1 dia. Pode usar `<Command>` shadcn-like custom (constituição
+Sulco proíbe shadcn; built-in com Headless UI ou implementação
+manual).
+
+Critérios de sucesso:
+- Selecionar 1 estilo entre 150 leva ≤ 5s (open popover + digitar
+  3 chars + click)
+- Página principal não cresce verticalmente quando user explora
+  filtros
+- Compatível com tema editorial pt-BR + tipografia serif/mono
+  existentes; sem importar shadcn
+- Funciona com keyboard-only
+
+Sem mudança de schema/queries. Esforço: 1 dia.
+
+Registrado a pedido em 2026-04-24 (após rollback da tentativa
+inline-search).
+
 ### Bug 9 — Filtros de coleção em Estilos/Gêneros (✅ já implementado)
 Reportado e investigado em 2026-04-24: descoberto que `<FilterBar>` em
 `src/components/filter-bar.tsx` JÁ implementa filtros multi-select de
