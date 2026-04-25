@@ -10,7 +10,12 @@ import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import { compareTrackPositions } from '@/lib/queries/curadoria';
 import { fetchAudioFeatures, type AudioFeatures } from './acousticbrainz';
-import { fetchReleaseRecordings, searchReleaseByDiscogsId, type MBRecordingRef } from './musicbrainz';
+import {
+  fetchReleaseRecordings,
+  searchReleaseByArtistAndTitle,
+  searchReleaseByDiscogsId,
+  type MBRecordingRef,
+} from './musicbrainz';
 import { markTrackSyncAttempt, writeEnrichment } from './write';
 
 const RETRY_WINDOW_DAYS = 30;
@@ -47,18 +52,37 @@ type TrackRow = {
 /**
  * Seleciona o MBID de recording que bate com a posição do track Sulco.
  * Usa `compareTrackPositions` pro match tolerante a variações
- * ("A1" vs "1A", etc).
+ * ("A1" vs "1A", etc). Se posição não casa (ex. vinil 2LP A1-D4 vs CD
+ * 1-14), tenta fallback por título normalizado.
  */
 function matchRecordingMbid(
   sulcoPosition: string,
+  sulcoTitle: string,
   mbRefs: MBRecordingRef[],
 ): string | null {
+  // Tier 1: posição exata (compareTrackPositions tolerante a "A1"/"1A")
   for (const ref of mbRefs) {
     if (compareTrackPositions(sulcoPosition, ref.position) === 0) {
       return ref.recordingMbid;
     }
   }
+  // Tier 2: título normalizado. Comum pra vinil-edição vs CD-edição
+  // onde tracklist é idêntica mas posições diferem (A1..D4 vs 1..14).
+  const target = normalizeTrackTitle(sulcoTitle);
+  if (!target) return null;
+  const titleMatches = mbRefs.filter((r) => normalizeTrackTitle(r.title) === target);
+  // Aceita só se for match único na release MB (evita ambiguidade
+  // tipo "Intro"/"Outro" duplicados).
+  if (titleMatches.length === 1) return titleMatches[0].recordingMbid;
   return null;
+}
+
+function normalizeTrackTitle(t: string): string {
+  return t
+    .toLowerCase()
+    .replace(/[''"`.,!?():;\[\]–—-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function diffUpdatedFields(track: TrackRow, feats: AudioFeatures): Array<'bpm' | 'musicalKey' | 'energy' | 'moods'> {
@@ -88,6 +112,8 @@ export async function enrichTrack(userId: number, trackId: number): Promise<Enri
       audioFeaturesSource: tracks.audioFeaturesSource,
       audioFeaturesSyncedAt: tracks.audioFeaturesSyncedAt,
       discogsId: records.discogsId,
+      recordArtist: records.artist,
+      recordTitle: records.title,
       recordArchived: records.archived,
       recordStatus: records.status,
     })
@@ -108,13 +134,28 @@ export async function enrichTrack(userId: number, trackId: number): Promise<Enri
   let mbid = row.mbid;
   if (!mbid) {
     try {
-      const mbReleaseId = await searchReleaseByDiscogsId(row.discogsId);
+      // Tier 1: URL lookup exato pelo Discogs ID
+      let mbReleaseId = await searchReleaseByDiscogsId(row.discogsId);
+      // Tier 2: fallback search por artist+title (cobre prensagens
+      // nacionais não-mapeadas no MB).
+      if (!mbReleaseId) {
+        // Conta tracks do disco pra ranquear release com track-count match
+        const trackCount = await db
+          .select({ id: tracks.id })
+          .from(tracks)
+          .where(eq(tracks.recordId, row.recordId));
+        mbReleaseId = await searchReleaseByArtistAndTitle(
+          row.recordArtist,
+          row.recordTitle,
+          trackCount.length,
+        );
+      }
       if (!mbReleaseId) {
         await markTrackSyncAttempt(row.id, null);
         return { outcome: 'skipped', reason: 'no_mbid' };
       }
       const refs = await fetchReleaseRecordings(mbReleaseId);
-      mbid = matchRecordingMbid(row.position, refs);
+      mbid = matchRecordingMbid(row.position, row.title, refs);
       if (!mbid) {
         await markTrackSyncAttempt(row.id, null);
         return { outcome: 'skipped', reason: 'no_mbid' };
@@ -185,6 +226,8 @@ export async function enrichRecord(userId: number, recordId: number): Promise<Re
     .select({
       id: records.id,
       discogsId: records.discogsId,
+      artist: records.artist,
+      title: records.title,
       archived: records.archived,
       status: records.status,
     })
@@ -232,10 +275,19 @@ export async function enrichRecord(userId: number, recordId: number): Promise<Re
   if (eligible.length === 0) return summary;
 
   // Resolver MB release uma vez por disco
+  // Tier 1: URL lookup pelo Discogs ID
+  // Tier 2: fallback search por artist+title (cobre prensagens nacionais)
   let mbRefs: MBRecordingRef[] = [];
   let mbSearchFailed = false;
   try {
-    const mbReleaseId = await searchReleaseByDiscogsId(rec.discogsId);
+    let mbReleaseId = await searchReleaseByDiscogsId(rec.discogsId);
+    if (!mbReleaseId) {
+      mbReleaseId = await searchReleaseByArtistAndTitle(
+        rec.artist,
+        rec.title,
+        summary.totalTracks,
+      );
+    }
     if (mbReleaseId) {
       mbRefs = await fetchReleaseRecordings(mbReleaseId);
     }
@@ -252,7 +304,7 @@ export async function enrichRecord(userId: number, recordId: number): Promise<Re
     }
     let mbid = track.mbid;
     if (!mbid) {
-      mbid = matchRecordingMbid(track.position, mbRefs);
+      mbid = matchRecordingMbid(track.position, track.title, mbRefs);
       if (!mbid) {
         await markTrackSyncAttempt(track.id, null);
         summary.tracksSkipped += 1;

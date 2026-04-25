@@ -79,6 +79,82 @@ export async function searchReleaseByDiscogsId(discogsReleaseId: number): Promis
   return release?.id ?? null;
 }
 
+type MBReleaseSearchResponse = {
+  releases?: Array<{
+    id: string;
+    score?: number;
+    title?: string;
+    'track-count'?: number;
+    'artist-credit'?: Array<{ name?: string }>;
+  }>;
+};
+
+/**
+ * Normaliza string de artist/title pra comparação tolerante:
+ *  - lowercase
+ *  - remove pontuação comum
+ *  - remove "the " no início
+ *  - colapsa whitespace
+ */
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[''"`.,!?():;\[\]–—-]/g, ' ')
+    .replace(/^the\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Fallback search por artist+title quando URL lookup falha (release
+ * Discogs não está mapeada no MB). Comum pra prensagens nacionais
+ * de discos internacionais (ex: edição BR de Michael Jackson Dangerous).
+ *
+ * Validações antes de aceitar:
+ *  - score >= 95 (alta confiança Lucene)
+ *  - artist do MB casa com `artist` Sulco (após normalize)
+ *  - se `expectedTrackCount` informado: prefere release com track-count
+ *    igual; se nenhuma bate, aceita o melhor score
+ *
+ * Retorna `null` se nenhum resultado passar os filtros.
+ */
+export async function searchReleaseByArtistAndTitle(
+  artist: string,
+  title: string,
+  expectedTrackCount?: number,
+): Promise<string | null> {
+  await rateLimit();
+  const escapeLucene = (s: string) => s.replace(/["\\]/g, ' ').trim();
+  const q = `artist:"${escapeLucene(artist)}" AND release:"${escapeLucene(title)}"`;
+  const url = `${MB_BASE}/release?query=${encodeURIComponent(q)}&fmt=json&limit=10`;
+
+  let res = await fetchWithTimeout(url);
+  if (res.status === 503) {
+    await new Promise((r) => setTimeout(r, 2_200));
+    await rateLimit();
+    res = await fetchWithTimeout(url);
+  }
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`MB search failed: ${res.status}`);
+  }
+  const body = (await res.json()) as MBReleaseSearchResponse;
+  const candidates = (body.releases ?? []).filter((r) => {
+    if (typeof r.score === 'number' && r.score < 95) return false;
+    const mbArtist = r['artist-credit']?.[0]?.name ?? '';
+    return normalizeForMatch(mbArtist) === normalizeForMatch(artist);
+  });
+  if (candidates.length === 0) return null;
+
+  // Se tem expected track count, prefere release com track-count que casa
+  if (typeof expectedTrackCount === 'number' && expectedTrackCount > 0) {
+    const exact = candidates.find((r) => r['track-count'] === expectedTrackCount);
+    if (exact) return exact.id;
+  }
+  // Senão, primeiro (já vem ordenado por score)
+  return candidates[0].id;
+}
+
 type MBReleaseFetchResponse = {
   media?: Array<{
     position?: number;
