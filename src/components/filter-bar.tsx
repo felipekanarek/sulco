@@ -161,52 +161,102 @@ function FacetRow({
   activeCls: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [query, setQuery] = useState('');
 
   if (available.length === 0) return null;
 
-  // Mantém selecionados sempre visíveis (mesmo se caem fora do top-N).
   const selectedSet = new Set(selected);
   const selectedFacets = available.filter((f) => selectedSet.has(f.value));
   const unselected = available.filter((f) => !selectedSet.has(f.value));
+
+  // Quando expandido com busca: filtra unselected por substring no value
+  // (case-insensitive). Selected SEMPRE visível mesmo durante filtro.
+  const q = query.trim().toLowerCase();
+  const filteredUnselected =
+    expanded && q.length > 0
+      ? unselected.filter((f) => f.value.toLowerCase().includes(q))
+      : unselected;
+
   const visibleUnselected = expanded
-    ? unselected
-    : unselected.slice(0, Math.max(0, COLLAPSED_COUNT - selectedFacets.length));
+    ? filteredUnselected
+    : filteredUnselected.slice(
+        0,
+        Math.max(0, COLLAPSED_COUNT - selectedFacets.length),
+      );
   const visible = [...selectedFacets, ...visibleUnselected];
   const hidden = available.length - visible.length;
+  const totalUnselected = unselected.length;
+  const filteredOutCount =
+    expanded && q.length > 0 ? totalUnselected - filteredUnselected.length : 0;
+
+  function toggleExpanded() {
+    setExpanded((v) => {
+      if (v) setQuery(''); // limpa busca ao recolher
+      return !v;
+    });
+  }
 
   return (
-    <div
-      className={`flex gap-2 items-center ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
-    >
-      <span className="label-tech text-ink-mute mr-1 shrink-0">{label}</span>
-      <div className={`flex gap-2 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}>
-        {visible.map((f) => {
-          const active = selectedSet.has(f.value);
-          return (
-            <button
-              key={f.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onToggle(f.value)}
-              title={`${f.count} ${f.count === 1 ? 'disco' : 'discos'}`}
-              className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 border rounded-full transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
-                active ? activeCls : 'border-line text-ink-soft hover:border-ink hover:text-ink'
-              }`}
-            >
-              <span>{f.value}</span>
-              <span className="text-ink-mute">{f.count}</span>
-            </button>
-          );
-        })}
-      </div>
-      {hidden > 0 || expanded ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="label-tech text-ink-mute hover:text-accent underline shrink-0 ml-1"
+    <div className="flex flex-col gap-2">
+      <div
+        className={`flex gap-2 items-center ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
+      >
+        <span className="label-tech text-ink-mute mr-1 shrink-0">{label}</span>
+        <div
+          className={`flex gap-2 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
         >
-          {expanded ? 'recolher' : `+${hidden} mais`}
-        </button>
+          {visible.map((f) => {
+            const active = selectedSet.has(f.value);
+            return (
+              <button
+                key={f.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onToggle(f.value)}
+                title={`${f.count} ${f.count === 1 ? 'disco' : 'discos'}`}
+                className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 border rounded-full transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
+                  active
+                    ? activeCls
+                    : 'border-line text-ink-soft hover:border-ink hover:text-ink'
+                }`}
+              >
+                <span>{f.value}</span>
+                <span className="text-ink-mute">{f.count}</span>
+              </button>
+            );
+          })}
+          {expanded && q.length > 0 && filteredUnselected.length === 0 ? (
+            <span className="font-mono text-[10px] text-ink-mute self-center">
+              nenhum {label.replace(/\s*\(.*\)/, '')} casa com "{query}"
+            </span>
+          ) : null}
+        </div>
+        {hidden > 0 || expanded ? (
+          <button
+            type="button"
+            onClick={toggleExpanded}
+            className="label-tech text-ink-mute hover:text-accent underline shrink-0 ml-1"
+          >
+            {expanded ? 'recolher' : `+${hidden} mais`}
+          </button>
+        ) : null}
+      </div>
+      {expanded ? (
+        <div className="flex items-center gap-3 ml-[7.5rem]">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Filtrar ${label.replace(/\s*\(.*\)/, '')} (digite pra buscar)…`}
+            className="bg-transparent border border-line rounded-full px-3 py-1 font-mono text-[11px] placeholder:text-ink-mute outline-none focus:border-accent w-72"
+            autoFocus
+          />
+          {filteredOutCount > 0 ? (
+            <span className="label-tech text-ink-mute">
+              {filteredUnselected.length} de {totalUnselected} ({filteredOutCount} ocultos)
+            </span>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
