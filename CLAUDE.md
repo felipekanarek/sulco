@@ -4,6 +4,57 @@ Guia de contexto para o Claude Code. Leia este arquivo inteiro antes de qualquer
 
 ---
 
+## Convenções
+
+### Sobre este arquivo
+
+CLAUDE.md contém apenas conhecimento **estável** + markers do agente:
+arquitetura, modelo de dados, padrões de código, regras de negócio
+críticas (Princípio I etc.), histórico de decisões com semver, e
+SPECKIT START/END markers.
+
+**NÃO entra aqui**: roadmap, bugs abertos, features pendentes, ideias
+não-comprometidas. Tudo isso vive em [BACKLOG.md](./BACKLOG.md).
+
+**Releases entregues** ficam registradas em `BACKLOG.md > Releases` com
+ref pra `specs/NNN-feature/`. Incrementos concluídos NÃO deixam
+rastro inline aqui.
+
+### Sobre o processo de desenvolvimento (Spec Kit)
+
+**Toda mudança — bug, fix, incremento pequeno ou grande — DEVE passar
+pelo Spec Kit.** Sem exceção por "tamanho percebido".
+
+Comandos obrigatórios em ordem:
+1. `/speckit.specify` — cria branch + spec mínima
+2. `/speckit.clarify` — opcional, só pra ambiguidades reais
+3. `/speckit.plan` — design técnico
+4. `/speckit.tasks` — breakdown executável
+5. `/speckit.analyze` — cross-check spec/plan/tasks (recomendado pra
+   incrementos médios+)
+6. `/speckit.implement` — execução com checkpoints
+
+**Por quê obrigatório**: rastreabilidade. Cada decisão fica versionada
+em `specs/NNN-*/` (spec, plan, tasks, contracts). Commits referenciam
+spec. Conversas referenciam IDs. Sem isso, fica conhecimento órfão
+que se perde em 2 semanas.
+
+**Pra ações REALMENTE triviais** (rename de label, ajuste CSS, fix
+typo de cópia): especificação curta tipo 1 parágrafo no `spec.md` é
+suficiente — mas o ritual permanece (branch dedicado, commit
+referenciando, entrada em `BACKLOG.md > Releases`).
+
+**Anti-pattern observado** (sessão 2026-04-25): pular speckit em
+"vou fazer isso rápido" gerou 5 commits diretos em main sem
+rastreabilidade (Bug 8b, mudanças de menu, label rename, etc.).
+Resultou em backlog confuso e histórico de decisões disperso. **Não
+repetir.**
+
+Se o Claude propor um caminho sem speckit em qualquer atividade de
+código, **interromper e exigir o ritual** antes de continuar.
+
+---
+
 ## O que é o Sulco
 
 App web pessoal para DJs que trabalham com vinil. Resolve uma dor específica: decidir o que levar de disco para cada set.
