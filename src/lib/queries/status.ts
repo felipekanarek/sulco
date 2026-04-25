@@ -2,6 +2,7 @@ import 'server-only';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns, tracks, users } from '@/db/schema';
+import { killZombieSyncRuns } from '@/lib/discogs/zombie';
 
 export type SyncRunRow = {
   id: number;
@@ -52,6 +53,13 @@ export type StatusSnapshot = {
  *    archived pendente OR conflito criado APÓS lastStatusVisitAt (FR-041)
  */
 export async function loadStatusSnapshot(userId: number): Promise<StatusSnapshot> {
+  // Bug 8 fix: limpa runs zumbis (running >65s sem progresso) ANTES de
+  // ler o snapshot. Assim `hasRunningSync` reflete o estado real e o
+  // ManualSyncButton/SyncBadge não trava em "em execução" depois que
+  // o processo morreu silenciosamente. Idempotente — 0 rows se nenhum
+  // zombie, custo: 1 UPDATE com WHERE indexado.
+  await killZombieSyncRuns(userId);
+
   const [userRow] = await db
     .select({ lastStatusVisitAt: users.lastStatusVisitAt })
     .from(users)

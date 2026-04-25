@@ -353,36 +353,20 @@ Esforço: pequeno-médio (1-2 dias). UI-heavy, sem mudança de schema.
 
 Registrado a pedido em 2026-04-24.
 
-### Bug 8 — Sync manual trava em "em andamento" quando processo morre silenciosamente
-Reportado em 2026-04-24. DJ clica "Sincronizar agora" em `/status`,
-sync começa mas processo morre (provavelmente Vercel Lambda timeout
-ou erro não capturado), `sync_runs.outcome` fica em `running` sem
-`finished_at`. UI mostra "em execução" indefinidamente.
+### Bug 8 — Sync trava em "em andamento" (✅ resolvido)
+Reportado e fixado em 2026-04-24/25. `loadStatusSnapshot` agora
+chama `killZombieSyncRuns(userId)` antes de ler o snapshot — runs
+running há >65s sem progresso são marcadas como `erro` automaticamente.
+Quando o DJ abre `/status` (ou o `<SyncBadge>` no header recalcula),
+zombies somem passivamente. Mitigação manual de SQL (run #262) não
+será mais necessária.
 
-Existe `killZombieSyncRuns` em `src/lib/discogs/zombie.ts` que mata
-runs >15 min, MAS só é chamado quando outra tentativa de sync inicia
-(`runIncrementalSync` → `killZombieSyncRuns` → checa concorrência).
-Se o DJ apenas observa `/status` sem clicar de novo, fica preso.
+Opção (b) do roadmap original (botão "cancelar manual" pra runs
+demoradas mas não-zombie) **não foi implementada** — pode entrar
+como Bug 8b se precisar. Hoje, o DJ pode forçar limpeza dando F5
+em /status, que dispara `loadStatusSnapshot` → `killZombieSyncRuns`.
 
-Mitigação aplicada hoje: query SQL manual matando run #262.
-
-Fix sugerido (em ordem de complexidade):
-- (a) **Server-side**: chamar `killZombieSyncRuns(userId)` no início
-  de `loadStatusSnapshot` em `queries/status.ts`. Custo: 1 query
-  extra por carregamento da página `/status`. Pro DJ que abre
-  /status sempre que quer ver status, libera zombies passivamente.
-- (b) **UI**: botão "cancelar/marcar como falha" exposto no
-  `<ManualSyncButton>` ou `<SyncBadge>` quando run em `running` há
-  >15 min. Ação explícita do DJ.
-- (c) **Eventual consistency**: cron próprio batendo a cada hora pra
-  matar zombies. Overkill pro piloto.
-
-Recomendação: (a) é simples e cobre 100% dos casos. Opção (b) ainda
-útil pra runs que não são zombie mas estão demorando muito (DJ
-quer abortar manual).
-
-Esforço: pequeno (~1h dev). Sem mudança de schema. Risco baixo —
-killZombieSyncRuns já é idempotente.
+Status: **fechado**. Commit `<NEW>`.
 
 ### Incremento futuro 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
 Reportado em 2026-04-24 após Felipe abrir os filtros expandidos:
