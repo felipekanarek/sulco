@@ -149,16 +149,13 @@ no Discogs.
 
 Nenhum no momento.
 
-### Ideias adjacentes (gating: virar Bug formal se acontecer)
-
-- **Bug 8b** — Botão "cancelar" pra sync demorado mas não-zombie
-  (run em `running` mas <65s, ainda saudável). Hoje DJ não tem como
-  abortar manualmente.
-
 ### Histórico (fechados)
 
 - **Bug 8** — Sync trava em "em andamento" — ✅ commit `1952d33`
   (`killZombieSyncRuns` passivo no `loadStatusSnapshot`)
+- **Bug 8b** — Botão "cancelar" pra sync manual em curso — ✅ Server
+  Action `cancelRunningSync` + link "Cancelar sync" no `<ManualSyncButton>`
+  quando há run em `running`
 - **Bug 9** — Filtros de coleção em estilos/gêneros — 🔒 já existia
   (descoberto em investigação 2026-04-24, `<FilterBar>`)
 - **Bug 10** — Curadoria aleatória direto pro disco — ✅ commit `8286226`

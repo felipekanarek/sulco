@@ -942,6 +942,42 @@ export async function triggerManualSync(): Promise<
   }
 }
 
+/* ============================================================
+   cancelRunningSync — Bug 8b
+   Marca runs `manual` em outcome='running' do user atual como
+   'erro'/cancelado. Pra DJ que vê sync demorando muito e quer
+   abortar antes do killZombieSyncRuns (que só roda em >65s).
+   ============================================================ */
+
+export async function cancelRunningSync(): Promise<
+  ActionResult<{ cancelledCount: number }>
+> {
+  const user = await requireCurrentUser();
+  // Cancela apenas runs do próprio user, kind='manual', em running.
+  // initial_import e reimport_record continuam intocados — esses
+  // têm fluxo próprio e cancelar deles abre risco de inconsistência.
+  // daily_auto também não — é cron, não tem usuário esperando.
+  const result = await db
+    .update(syncRuns)
+    .set({
+      outcome: 'erro',
+      finishedAt: new Date(),
+      errorMessage: sql`COALESCE(${syncRuns.errorMessage}, '') || ' [cancelado pelo DJ via /status]'`,
+    })
+    .where(
+      and(
+        eq(syncRuns.userId, user.id),
+        eq(syncRuns.kind, 'manual'),
+        eq(syncRuns.outcome, 'running'),
+      ),
+    )
+    .returning({ id: syncRuns.id });
+
+  revalidatePath('/status');
+  revalidatePath('/');
+  return { ok: true, data: { cancelledCount: result.length } };
+}
+
 const reimportSchema = z.object({
   recordId: z.number().int().positive(),
 });

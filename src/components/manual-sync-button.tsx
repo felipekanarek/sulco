@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { triggerManualSync } from '@/lib/actions';
+import { cancelRunningSync, triggerManualSync } from '@/lib/actions';
 
 /**
  * Botão "Sincronizar agora" (FR-033).
@@ -22,6 +22,7 @@ export function ManualSyncButton({
 }) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageKind, setMessageKind] = useState<'ok' | 'warn' | null>(null);
 
@@ -75,6 +76,32 @@ export function ManualSyncButton({
     }
   }
 
+  async function cancel() {
+    if (!initialRunning || isCancelling) return;
+    setIsCancelling(true);
+    setMessage(null);
+    setMessageKind(null);
+    try {
+      const res = await cancelRunningSync();
+      if (!res.ok) {
+        setMessage(res.error);
+        setMessageKind('warn');
+        return;
+      }
+      const n = res.data?.cancelledCount ?? 0;
+      setMessage(
+        n > 0 ? 'Sync cancelado.' : 'Nada pra cancelar (talvez já terminou).',
+      );
+      setMessageKind('ok');
+      router.refresh();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Erro ao cancelar.');
+      setMessageKind('warn');
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
   const label = isPending
     ? 'Sincronizando...'
     : initialRunning
@@ -101,9 +128,19 @@ export function ManualSyncButton({
         </p>
       ) : null}
       {initialRunning ? (
-        <p className="label-tech text-ink-mute text-right">
-          Atualizando automaticamente...
-        </p>
+        <div className="flex flex-col items-end gap-1">
+          <p className="label-tech text-ink-mute text-right">
+            Atualizando automaticamente...
+          </p>
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={isCancelling}
+            className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute hover:text-warn underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCancelling ? 'Cancelando...' : 'Cancelar sync'}
+          </button>
+        </div>
       ) : null}
       {disabled && reason && !message ? (
         <p className="label-tech text-ink-mute text-right max-w-[220px]">{reason}</p>
