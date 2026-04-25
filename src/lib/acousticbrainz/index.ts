@@ -24,6 +24,10 @@ export type EnrichOutcome =
 
 export type RecordEnrichSummary = {
   recordId: number;
+  /** Total de faixas do disco (exclui arquivadas por FK). */
+  totalTracks: number;
+  /** Faixas excluídas do processamento: já têm source='acousticbrainz'|'manual' OU syncedAt < 30 dias. */
+  tracksAlreadyProcessed: number;
   mbidsResolved: number;
   tracksUpdated: number;
   tracksSkipped: number;
@@ -169,6 +173,8 @@ export async function enrichTrack(userId: number, trackId: number): Promise<Enri
 export async function enrichRecord(userId: number, recordId: number): Promise<RecordEnrichSummary> {
   const summary: RecordEnrichSummary = {
     recordId,
+    totalTracks: 0,
+    tracksAlreadyProcessed: 0,
     mbidsResolved: 0,
     tracksUpdated: 0,
     tracksSkipped: 0,
@@ -194,6 +200,13 @@ export async function enrichRecord(userId: number, recordId: number): Promise<Re
   // 2026-04-24 smoke test).
   if (rec.archived) return summary;
 
+  // Total de faixas do disco (pra feedback UI)
+  const totalRows = await db
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(eq(tracks.recordId, recordId));
+  summary.totalTracks = totalRows.length;
+
   // Faixas elegíveis: source IS NULL E (nunca tentou OU tentou há >30 dias)
   const cutoff = Math.floor(Date.now() / 1000) - RETRY_WINDOW_SECONDS;
   const eligible = await db
@@ -215,6 +228,7 @@ export async function enrichRecord(userId: number, recordId: number): Promise<Re
       ),
     );
 
+  summary.tracksAlreadyProcessed = summary.totalTracks - eligible.length;
   if (eligible.length === 0) return summary;
 
   // Resolver MB release uma vez por disco

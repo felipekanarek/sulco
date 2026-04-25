@@ -114,29 +114,35 @@ export function TrackCurationRow({
           ) : null}
         </div>
 
-        {/* Tags visíveis quando selected */}
-        {local.selected &&
-        (local.bpm ||
-          local.musicalKey ||
-          local.energy ||
-          local.fineGenre ||
-          local.moods.length > 0 ||
-          local.contexts.length > 0) ? (
-          <div className="flex gap-2 flex-wrap items-center mb-2">
+        {/* Tags: audio features (bpm/tom/energia/moods/badge) sempre
+            visíveis quando têm dados — permite DJ ver sugestão ANTES
+            de decidir selected. fineGenre/contexts/isBomb continuam só
+            quando selected (são 100% autorais sem sugestão externa).
+            Quando unselected, bloco aparece com opacidade reduzida. */}
+        {local.bpm ||
+        local.musicalKey ||
+        local.energy ||
+        local.moods.length > 0 ||
+        (local.selected && (local.fineGenre || local.contexts.length > 0)) ? (
+          <div
+            className={`flex gap-2 flex-wrap items-center mb-2 ${local.selected ? '' : 'opacity-60'}`}
+          >
             {local.bpm ? <Tag>{local.bpm} BPM</Tag> : null}
             {local.musicalKey ? <Tag variant="ink">{local.musicalKey}</Tag> : null}
             {local.energy ? <Tag>energia {local.energy}</Tag> : null}
-            {local.fineGenre ? <Tag variant="ink">{local.fineGenre}</Tag> : null}
+            {local.selected && local.fineGenre ? <Tag variant="ink">{local.fineGenre}</Tag> : null}
             {local.moods.map((m) => (
               <Tag key={m} variant="mood">
                 {m}
               </Tag>
             ))}
-            {local.contexts.map((c) => (
-              <Tag key={c} variant="ctx">
-                {c}
-              </Tag>
-            ))}
+            {local.selected
+              ? local.contexts.map((c) => (
+                  <Tag key={c} variant="ctx">
+                    {c}
+                  </Tag>
+                ))
+              : null}
             <AudioFeaturesBadge source={local.audioFeaturesSource} />
           </div>
         ) : null}

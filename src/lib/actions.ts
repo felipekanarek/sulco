@@ -505,6 +505,8 @@ export async function enrichRecordOnDemand(
   input: z.infer<typeof enrichRecordSchema>,
 ): Promise<
   ActionResult<{
+    totalTracks: number;
+    tracksAlreadyProcessed: number;
     mbidsResolved: number;
     tracksUpdated: number;
     tracksSkipped: number;
@@ -535,6 +537,8 @@ export async function enrichRecordOnDemand(
     return {
       ok: true,
       data: {
+        totalTracks: summary.totalTracks,
+        tracksAlreadyProcessed: summary.tracksAlreadyProcessed,
         mbidsResolved: summary.mbidsResolved,
         tracksUpdated: summary.tracksUpdated,
         tracksSkipped: summary.tracksSkipped,
