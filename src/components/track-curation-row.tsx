@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { updateTrackCuration } from '@/lib/actions';
 import { AudioFeaturesBadge } from './audio-features-badge';
 import { BombaToggle } from './bomba-toggle';
@@ -48,6 +48,39 @@ export function TrackCurationRow({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+
+  // Re-sincroniza state local quando audio features chegam do servidor
+  // (router.refresh() após enrichRecordOnDemand). Atualiza só os 4 campos
+  // de audio features + a flag de origem; preserva o resto do estado
+  // local pra não atropelar edição em curso (rating, comment, isBomb...).
+  useEffect(() => {
+    setLocal((prev) => {
+      const incomingChanged =
+        prev.bpm !== track.bpm ||
+        prev.musicalKey !== track.musicalKey ||
+        prev.energy !== track.energy ||
+        JSON.stringify(prev.moods) !== JSON.stringify(track.moods) ||
+        prev.audioFeaturesSource !== track.audioFeaturesSource;
+      if (!incomingChanged) return prev;
+      return {
+        ...prev,
+        bpm: track.bpm,
+        musicalKey: track.musicalKey,
+        energy: track.energy,
+        moods: track.moods,
+        audioFeaturesSource: track.audioFeaturesSource,
+      };
+    });
+    // Só re-sync quando audio features mudam — não trigger quando
+    // outros campos mudam (evita race com edição local em curso).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    track.bpm,
+    track.musicalKey,
+    track.energy,
+    track.moods,
+    track.audioFeaturesSource,
+  ]);
 
   function save(patch: Partial<TrackData>) {
     // Otimista: aplica local, envia ao servidor, reverte em erro

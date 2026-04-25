@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { enrichRecordOnDemand } from '@/lib/actions';
 
 type FeedbackState =
@@ -35,6 +36,7 @@ export function EnrichRecordButton({
   /** Se o disco já teve pelo menos 1 tentativa (tracks.audio_features_synced_at !== NULL). */
   alreadyAttempted: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<FeedbackState>({ kind: 'idle' });
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -63,6 +65,10 @@ export function EnrichRecordButton({
           tracksUpdated: res.data?.tracksUpdated ?? 0,
           tracksSkipped: res.data?.tracksSkipped ?? 0,
         });
+        // Força RSC re-render pra propagar audioFeaturesSource + valores
+        // novos pros TrackCurationRows (revalidatePath dentro da action
+        // por si só não invalida o cache do client; refresh garante).
+        router.refresh();
       } else {
         setFeedback({ kind: 'error', message: res.error });
       }
