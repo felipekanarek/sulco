@@ -92,6 +92,7 @@ tasks de cada incremento:
 - [002-multi-conta/](./specs/002-multi-conta/) — invite-only + allowlist + /admin
 - [003-faixas-ricas-montar/](./specs/003-faixas-ricas-montar/) — candidatos ricos no /montar
 - [005-acousticbrainz-audio-features/](./specs/005-acousticbrainz-audio-features/) — pré-preenchimento de BPM/tom/energia/moods via MusicBrainz → AcousticBrainz, respeitando Princípio I
+- [006-curadoria-aleatoria/](./specs/006-curadoria-aleatoria/) — botão 🎲 sorteia disco unrated direto pro `/disco/[id]`
 
 ## Audio features (005)
 
@@ -135,12 +136,7 @@ inteiro (vira `'manual'`).
 Observabilidade: seção "Audio features" em `/status` mostra cobertura
 por campo (total + sugestão + confirmadas) + última execução.
 
-## Próximos passos
+## Roadmap & backlog
 
-- [ ] Homologação ponta-a-ponta do sync Discogs (Phase 6) em condições reais
-- [ ] Homologação ponta-a-ponta do 005 em acervo real (MB+AB com rede aberta — quickstart §1–7)
-- [ ] Preview de áudio (Deezer + YouTube link-out) — incremento 5b no roadmap
-- [ ] Notificações por email (envio automático ao convidar) — ver CLAUDE.md
-- [ ] Briefing inteligente com IA (Anthropic SDK + prompt caching)
-- [ ] PWA / mobile (`next-pwa`, swipe em /curadoria)
-- [ ] Playlists (blocos reutilizáveis) — schema pronto, UI fora do piloto
+Lista priorizada de incrementos, bugs e ideias vive em
+[BACKLOG.md](./BACKLOG.md).
