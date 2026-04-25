@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns } from '@/db/schema';
 import { killZombieSyncRuns } from './zombie';
@@ -51,20 +51,32 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
     };
   }
 
-  // Último snapshot conhecido (para detectar remoções)
+  // 007/Bug 11: snapshot anterior compartilhável entre manual/daily_auto
+  // (ambos representam estado completo da 1ª página da coleção).
+  // initial_import salva `{totalItems}`, não array de IDs — ignorado.
+  // reimport_record é por-disco — não entra no fallback.
+  const snapshotKindFallback: SyncKind[] =
+    kind === 'manual'
+      ? ['manual', 'daily_auto']
+      : ['daily_auto', 'manual'];
   const previous = await db
-    .select({ snapshotJson: syncRuns.snapshotJson })
+    .select({ kind: syncRuns.kind, snapshotJson: syncRuns.snapshotJson })
     .from(syncRuns)
     .where(
       and(
         eq(syncRuns.userId, userId),
-        eq(syncRuns.kind, kind),
+        inArray(syncRuns.kind, snapshotKindFallback),
         eq(syncRuns.outcome, 'ok'),
       ),
     )
     .orderBy(desc(syncRuns.startedAt))
     .limit(1);
   const prevIds = parseSnapshotIds(previous[0]?.snapshotJson ?? null);
+  console.info(
+    previous[0]
+      ? `[sync] ${kind} herdou snapshot de kind=${previous[0].kind} com ${prevIds?.length ?? 0} ids`
+      : `[sync] ${kind} sem snapshot anterior — pula detecção de removidos nesta execução`,
+  );
 
   const inserted = await db
     .insert(syncRuns)
@@ -93,11 +105,19 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
       .where(and(eq(records.userId, userId), eq(records.archived, false)));
     const localIds = new Set(localRows.map((r) => r.discogsId));
 
-    // Novos ou com metadados atualizados → puxa release detalhado
+    // 007/Bug 11: chama `fetchRelease` APENAS pra discos novos (ainda
+    // não existem em `records`). Pra existentes, pular — assumimos
+    // metadata Discogs estável após import inicial. DJ pode forçar
+    // refresh de disco específico via botão "Reimportar este disco"
+    // (kind='reimport_record', fluxo separado).
+    //
+    // Sem este filtro, sync incremental fazia 100 requests Discogs
+    // por execução (1 por disco da 1ª página), estourando rate limit
+    // ~1 req/s × 100 = 100s → Vercel Lambda timeout 60s → run zumbi.
     for (const rel of page.releases) {
-      const isNew = !localIds.has(rel.id);
+      if (localIds.has(rel.id)) continue; // existente, pular
       const full = await fetchRelease(userId, rel.id);
-      const res = await applyDiscogsUpdate(userId, full, { isNew });
+      const res = await applyDiscogsUpdate(userId, full, { isNew: true });
       if (res.created) newCount += 1;
     }
 

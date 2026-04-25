@@ -151,56 +151,7 @@ Nenhum no momento.
 
 ### Abertos
 
-#### Bug 11 — Primeiro sync manual estoura Vercel timeout (60s) por falta de snapshot anterior
-Reportado em 2026-04-25. DJ removeu 5 discos no Discogs e clicou
-"Sincronizar agora" em `/sync`. Sync rodou 1m08s e foi morto pelo
-`killZombieSyncRuns` (Bug 8 fix) com 0 removidos detectados.
-
-**Causa raiz**: `runIncrementalSync` em `src/lib/discogs/sync.ts:55-66`
-busca snapshot anterior **filtrando por mesmo `kind`** (`eq(syncRuns.kind, kind)`):
-
-```ts
-const previous = await db
-  .select({ snapshotJson: syncRuns.snapshotJson })
-  .from(syncRuns)
-  .where(and(
-    eq(syncRuns.userId, userId),
-    eq(syncRuns.kind, kind),    // ← filtro estrito por kind!
-    eq(syncRuns.outcome, 'ok'),
-  ));
-```
-
-Se nunca rodou `manual` com sucesso (caso do Felipe — só tem
-`initial_import` e `reimport_record` no histórico ok), `prevIds = []`.
-Todos os 100 discos da 1ª página viram "novos" → 100× `fetchRelease()`
-× rate limit Discogs ~1 req/s = ~100s → Vercel Lambda timeout em 60s
-→ run morre como zombie.
-
-**Cenário**: bug afeta TODA primeira execução manual de qualquer DJ
-com acervo grande. Onboarding via initial_import passa, mas quando o
-DJ clica "Sincronizar agora" pela primeira vez, trava.
-
-**Fix proposto**: fallback hierárquico de snapshot. Pra `manual`:
-1. Procura último ok com kind='manual'
-2. Se não acha, fallback pra kind='daily_auto'
-3. Se não acha, fallback pra kind='initial_import' (ÚLTIMO snapshot
-   completo conhecido do acervo)
-
-Pra `daily_auto`, mesma cadeia (manual ↔ daily_auto são intercambiáveis
-porque ambos representam o estado completo do acervo no Discogs).
-
-`reimport_record` continua filtrado separado (snapshot é só do disco
-específico, não do acervo).
-
-**Esforço**: ~30 min via speckit.specify dedicado. Sem schema delta.
-
-**Workaround temporário**: pular sync manual; aguardar cron 04:00 SP
-diário fazer o trabalho. Cron usa kind='daily_auto' que tem o mesmo
-problema na 1ª vez, mas após primeira execução cria snapshot que
-serve de base pras seguintes.
-
-**Workaround imediato pros 5 discos**: SQL manual marcando archived
-nos IDs específicos. Não recomendado sem identificar quais foram.
+Nenhum no momento.
 
 ### Histórico (fechados)
 
@@ -213,6 +164,12 @@ nos IDs específicos. Não recomendado sem identificar quais foram.
   (descoberto em investigação 2026-04-24, `<FilterBar>`)
 - **Bug 10** — Curadoria aleatória direto pro disco — ✅ commit `8286226`
   (entregue como Incremento 006 com botão 🎲 na home)
+- **Bug 11** — Primeiro sync manual estoura Vercel timeout — ✅ Incremento
+  007 (`specs/007-fix-sync-snapshot-fallback/`). Causa raiz: `fetchRelease`
+  era chamado pra TODOS 100 discos da 1ª página mesmo os já existentes
+  → 100s de requests Discogs → timeout 60s. Fix: skip `fetchRelease`
+  quando disco já existe em `records`. Snapshot fallback manual↔daily_auto
+  pra herdar primeira execução.
 
 ---
 
