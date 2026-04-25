@@ -5,6 +5,7 @@ import { requireCurrentUser } from '@/lib/auth';
 import { listUserVocabulary } from '@/lib/actions';
 import { loadDisc } from '@/lib/queries/curadoria';
 import { CoverPlaceholder } from '@/components/cover-placeholder';
+import { EnrichRecordButton } from '@/components/enrich-record-button';
 import { RecordControls } from '@/components/record-controls';
 import { ReimportButton } from '@/components/reimport-button';
 import { TrackCurationRow } from '@/components/track-curation-row';
@@ -112,6 +113,10 @@ export default async function RecordDetailPage({
           />
 
           <div className="mt-4 pt-4 border-t border-line-soft space-y-3">
+            <EnrichRecordButton
+              recordId={disc.id}
+              alreadyAttempted={disc.tracks.some((t) => t.audioFeaturesSource !== null)}
+            />
             <ReimportButton recordId={disc.id} variant="default" />
             <div className="flex flex-col gap-1">
               <a

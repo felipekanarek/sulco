@@ -491,6 +491,63 @@ export async function updateRecordAuthorFields(
 }
 
 /* ============================================================
+   enrichRecordOnDemand — 005 (refactor on-demand)
+   DJ clica "Buscar sugestões" em /disco/[id] → roda cadeia
+   Discogs→MB→AB e grava audio features sugeridas respeitando
+   Princípio I. Revalida a página no fim.
+   ============================================================ */
+
+const enrichRecordSchema = z.object({
+  recordId: z.number().int().positive(),
+});
+
+export async function enrichRecordOnDemand(
+  input: z.infer<typeof enrichRecordSchema>,
+): Promise<
+  ActionResult<{
+    mbidsResolved: number;
+    tracksUpdated: number;
+    tracksSkipped: number;
+    tracksErrored: number;
+  }>
+> {
+  const user = await requireCurrentUser();
+  const parsed = enrichRecordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+
+  // Ownership check explícito antes de bater em APIs externas
+  const own = await db
+    .select({ id: records.id })
+    .from(records)
+    .where(and(eq(records.id, parsed.data.recordId), eq(records.userId, user.id)))
+    .limit(1);
+  if (own.length === 0) {
+    return { ok: false, error: 'Disco não encontrado.' };
+  }
+
+  // Import dinâmico pra evitar loading de 'server-only' em edge casos
+  const { enrichRecord } = await import('@/lib/acousticbrainz');
+  try {
+    const summary = await enrichRecord(user.id, parsed.data.recordId);
+    revalidatePath(`/disco/${parsed.data.recordId}`);
+    return {
+      ok: true,
+      data: {
+        mbidsResolved: summary.mbidsResolved,
+        tracksUpdated: summary.tracksUpdated,
+        tracksSkipped: summary.tracksSkipped,
+        tracksErrored: summary.tracksErrored,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Fontes externas indisponíveis: ${message}` };
+  }
+}
+
+/* ============================================================
    createSet / updateSet — FR-022, FR-027, FR-028 (T070)
    eventDate armazenado em UTC; conversão vem do input datetime-local
    do cliente (que já envia ISO UTC via new Date().toISOString()).

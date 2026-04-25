@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { createTestDb } from '../helpers/test-db';
 
 /**
@@ -67,8 +67,8 @@ describe('T021 — multi-user isolation (SC-008)', () => {
       .values({ recordId: r2.id, position: 'A1', title: 'Same' })
       .returning();
 
-    const { enrichUserBacklog } = await import('@/lib/acousticbrainz');
-    const summary = await enrichUserBacklog(u1.id);
+    const { enrichRecord } = await import('@/lib/acousticbrainz');
+    const summary = await enrichRecord(u1.id, r1.id);
 
     expect(summary.tracksUpdated).toBe(1);
 
@@ -80,19 +80,12 @@ describe('T021 — multi-user isolation (SC-008)', () => {
     expect(afterT1.bpm).toBe(125);
     expect(afterT1.mbid).toBe('mbid-shared');
 
-    // User2 intacto
+    // User2 intacto — ownership check via records.user_id
     expect(afterT2.audioFeaturesSource).toBeNull();
     expect(afterT2.bpm).toBeNull();
     expect(afterT2.musicalKey).toBeNull();
     expect(afterT2.mbid).toBeNull();
     expect(afterT2.audioFeaturesSyncedAt).toBeNull();
-
-    // Verifica que syncRuns só tem linha do user1
-    const runs = await ctx.db
-      .select()
-      .from(schema.syncRuns)
-      .where(and(eq(schema.syncRuns.userId, u2.id), eq(schema.syncRuns.kind, 'audio_features')));
-    expect(runs).toHaveLength(0);
   });
 
   it('enrichTrack bloqueia trackId de outro user (ownership check)', async () => {

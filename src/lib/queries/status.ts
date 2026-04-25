@@ -5,7 +5,7 @@ import { records, syncRuns, tracks, users } from '@/db/schema';
 
 export type SyncRunRow = {
   id: number;
-  kind: 'initial_import' | 'daily_auto' | 'manual' | 'reimport_record' | 'audio_features';
+  kind: 'initial_import' | 'daily_auto' | 'manual' | 'reimport_record';
   targetRecordId: number | null;
   startedAt: Date | null;
   finishedAt: Date | null;
@@ -155,109 +155,3 @@ export async function computeBadgeActive(userId: number): Promise<boolean> {
   return snap.badgeActive;
 }
 
-/* ============================================================
-   005 — Audio features coverage (FR-021, FR-022, US4)
-   ============================================================ */
-
-type FieldCoverage = {
-  total: number;
-  fromSource: number; // valor atual é sugestão externa não-confirmada
-  fromManual: number; // DJ marcou como 'manual' (confirmado ou editado)
-};
-
-export type AudioFeaturesCoverage = {
-  totalTracks: number;
-  withBpm: FieldCoverage;
-  withKey: FieldCoverage;
-  withEnergy: FieldCoverage;
-  withMoods: FieldCoverage;
-  lastRun: {
-    startedAt: Date;
-    finishedAt: Date | null;
-    tracksUpdated: number;
-    outcome: 'running' | 'ok' | 'erro' | 'rate_limited' | 'parcial';
-  } | null;
-};
-
-/**
- * Estatísticas agregadas pro painel `/status` do user:
- *  - total de faixas ativas (records.archived=false AND status='active')
- *  - quantas com cada campo de audio features preenchido
- *  - breakdown por source (acousticbrainz vs. manual)
- *  - última execução da rotina (kind='audio_features')
- *
- * Uma query SQL única com agregação condicional. Alvo SC-007: <1s em 3000 discos.
- */
-export async function getAudioFeaturesCoverage(userId: number): Promise<AudioFeaturesCoverage> {
-  // Query agregada: total + fills + breakdown por source em uma passagem
-  const [agg] = await db
-    .select({
-      totalTracks: sql<number>`COUNT(*)`,
-      withBpmTotal: sql<number>`COUNT(${tracks.bpm})`,
-      withBpmSource: sql<number>`SUM(CASE WHEN ${tracks.bpm} IS NOT NULL AND ${tracks.audioFeaturesSource} = 'acousticbrainz' THEN 1 ELSE 0 END)`,
-      withBpmManual: sql<number>`SUM(CASE WHEN ${tracks.bpm} IS NOT NULL AND ${tracks.audioFeaturesSource} = 'manual' THEN 1 ELSE 0 END)`,
-      withKeyTotal: sql<number>`COUNT(${tracks.musicalKey})`,
-      withKeySource: sql<number>`SUM(CASE WHEN ${tracks.musicalKey} IS NOT NULL AND ${tracks.audioFeaturesSource} = 'acousticbrainz' THEN 1 ELSE 0 END)`,
-      withKeyManual: sql<number>`SUM(CASE WHEN ${tracks.musicalKey} IS NOT NULL AND ${tracks.audioFeaturesSource} = 'manual' THEN 1 ELSE 0 END)`,
-      withEnergyTotal: sql<number>`COUNT(${tracks.energy})`,
-      withEnergySource: sql<number>`SUM(CASE WHEN ${tracks.energy} IS NOT NULL AND ${tracks.audioFeaturesSource} = 'acousticbrainz' THEN 1 ELSE 0 END)`,
-      withEnergyManual: sql<number>`SUM(CASE WHEN ${tracks.energy} IS NOT NULL AND ${tracks.audioFeaturesSource} = 'manual' THEN 1 ELSE 0 END)`,
-      withMoodsTotal: sql<number>`SUM(CASE WHEN ${tracks.moods} IS NOT NULL AND ${tracks.moods} <> '[]' THEN 1 ELSE 0 END)`,
-      withMoodsSource: sql<number>`SUM(CASE WHEN ${tracks.moods} IS NOT NULL AND ${tracks.moods} <> '[]' AND ${tracks.audioFeaturesSource} = 'acousticbrainz' THEN 1 ELSE 0 END)`,
-      withMoodsManual: sql<number>`SUM(CASE WHEN ${tracks.moods} IS NOT NULL AND ${tracks.moods} <> '[]' AND ${tracks.audioFeaturesSource} = 'manual' THEN 1 ELSE 0 END)`,
-    })
-    .from(tracks)
-    .innerJoin(records, eq(records.id, tracks.recordId))
-    .where(
-      and(
-        eq(records.userId, userId),
-        eq(records.archived, false),
-        eq(records.status, 'active'),
-      ),
-    );
-
-  // Última execução da rotina de enriquecimento
-  const [lastRun] = await db
-    .select({
-      startedAt: syncRuns.startedAt,
-      finishedAt: syncRuns.finishedAt,
-      newCount: syncRuns.newCount,
-      outcome: syncRuns.outcome,
-    })
-    .from(syncRuns)
-    .where(and(eq(syncRuns.userId, userId), eq(syncRuns.kind, 'audio_features')))
-    .orderBy(desc(syncRuns.startedAt))
-    .limit(1);
-
-  return {
-    totalTracks: Number(agg?.totalTracks ?? 0),
-    withBpm: {
-      total: Number(agg?.withBpmTotal ?? 0),
-      fromSource: Number(agg?.withBpmSource ?? 0),
-      fromManual: Number(agg?.withBpmManual ?? 0),
-    },
-    withKey: {
-      total: Number(agg?.withKeyTotal ?? 0),
-      fromSource: Number(agg?.withKeySource ?? 0),
-      fromManual: Number(agg?.withKeyManual ?? 0),
-    },
-    withEnergy: {
-      total: Number(agg?.withEnergyTotal ?? 0),
-      fromSource: Number(agg?.withEnergySource ?? 0),
-      fromManual: Number(agg?.withEnergyManual ?? 0),
-    },
-    withMoods: {
-      total: Number(agg?.withMoodsTotal ?? 0),
-      fromSource: Number(agg?.withMoodsSource ?? 0),
-      fromManual: Number(agg?.withMoodsManual ?? 0),
-    },
-    lastRun: lastRun
-      ? {
-          startedAt: lastRun.startedAt,
-          finishedAt: lastRun.finishedAt,
-          tracksUpdated: Number(lastRun.newCount),
-          outcome: lastRun.outcome,
-        }
-      : null,
-  };
-}

@@ -1,12 +1,7 @@
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import { requireCurrentUser } from '@/lib/auth';
-import {
-  getAudioFeaturesCoverage,
-  loadStatusSnapshot,
-  type AudioFeaturesCoverage,
-  type SyncRunRow,
-} from '@/lib/queries/status';
+import { loadStatusSnapshot, type SyncRunRow } from '@/lib/queries/status';
 import { ConflictRow } from '@/components/conflict-row';
 import { ArchivedRecordRow } from '@/components/archived-record-row';
 import { ManualSyncButton } from '@/components/manual-sync-button';
@@ -26,10 +21,7 @@ export default async function StatusPage() {
   // Carrega snapshot ANTES de atualizar lastStatusVisitAt — assim o badge
   // reflete o estado "no momento da visita"; próximos renders não mostram
   // badge até novo evento chegar.
-  const [snapshot, audioFeatures] = await Promise.all([
-    loadStatusSnapshot(user.id),
-    getAudioFeaturesCoverage(user.id),
-  ]);
+  const snapshot = await loadStatusSnapshot(user.id);
 
   // Marca visita (FR-041). Feito de forma silenciosa; nenhum revalidate
   // explícito porque a coluna só afeta cálculos futuros do badge.
@@ -104,9 +96,6 @@ export default async function StatusPage() {
         </section>
       ) : null}
 
-      {/* 005: Audio features coverage */}
-      <AudioFeaturesPanel coverage={audioFeatures} />
-
       {/* Histórico de syncRuns */}
       <section>
         <div className="flex justify-between items-baseline pb-4 border-b border-line mb-6">
@@ -140,7 +129,6 @@ function SyncRunItem({ run }: { run: SyncRunRow }) {
     daily_auto: 'Sync automático',
     manual: 'Sync manual',
     reimport_record: 'Reimport de disco',
-    audio_features: 'Audio features',
   }[run.kind];
 
   const outcomeCfg = {
@@ -179,67 +167,3 @@ function SyncRunItem({ run }: { run: SyncRunRow }) {
   );
 }
 
-function AudioFeaturesPanel({ coverage }: { coverage: AudioFeaturesCoverage }) {
-  const fields: Array<{ label: string; key: 'withBpm' | 'withKey' | 'withEnergy' | 'withMoods' }> = [
-    { label: 'BPM', key: 'withBpm' },
-    { label: 'Tom', key: 'withKey' },
-    { label: 'Energia', key: 'withEnergy' },
-    { label: 'Moods', key: 'withMoods' },
-  ];
-
-  return (
-    <section className="mb-12">
-      <div className="flex justify-between items-baseline pb-4 border-b border-line mb-6">
-        <h2 className="font-serif italic text-[28px] font-medium tracking-tight">
-          Audio features
-        </h2>
-        <span className="label-tech">
-          {coverage.totalTracks} {coverage.totalTracks === 1 ? 'faixa' : 'faixas'} ativas
-        </span>
-      </div>
-
-      {coverage.totalTracks === 0 ? (
-        <p className="font-serif italic text-ink-mute text-center py-6">
-          Nenhuma faixa ativa ainda — audio features aparecem aqui quando houver curadoria.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {fields.map(({ label, key }) => {
-            const fc = coverage[key];
-            const pct = coverage.totalTracks > 0 ? Math.round((fc.total / coverage.totalTracks) * 100) : 0;
-            return (
-              <div key={key} className="border border-line rounded-sm p-4">
-                <div className="flex justify-between items-baseline mb-2">
-                  <h3 className="font-mono text-[12px] uppercase tracking-[0.14em]">{label}</h3>
-                  <span className="font-mono text-[11px] text-ink-mute">{pct}%</span>
-                </div>
-                <p className="font-serif italic text-[15px] text-ink">
-                  {fc.total} de {coverage.totalTracks}
-                </p>
-                <p className="font-mono text-[11px] text-ink-mute mt-1">
-                  sugestão: {fc.fromSource} · confirmadas: {fc.fromManual}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {coverage.lastRun ? (
-        <div className="font-serif italic text-[14px] text-ink-soft">
-          Última execução:{' '}
-          <span className="font-mono text-[11px] text-ink-mute">
-            {formatForDisplay(coverage.lastRun.startedAt)}
-          </span>
-          {' · '}
-          {coverage.lastRun.tracksUpdated} {coverage.lastRun.tracksUpdated === 1 ? 'faixa atualizada' : 'faixas atualizadas'}
-          {coverage.lastRun.outcome !== 'ok' ? ` · outcome: ${coverage.lastRun.outcome}` : ''}
-        </div>
-      ) : (
-        <p className="font-serif italic text-[14px] text-ink-mute">
-          Nenhuma execução de enriquecimento registrada ainda.
-        </p>
-      )}
-    </section>
-  );
-}

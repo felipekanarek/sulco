@@ -185,7 +185,7 @@ export const syncRuns = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     kind: text('kind', {
-      enum: ['initial_import', 'daily_auto', 'manual', 'reimport_record', 'audio_features'],
+      enum: ['initial_import', 'daily_auto', 'manual', 'reimport_record'],
     }).notNull(),
     targetRecordId: integer('target_record_id').references(() => records.id, {
       onDelete: 'set null',
