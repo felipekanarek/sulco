@@ -168,11 +168,24 @@ no Discogs.
 
 ### Abertos
 
-Nenhum no momento.
+#### Bug 13 — Banner de import permanente na home
+Reportado em 2026-04-25. O `<ImportProgressCard>` aparece na home (`/`)
+mesmo quando não há import em andamento nem recém-concluído. Esperado:
 
-### Abertos
+- **Em andamento** (`outcome='running'`) → banner sempre visível, não-fechável
+- **Recém-concluído** (não acknowledged ainda) → banner visível com
+  botão **"× fechar"**; click marca acknowledge; banner some até
+  próxima execução
+- **Idle/antigo** → banner não renderiza
 
-Nenhum no momento.
+Implementação sugerida:
+- Schema delta aditivo: `users.import_acknowledged_at` (nullable)
+- `getImportProgress()` retorna estado atual + lastAck
+- `<ImportProgressCard>` renderiza só se: running OR (concluído AND
+  lastAck < startedAt do último run)
+- Server Action `acknowledgeImportProgress()` seta timestamp
+
+Esforço: ~1h via speckit.
 
 ### Histórico (fechados)
 
