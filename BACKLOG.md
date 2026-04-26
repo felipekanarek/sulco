@@ -171,12 +171,16 @@ Nenhum no momento.
   quando disco já existe em `records`. Snapshot fallback manual↔daily_auto
   pra herdar primeira execução.
 - **Bug 12** — Sync archives falso-positivo quando disco é empurrado
-  pra fora da 1ª página por novos adicionados — ✅ commit junto com 007.
-  Discogs ordena coleção `date_added desc`. Quando user adiciona N novos,
-  os últimos N do snapshot anterior caem pra página 2+ e parecem
-  "removidos". Fix: antes de archive, valida via
-  `existsInUserCollection` (Discogs API 200/404). Se ainda na coleção,
-  não archive — só foi empurrado.
+  pra fora da 1ª página por novos adicionados — ✅ Incremento 007
+  (escopo final). Causa raiz mais profunda do que parecia: sync
+  incremental só comparava 1ª página, falhando em (a) detectar
+  removidos antigos e (b) gerar falso-positivo de empurrados.
+  **Fix**: paginar a coleção INTEIRA (~30s pra acervo de 2600 discos)
+  e comparar `localIds` (records ativos) vs `currentIds` (todas as
+  páginas). Se não está no Discogs paginado, archive direto. Tentativa
+  intermediária com `existsInUserCollection` foi descartada — endpoint
+  Discogs `/collection/folders/0/releases/{id}` não responde GET
+  (HTTP 405).
 
 ---
 

@@ -247,40 +247,6 @@ export async function fetchCollectionPage(
   };
 }
 
-/**
- * Verifica se um release específico ainda está na coleção do user.
- * Endpoint: `/users/{username}/collection/folders/0/releases/{release_id}`
- * → 200 se sim, 404 se não.
- *
- * Usado pelo sync incremental (Bug 12 fix) pra evitar falso-positivo
- * de archive quando disco caiu pra fora da 1ª página por novos terem
- * sido adicionados (não foi removido — só empurrado).
- */
-export async function existsInUserCollection(
-  userId: number,
-  releaseId: number,
-): Promise<boolean> {
-  const token = await getTokenForUser(userId);
-  const rows = await db
-    .select({ username: users.discogsUsername })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  const username = rows[0]?.username;
-  if (!username) throw new Error(`User ${userId} sem discogsUsername`);
-  try {
-    await discogsFetch({
-      userId,
-      token,
-      endpoint: `/users/${encodeURIComponent(username)}/collection/folders/0/releases/${releaseId}`,
-    });
-    return true;
-  } catch (err) {
-    if (err instanceof DiscogsError && err.status === 404) return false;
-    throw err;
-  }
-}
-
 export async function fetchRelease(userId: number, releaseId: number): Promise<DiscogsRelease> {
   const token = await getTokenForUser(userId);
   const res = await discogsFetch({

@@ -6,7 +6,6 @@ import { killZombieSyncRuns } from './zombie';
 import {
   DiscogsAuthError,
   DiscogsError,
-  existsInUserCollection,
   fetchCollectionPage,
   fetchRelease,
 } from './client';
@@ -115,10 +114,9 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
 
     // Removidos: discos em `records` (ativo, não-archived) que não
     // estão mais em currentIds (= sumiram da coleção Discogs).
-    // Validação extra via existsInUserCollection pra defesa em
-    // profundidade contra falso-positivo (ex: race entre paginação
-    // e o user adicionando/removendo durante o sync). Custo: 1 req
-    // por candidato a archive — geralmente unidades.
+    // Com paginação completa, comparação é exata: se não tá em
+    // currentSet, não tá no Discogs. (Race entre user editando
+    // coleção durante o sync é rara e cabe pro próximo sync corrigir.)
     for (const localId of localIds) {
       if (currentSet.has(localId)) continue;
       const target = await db
@@ -133,20 +131,6 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
         )
         .limit(1);
       if (target.length === 0) continue;
-
-      let stillInCollection: boolean;
-      try {
-        stillInCollection = await existsInUserCollection(userId, localId);
-      } catch (err) {
-        console.warn('[sync] check coleção falhou pra', localId, err);
-        continue;
-      }
-      if (stillInCollection) {
-        // Discrepância — disco sumiu da paginação mas API confirma
-        // que existe. Pode ser race com user editando coleção.
-        // Por segurança, não archive.
-        continue;
-      }
       await archiveRecord(userId, target[0].id);
       removedCount += 1;
     }
