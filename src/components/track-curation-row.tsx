@@ -6,6 +6,7 @@ import { AudioFeaturesBadge } from './audio-features-badge';
 import { BombaToggle } from './bomba-toggle';
 import { CamelotWheel } from './camelot-wheel';
 import { ChipPicker } from './chip-picker';
+import { PreviewControls } from './preview-controls';
 
 export type TrackData = {
   id: number;
@@ -24,11 +25,15 @@ export type TrackData = {
   comment: string | null;
   isBomb: boolean;
   audioFeaturesSource: 'acousticbrainz' | 'manual' | null;
+  // 008 — preview de áudio
+  previewUrl: string | null;
+  previewUrlCachedAt: Date | null;
 };
 
 type Props = {
   track: TrackData;
   recordId: number;
+  recordArtist: string;
   moodSuggestions: string[];
   contextSuggestions: string[];
 };
@@ -41,6 +46,7 @@ type Props = {
 export function TrackCurationRow({
   track,
   recordId,
+  recordArtist,
   moodSuggestions,
   contextSuggestions,
 }: Props) {
@@ -117,6 +123,16 @@ export function TrackCurationRow({
           {local.duration ? (
             <span className="font-mono text-[11px] text-ink-mute">{local.duration}</span>
           ) : null}
+        </div>
+
+        <div className="mb-3">
+          <PreviewControls
+            trackId={local.id}
+            artist={recordArtist}
+            title={local.title}
+            initialPreviewUrl={local.previewUrl}
+            initialCachedAt={local.previewUrlCachedAt}
+          />
         </div>
 
         {/* Rating (+, ++, +++) */}

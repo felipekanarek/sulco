@@ -4,9 +4,17 @@ import path from 'node:path';
 export default defineConfig({
   test: {
     environment: 'happy-dom',
-    include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx', 'tests/integration/**/*.test.ts'],
+    include: [
+      'tests/unit/**/*.test.ts',
+      'tests/unit/**/*.test.tsx',
+      'tests/integration/**/*.test.ts',
+      'tests/integration/**/*.test.tsx',
+    ],
     exclude: ['tests/e2e/**', 'node_modules/**', '.next/**'],
     globals: true,
+  },
+  esbuild: {
+    jsx: 'automatic',
   },
   resolve: {
     alias: {

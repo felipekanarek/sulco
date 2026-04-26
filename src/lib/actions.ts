@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { asc, and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { invites, records, syncRuns, users } from '@/db/schema';
+import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { encryptPAT } from '@/lib/crypto';
 import { markCredentialValid } from '@/lib/discogs';
@@ -1222,5 +1222,108 @@ export async function listInvites(): Promise<
     })
     .from(invites)
     .orderBy(asc(invites.createdAt));
+}
+
+/* ============================================================
+   resolveTrackPreview / invalidateTrackPreview — 008
+   Lazy on-demand: 1º click busca Deezer e cacheia; subsequentes
+   leem do DB. Princípio I: nunca toca campos AUTHOR.
+   ============================================================ */
+
+const trackPreviewSchema = z.object({
+  trackId: z.number().int().positive(),
+});
+
+export async function resolveTrackPreview(
+  input: z.infer<typeof trackPreviewSchema>,
+): Promise<ActionResult<{ deezerUrl: string | null; cached: boolean }>> {
+  const user = await requireCurrentUser();
+  const parsed = trackPreviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+
+  // Ownership check + read cache + read artist em uma query
+  const rows = await db
+    .select({
+      trackId: tracks.id,
+      title: tracks.title,
+      artist: records.artist,
+      previewUrl: tracks.previewUrl,
+      previewUrlCachedAt: tracks.previewUrlCachedAt,
+    })
+    .from(tracks)
+    .innerJoin(records, eq(records.id, tracks.recordId))
+    .where(and(eq(tracks.id, parsed.data.trackId), eq(records.userId, user.id)))
+    .limit(1);
+
+  if (rows.length === 0) {
+    return { ok: false, error: 'Faixa não encontrada.' };
+  }
+  const row = rows[0];
+
+  // Cache hit: previewUrlCachedAt != null indica tentativa prévia.
+  // previewUrl '' é marker "tentou, sem dado" → retorna null pro cliente.
+  if (row.previewUrlCachedAt != null) {
+    const deezerUrl =
+      row.previewUrl && row.previewUrl.length > 0 ? row.previewUrl : null;
+    return { ok: true, data: { deezerUrl, cached: true } };
+  }
+
+  // Cache miss → busca Deezer
+  const { searchTrackPreview, DeezerServiceError } = await import(
+    '@/lib/preview/deezer'
+  );
+  let hit: Awaited<ReturnType<typeof searchTrackPreview>>;
+  try {
+    hit = await searchTrackPreview(row.artist, row.title);
+  } catch (err) {
+    // Network/5xx: NÃO persiste cache (próximo retry vale)
+    const message =
+      err instanceof DeezerServiceError ? err.message : 'Deezer indisponível';
+    return { ok: false, error: message };
+  }
+
+  // Persiste resultado: URL, marker '' (sem hit ou hit sem preview).
+  // Princípio I: UPDATE só toca preview_url + preview_url_cached_at.
+  const deezerUrl = hit?.previewUrl ?? null;
+  const cacheValue = deezerUrl ?? '';
+  await db
+    .update(tracks)
+    .set({
+      previewUrl: cacheValue,
+      previewUrlCachedAt: new Date(),
+    })
+    .where(eq(tracks.id, row.trackId));
+
+  return { ok: true, data: { deezerUrl, cached: false } };
+}
+
+export async function invalidateTrackPreview(
+  input: z.infer<typeof trackPreviewSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = trackPreviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+
+  // Ownership check antes do UPDATE
+  const own = await db
+    .select({ id: tracks.id })
+    .from(tracks)
+    .innerJoin(records, eq(records.id, tracks.recordId))
+    .where(and(eq(tracks.id, parsed.data.trackId), eq(records.userId, user.id)))
+    .limit(1);
+  if (own.length === 0) {
+    return { ok: false, error: 'Faixa não encontrada.' };
+  }
+
+  await db
+    .update(tracks)
+    .set({ previewUrl: null, previewUrlCachedAt: null })
+    .where(eq(tracks.id, parsed.data.trackId));
+
+  return { ok: true };
 }
 

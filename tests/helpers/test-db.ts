@@ -91,6 +91,8 @@ async function applyDdl(client: Client) {
       mbid TEXT,
       audio_features_source TEXT,
       audio_features_synced_at INTEGER,
+      preview_url TEXT,
+      preview_url_cached_at INTEGER,
       conflict INTEGER DEFAULT 0 NOT NULL,
       conflict_detected_at INTEGER,
       updated_at INTEGER DEFAULT (unixepoch())

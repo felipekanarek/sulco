@@ -12,18 +12,42 @@ Convenção:
 
 ### 🟢 Próximos (semanas)
 
-#### Incremento 5b — Preview de áudio (Deezer + YouTube fallback)
-Permitir ouvir 30s das faixas durante montagem do set, inline em
-`/sets/[id]/montar`, sem sair do Sulco. Combo:
-- **Deezer Public API** (preview_url 30s ainda ativo, sem auth) — drop-in
-  do Spotify deprecado
-- **YouTube link-out** como fallback universal quando Deezer não acha
-- Server Action resolve preview por (artist, title, isrc?), cache em
-  `tracks.previewUrl` + `previewUrlCachedAt`
-- Botão `▶` inline no `CandidateRow`, `<audio>` nativo (sem SDK embed)
+#### Incremento 12 — YouTube embed inline no preview de áudio
+Hoje (008) o botão **↗ YouTube** abre busca em nova aba — DJ ainda
+sai do Sulco e escolhe vídeo manualmente. Evolução natural: trazer o
+1º resultado da busca pra dentro da página, num iframe oficial do
+YouTube, junto com os outros 2 botões (▶ Deezer / ↗ Spotify). Vira
+opção de "ouvir full-length sem sair" quando Deezer não tem ou DJ
+quer mais que 30s.
 
-Estimativa: 1-2 dias. Originalmente parte do 004-spotify-audio-hints
-(arquivado).
+Escopo provável:
+- **YouTube Data API v3** (`search.list?q=<artist+title>&maxResults=1&type=video`)
+  pra resolver `videoId` do 1º hit. Quota: 100 unidades por chamada
+  de search (10k/dia free → ~100 buscas/dia). Mais que suficiente
+  pro uso solo do Felipe; cache em coluna nova `tracks.youtubeVideoId`
+  + `youtubeVideoIdCachedAt` (zona SYS, mesmo padrão Deezer do 008).
+- Server Action `resolveTrackYoutubeEmbed(trackId)` análoga a
+  `resolveTrackPreview` — lazy on-demand, com ownership check e
+  Princípio I respeitado.
+- UI: botão `▶ YouTube` (sem ↗) que troca o iframe inline em vez de
+  abrir nova aba. Player oficial do YouTube via `<iframe src="https://www.youtube.com/embed/<videoId>">` —
+  responsivo, com handling de player events.
+- Preserva ↗ Spotify e ▶ Deezer; ↗ YouTube atual vira embed interno.
+
+Decisões pendentes pra `/speckit.specify`:
+- Token YouTube API: env var `YOUTUBE_API_KEY` (chave server-side,
+  não exposta ao cliente).
+- "1 player ativo por vez" (FR-007 do 008): incluir o iframe YouTube
+  no Context global ou deixar separado? (DJ podia querer ouvir Deezer
+  + YouTube em paralelo? — provavelmente não.)
+- Falso match no 1º resultado: cobrir caso "vídeo errado" com botão
+  pra abrir busca completa (degrada pro comportamento atual de ↗).
+- Scrub e volume: player YouTube oficial já oferece — sem refatorar.
+
+Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
+adicional (mesmo padrão 008).
+
+Registrado a pedido em 2026-04-26 após validação manual do 008.
 
 #### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
 Quando sync detecta vários discos removidos do Discogs (caso típico:
@@ -253,6 +277,8 @@ spec/plan/data-model/contracts/quickstart.
 - **004** — 🚫 Spotify audio hints · ARQUIVADO (API deprecada nov/2024) · `specs/004-spotify-audio-hints-ARQUIVADO/`
 - **005** — Audio features via AcousticBrainz · 2026-04-24/25 · `specs/005-acousticbrainz-audio-features/` · ~1200 faixas enriquecidas em prod (~1140 BR após batch fallback artist+title)
 - **006** — Curadoria aleatória · 2026-04-24 · `specs/006-curadoria-aleatoria/`
+- **007** — Fix sync snapshot fallback · 2026-04-25 · `specs/007-fix-sync-snapshot-fallback/` · resolveu Bug 11 (timeout 1º sync) + Bug 12 (falso-positivo archives) via paginação completa
+- **008** — Preview de áudio Deezer + Spotify + YouTube · 2026-04-26 · `specs/008-preview-audio-deezer-spotify-youtube/` · 3 botões inline em `/disco/[id]` e `/sets/[id]/montar`; Deezer 30s player + Spotify/YouTube link-out; cache lazy on-demand em `tracks.preview_url`/`tracks.preview_url_cached_at`
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).

@@ -31,6 +31,9 @@ export type Candidate = {
   comment: string | null;
   references: string | null;
   isBomb: boolean;
+  // 008 — preview de áudio
+  previewUrl: string | null;
+  previewUrlCachedAt: Date | null;
   // record context
   recordId: number;
   artist: string;
@@ -115,6 +118,8 @@ export async function queryCandidates(
       comment: tracks.comment,
       references: tracks.references,
       isBomb: tracks.isBomb,
+      previewUrl: tracks.previewUrl,
+      previewUrlCachedAt: tracks.previewUrlCachedAt,
       recordId: records.id,
       artist: records.artist,
       recordTitle: records.title,

@@ -123,6 +123,9 @@ export const tracks = sqliteTable(
       enum: ['acousticbrainz', 'manual'],
     }),
     audioFeaturesSyncedAt: integer('audio_features_synced_at', { mode: 'timestamp' }),
+    // 008 — preview de áudio (zona SYS)
+    previewUrl: text('preview_url'),
+    previewUrlCachedAt: integer('preview_url_cached_at', { mode: 'timestamp' }),
     // SYS (conflito — FR-037)
     conflict: integer('conflict', { mode: 'boolean' }).notNull().default(false),
     conflictDetectedAt: integer('conflict_detected_at', { mode: 'timestamp' }),

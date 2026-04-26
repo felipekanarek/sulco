@@ -13,6 +13,7 @@ import { DiscogsCredentialBanner } from '@/components/discogs-credential-banner'
 import { ArchivedRecordsBanner } from '@/components/archived-records-banner';
 import { SyncBadge } from '@/components/sync-badge';
 import { ImportPoller } from '@/components/import-poller';
+import { PreviewPlayerProvider } from '@/components/preview-player-context';
 
 export const metadata: Metadata = {
   title: 'Sulco — curadoria de vinil para DJs',
@@ -24,18 +25,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body>
         <ClerkProvider localization={ptBR}>
-          <Header />
-          {/* Banners globais (FR-045, FR-036) — RSC lê DB a cada request */}
-          <DiscogsCredentialBanner />
-          <ArchivedRecordsBanner />
-          {/* Poller silencioso — mantém import progredindo em qualquer rota */}
-          <ImportPoller />
-          <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
-          <footer className="border-t border-line py-6">
-            <div className="max-w-[1240px] mx-auto px-8">
-              <p className="eyebrow text-center">Sulco · protótipo nível 2 · Next.js + SQLite local</p>
-            </div>
-          </footer>
+          <PreviewPlayerProvider>
+            <Header />
+            {/* Banners globais (FR-045, FR-036) — RSC lê DB a cada request */}
+            <DiscogsCredentialBanner />
+            <ArchivedRecordsBanner />
+            {/* Poller silencioso — mantém import progredindo em qualquer rota */}
+            <ImportPoller />
+            <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
+            <footer className="border-t border-line py-6">
+              <div className="max-w-[1240px] mx-auto px-8">
+                <p className="eyebrow text-center">Sulco · protótipo nível 2 · Next.js + SQLite local</p>
+              </div>
+            </footer>
+          </PreviewPlayerProvider>
         </ClerkProvider>
       </body>
     </html>

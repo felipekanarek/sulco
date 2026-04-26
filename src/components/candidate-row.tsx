@@ -8,6 +8,7 @@ import { addTrackToSet, removeTrackFromSet } from '@/lib/actions';
 import { CoverPlaceholder } from './cover-placeholder';
 import { BombaInline } from './bomba-badge';
 import { Chip } from './chip';
+import { PreviewControls } from './preview-controls';
 import type { Candidate } from '@/lib/queries/montar';
 
 const RATING_GLYPH: Record<number, string> = { 1: '+', 2: '++', 3: '+++' };
@@ -163,6 +164,16 @@ export function CandidateRow({
             {candidate.fineGenre}
           </p>
         ) : null}
+
+        <div className="mt-2">
+          <PreviewControls
+            trackId={candidate.id}
+            artist={candidate.artist}
+            title={candidate.title}
+            initialPreviewUrl={candidate.previewUrl}
+            initialCachedAt={candidate.previewUrlCachedAt}
+          />
+        </div>
 
         {hasChips ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">

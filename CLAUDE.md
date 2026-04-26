@@ -262,43 +262,45 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **005-acousticbrainz-audio-features**
+Current active feature: **008-preview-audio-deezer-spotify-youtube**
 
 Authoritative planning artifacts (read these before making changes
-to audio features enrichment, schema de tracks, ou cadeia Discogs →
-MusicBrainz → AcousticBrainz):
+to preview de áudio, schema de tracks, ou client de Deezer):
 
-- Plan: [specs/005-acousticbrainz-audio-features/plan.md](specs/005-acousticbrainz-audio-features/plan.md)
-- Spec: [specs/005-acousticbrainz-audio-features/spec.md](specs/005-acousticbrainz-audio-features/spec.md)
-- Data model: [specs/005-acousticbrainz-audio-features/data-model.md](specs/005-acousticbrainz-audio-features/data-model.md)
-- Contracts: [specs/005-acousticbrainz-audio-features/contracts/](specs/005-acousticbrainz-audio-features/contracts/)
-- Research: [specs/005-acousticbrainz-audio-features/research.md](specs/005-acousticbrainz-audio-features/research.md)
-- Quickstart: [specs/005-acousticbrainz-audio-features/quickstart.md](specs/005-acousticbrainz-audio-features/quickstart.md)
+- Plan: [specs/008-preview-audio-deezer-spotify-youtube/plan.md](specs/008-preview-audio-deezer-spotify-youtube/plan.md)
+- Spec: [specs/008-preview-audio-deezer-spotify-youtube/spec.md](specs/008-preview-audio-deezer-spotify-youtube/spec.md)
+- Data model: [specs/008-preview-audio-deezer-spotify-youtube/data-model.md](specs/008-preview-audio-deezer-spotify-youtube/data-model.md)
+- Contracts: [specs/008-preview-audio-deezer-spotify-youtube/contracts/](specs/008-preview-audio-deezer-spotify-youtube/contracts/)
+- Research: [specs/008-preview-audio-deezer-spotify-youtube/research.md](specs/008-preview-audio-deezer-spotify-youtube/research.md)
+- Quickstart: [specs/008-preview-audio-deezer-spotify-youtube/quickstart.md](specs/008-preview-audio-deezer-spotify-youtube/quickstart.md)
 
-Prior features (completed, frozen):
-- [001-sulco-piloto/](specs/001-sulco-piloto/) — piloto single-user
-- [002-multi-conta/](specs/002-multi-conta/) — invite-only + /admin
-- [003-faixas-ricas-montar/](specs/003-faixas-ricas-montar/) — candidatos ricos no /montar
-- [004-spotify-audio-hints-ARQUIVADO/](specs/004-spotify-audio-hints-ARQUIVADO/) — bloqueado (API deprecada)
+Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
+- 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
+- 004 spotify-audio-hints-ARQUIVADO (API deprecada)
+- 005 acousticbrainz-audio-features (~1200 faixas em prod)
+- 006 curadoria-aleatoria
+- 007 fix-sync-snapshot-fallback (Bug 11 + 12)
 
-Key points of 005:
-- **Schema delta aditivo**: 3 colunas novas em `tracks` (`mbid`,
-  `audioFeaturesSource`, `audioFeaturesSyncedAt`) + 1 valor novo no
-  enum `syncRuns.kind` (`'audio_features'`)
-- **Princípio I NON-NEGOTIABLE**: null-guard via `WHERE
-  audio_features_source IS NULL` no UPDATE + `COALESCE` por campo.
-  Qualquer edição manual vira `source = 'manual'` e trava o bloco
-  inteiro (bpm/musicalKey/energy/moods) contra futuras sugestões.
-- Cadeia: `records.discogsId` → MusicBrainz (`/release?query=discogs:…`
-  → `/release/{mbid}?inc=recordings`) → AcousticBrainz
-  (`/{mbid}/low-level` + `/high-level`). NÃO persistimos ISRC neste
-  round.
-- Gatilhos: cron diário existente (backlog) + trigger fire-and-forget
-  pós-import-sync (discos novos)
-- Módulo novo em `src/lib/acousticbrainz/`; zero dependência externa
-  nova (fetch nativo)
-- Rate limit: MB 1 req/s com User-Agent correto; AB ~2 req/s
-- Conversão Camelot na escrita (tabela em `camelot.ts`); energy
-  derivado de `mood_aggressive.probability`; moods threshold ≥0.7
-  sem tradução
+Key points of 008:
+- **Schema delta aditivo**: 2 colunas em `tracks` (zona SYS):
+  `previewUrl TEXT`, `previewUrlCachedAt INTEGER`. Aplicação via
+  `npm run db:push` em dev + ALTER manual em Turso prod.
+- **Princípio I respeitado**: campos preview são write-only do
+  sistema; `resolveTrackPreview` nunca toca AUTHOR fields.
+- **Pipeline**: click ▶ → Server Action `resolveTrackPreview(trackId)`
+  → `Deezer Search API` (sem auth) → cache em DB → `<audio>` nativo
+  toca 30s. Cache hit subsequente <500ms.
+- **3 botões inline sempre visíveis**: ▶ Deezer (player), ↗ Spotify
+  (link search aberto), ↗ YouTube (link search aberto). Spotify e
+  YouTube são URLs deterministicas client-side, sem API.
+- **Estado "1 player por vez"**: React Context global
+  `<PreviewPlayerProvider>` em `layout.tsx`.
+- **Cache states**: `previewUrl=NULL` (nunca tentado), `''`
+  (tentou, sem dado), URL (cacheado). `invalidateTrackPreview` reseta
+  pra recuperação de URL morta.
+- **Aparece em**: `/disco/[id]` (TrackCurationRow) + `/sets/[id]/montar`
+  (CandidateRow).
+- **Módulo novo** em `src/lib/preview/` + 2 client components +
+  1 provider em layout.
+- Sem dependência externa nova (`<audio>` nativo, fetch nativo).
 <!-- SPECKIT END -->

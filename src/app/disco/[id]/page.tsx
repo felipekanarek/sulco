@@ -174,6 +174,7 @@ export default async function RecordDetailPage({
                     key={t.id}
                     track={t}
                     recordId={disc.id}
+                    recordArtist={disc.artist}
                     moodSuggestions={moodSuggestions}
                     contextSuggestions={contextSuggestions}
                   />

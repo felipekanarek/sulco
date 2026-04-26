@@ -136,6 +136,38 @@ inteiro (vira `'manual'`).
 Observabilidade: seção "Audio features" em `/status` mostra cobertura
 por campo (total + sugestão + confirmadas) + última execução.
 
+## Preview de áudio (008)
+
+DJ ouve 30s de cada faixa direto na tela de curadoria (`/disco/[id]`)
+ou montagem (`/sets/[id]/montar`). 3 botões inline em cada faixa:
+
+- **▶ Deezer** — player nativo `<audio>`, 30s. URL resolvida via
+  `Deezer Search API` (`GET https://api.deezer.com/search?q=<artist
+  title>&limit=1`, sem auth) na Server Action `resolveTrackPreview`,
+  com User-Agent `Sulco/0.1 ( marcus@infoprice.co )`. Resultado
+  cacheado em `tracks.preview_url` + `tracks.preview_url_cached_at`
+  (zona SYS — Princípio I respeitado, nunca toca AUTHOR).
+- **↗ Spotify** — abre nova aba em
+  `https://open.spotify.com/search/<encoded>`. DJ Premium ouve
+  full-length; free vê preview 30s.
+- **↗ YouTube** — abre nova aba em
+  `https://www.youtube.com/results?search_query=<encoded>`.
+
+UX: 4 estados visuais do botão Deezer (idle ▶ · loading ⟳ · playing
+⏸ · unavailable). Apenas 1 player ativo por vez no app inteiro
+(React Context global em `<PreviewPlayerProvider>`). Recuperação de
+URL morta via botão "tentar de novo" que invalida cache e refaz
+busca.
+
+Schema delta: `npm run db:push` em dev; em prod via Turso CLI:
+```sql
+ALTER TABLE tracks ADD COLUMN preview_url TEXT;
+ALTER TABLE tracks ADD COLUMN preview_url_cached_at INTEGER;
+```
+
+Spec completa em
+[specs/008-preview-audio-deezer-spotify-youtube/](./specs/008-preview-audio-deezer-spotify-youtube/).
+
 ## Roadmap & backlog
 
 Lista priorizada de incrementos, bugs e ideias vive em
