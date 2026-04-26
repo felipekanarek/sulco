@@ -25,6 +25,27 @@ Permitir ouvir 30s das faixas durante montagem do set, inline em
 Estimativa: 1-2 dias. Originalmente parte do 004-spotify-audio-hints
 (arquivado).
 
+#### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
+Quando sync detecta vários discos removidos do Discogs (caso típico:
+DJ faz limpeza de coleção e remove 5-10 de uma vez), banner em `/sync`
+mostra cada um com botão "Reconhecer" individual. Pra >5 archived,
+clicar um por um vira fricção.
+
+Escopo:
+- Botão "Reconhecer tudo" no header da seção "Discos arquivados",
+  abaixo do contador de pendentes
+- Confirmação simples ("Marcar todos os N como reconhecidos?")
+- Server Action `acknowledgeAllArchived()` faz `UPDATE records SET
+  archived_acknowledged_at = now() WHERE user_id = ? AND archived = 1
+  AND archived_acknowledged_at IS NULL`
+- revalidatePath('/sync') no fim → banner some
+
+Sem schema delta. Esforço: ~30 min via speckit. Reusa fluxo
+existente de "Reconhecer" individual.
+
+Registrado a pedido em 2026-04-25 após sync 268 marcar 9 archived
+de uma vez (limpeza de coleção do Felipe).
+
 #### Incremento 10 — Curadoria aleatória respeita filtros aplicados
 Hoje o botão 🎲 (006, em prod) sorteia entre TODOS os discos `unrated`
 não-arquivados. Quando o DJ tem filtro de gênero/estilo ativo na
