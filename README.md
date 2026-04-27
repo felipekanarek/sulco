@@ -168,6 +168,38 @@ ALTER TABLE tracks ADD COLUMN preview_url_cached_at INTEGER;
 Spec completa em
 [specs/008-preview-audio-deezer-spotify-youtube/](./specs/008-preview-audio-deezer-spotify-youtube/).
 
+## Responsividade mobile (009)
+
+Layout mobile-first com Tailwind v3 (default = mobile, `md:`+ adiciona
+desktop). Breakpoints: ≤640px mobile · 641-1023px tablet · ≥1024px
+desktop. Identidade editorial preservada (EB Garamond + JetBrains
+Mono + paleta atual).
+
+Decisões UX (de `/speckit.clarify`):
+
+- **Nav mobile** = drawer lateral à esquerda (~75% largura) acionado
+  por hambúrguer no header; fecha por tap no overlay, ESC ou tap em
+  link; renderiza via React Portal pra escapar de `backdrop-filter`
+  containing block.
+- **`/disco/[id]` mobile** = banner full-width (capa aspect-square) no
+  topo + meta + controles + tracklist empilhados.
+- **Filtros mobile** (home `/` + `/sets/[id]/montar`) = bottom sheet
+  (~80vh, drag handle visual, sticky "Aplicar (N)") com chip-bar de
+  filtros aplicados acima da lista.
+- **Bag** em `/sets/[id]/montar` mobile = no topo (`order-1`) com lista
+  de faixas colapsável (`<details>` default closed) pra evitar parede
+  com bags grandes.
+
+Tap targets ≥44×44px universais em mobile (FR-004 / Apple HIG / WCAG
+AAA). Inputs numéricos com `inputMode="numeric"`. Body scroll lock
+quando drawer aberto.
+
+PWA (manifest, service worker, instalação, offline) **não** é parte
+do 009 — fica como Inc futuro 2b.
+
+Spec completa em
+[specs/009-responsividade-mobile-first/](./specs/009-responsividade-mobile-first/).
+
 ## Roadmap & backlog
 
 Lista priorizada de incrementos, bugs e ideias vive em

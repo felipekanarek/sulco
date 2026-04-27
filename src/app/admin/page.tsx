@@ -14,30 +14,30 @@ export default async function AdminPage() {
   const rows = await listAllUsers();
 
   return (
-    <main className="max-w-[1000px] mx-auto px-8 pt-12 pb-24">
-      <div className="flex items-baseline justify-between mb-8">
+    <main className="max-w-[1000px] mx-auto px-4 md:px-8 pt-8 md:pt-12 pb-16 md:pb-24">
+      <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-3 md:gap-8 mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-3">Administração</p>
-          <h1 className="font-serif italic text-4xl leading-tight">
+          <h1 className="font-serif italic text-3xl md:text-4xl leading-tight">
             Painel de contas
           </h1>
         </div>
         <Link
           href="/admin/convites"
-          className="font-mono text-[11px] uppercase tracking-[0.12em] border border-line text-ink hover:border-ink px-4 py-2 rounded-sm transition-colors"
+          className="font-mono text-[11px] uppercase tracking-[0.12em] border border-line text-ink hover:border-ink active:border-ink px-4 py-2 min-h-[44px] inline-flex items-center justify-center rounded-sm transition-colors self-start md:self-auto"
         >
           Convites →
         </Link>
       </div>
 
-      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-mute mb-6">
+      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-mute mb-4 md:mb-6">
         {rows.length} {rows.length === 1 ? 'conta' : 'contas'}
       </p>
 
       {rows.length === 0 ? (
         <p className="font-serif italic text-ink-soft">Nenhuma conta ainda.</p>
       ) : (
-        <table className="w-full">
+        <table className="w-full hidden md:table">
           <thead>
             <tr className="border-b border-ink">
               <th
@@ -79,6 +79,36 @@ export default async function AdminPage() {
           </tbody>
         </table>
       )}
+
+      {/* Mobile: cards verticais (substitui a table desktop) */}
+      {rows.length > 0 ? (
+        <ul className="md:hidden flex flex-col gap-3">
+          {rows.map((r) => (
+            <li
+              key={`m-${r.id}`}
+              className="border border-line bg-paper-raised rounded-sm p-4 flex flex-col gap-2"
+            >
+              <p className="font-mono text-[13px] text-ink break-all">{r.email}</p>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+                <dt className="font-mono uppercase tracking-[0.1em] text-ink-mute">Discogs</dt>
+                <dd className="font-mono text-ink truncate">{r.discogsUsername || '—'}</dd>
+                <dt className="font-mono uppercase tracking-[0.1em] text-ink-mute">Discos</dt>
+                <dd className="font-serif italic text-ink">{r.recordsCount}</dd>
+                <dt className="font-mono uppercase tracking-[0.1em] text-ink-mute">Último sync</dt>
+                <dd className="font-mono text-ink-soft">
+                  {r.lastSyncAt
+                    ? r.lastSyncAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                    : '—'}
+                </dd>
+                <dt className="font-mono uppercase tracking-[0.1em] text-ink-mute">Status</dt>
+                <dd className={`font-mono text-[11px] uppercase tracking-[0.1em] ${r.discogsCredentialStatus === 'invalid' ? 'text-warn' : 'text-ok'}`}>
+                  {r.discogsCredentialStatus === 'invalid' ? 'inválido' : 'ok'}
+                </dd>
+              </dl>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </main>
   );
 }

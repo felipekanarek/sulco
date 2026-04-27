@@ -262,17 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **008-preview-audio-deezer-spotify-youtube**
+Current active feature: **009-responsividade-mobile-first**
 
 Authoritative planning artifacts (read these before making changes
-to preview de áudio, schema de tracks, ou client de Deezer):
+to layout responsivo, header mobile, drawer/bottom sheet, ou qualquer
+ajuste de UI cross-cutting):
 
-- Plan: [specs/008-preview-audio-deezer-spotify-youtube/plan.md](specs/008-preview-audio-deezer-spotify-youtube/plan.md)
-- Spec: [specs/008-preview-audio-deezer-spotify-youtube/spec.md](specs/008-preview-audio-deezer-spotify-youtube/spec.md)
-- Data model: [specs/008-preview-audio-deezer-spotify-youtube/data-model.md](specs/008-preview-audio-deezer-spotify-youtube/data-model.md)
-- Contracts: [specs/008-preview-audio-deezer-spotify-youtube/contracts/](specs/008-preview-audio-deezer-spotify-youtube/contracts/)
-- Research: [specs/008-preview-audio-deezer-spotify-youtube/research.md](specs/008-preview-audio-deezer-spotify-youtube/research.md)
-- Quickstart: [specs/008-preview-audio-deezer-spotify-youtube/quickstart.md](specs/008-preview-audio-deezer-spotify-youtube/quickstart.md)
+- Plan: [specs/009-responsividade-mobile-first/plan.md](specs/009-responsividade-mobile-first/plan.md)
+- Spec: [specs/009-responsividade-mobile-first/spec.md](specs/009-responsividade-mobile-first/spec.md)
+- Data model: [specs/009-responsividade-mobile-first/data-model.md](specs/009-responsividade-mobile-first/data-model.md)
+- Contracts: [specs/009-responsividade-mobile-first/contracts/](specs/009-responsividade-mobile-first/contracts/)
+- Research: [specs/009-responsividade-mobile-first/research.md](specs/009-responsividade-mobile-first/research.md)
+- Quickstart: [specs/009-responsividade-mobile-first/quickstart.md](specs/009-responsividade-mobile-first/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -280,27 +281,32 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 005 acousticbrainz-audio-features (~1200 faixas em prod)
 - 006 curadoria-aleatoria
 - 007 fix-sync-snapshot-fallback (Bug 11 + 12)
+- 008 preview-audio-deezer-spotify-youtube (3 botões inline em
+  `/disco/[id]` e `/sets/[id]/montar`)
 
-Key points of 008:
-- **Schema delta aditivo**: 2 colunas em `tracks` (zona SYS):
-  `previewUrl TEXT`, `previewUrlCachedAt INTEGER`. Aplicação via
-  `npm run db:push` em dev + ALTER manual em Turso prod.
-- **Princípio I respeitado**: campos preview são write-only do
-  sistema; `resolveTrackPreview` nunca toca AUTHOR fields.
-- **Pipeline**: click ▶ → Server Action `resolveTrackPreview(trackId)`
-  → `Deezer Search API` (sem auth) → cache em DB → `<audio>` nativo
-  toca 30s. Cache hit subsequente <500ms.
-- **3 botões inline sempre visíveis**: ▶ Deezer (player), ↗ Spotify
-  (link search aberto), ↗ YouTube (link search aberto). Spotify e
-  YouTube são URLs deterministicas client-side, sem API.
-- **Estado "1 player por vez"**: React Context global
-  `<PreviewPlayerProvider>` em `layout.tsx`.
-- **Cache states**: `previewUrl=NULL` (nunca tentado), `''`
-  (tentou, sem dado), URL (cacheado). `invalidateTrackPreview` reseta
-  pra recuperação de URL morta.
-- **Aparece em**: `/disco/[id]` (TrackCurationRow) + `/sets/[id]/montar`
-  (CandidateRow).
-- **Módulo novo** em `src/lib/preview/` + 2 client components +
-  1 provider em layout.
-- Sem dependência externa nova (`<audio>` nativo, fetch nativo).
+Key points of 009:
+- **Zero schema delta**, zero novas Server Actions. Feature é
+  puramente front-end de apresentação.
+- **Princípio I respeitado por construção**: refator visual não
+  toca actions/queries que escrevem AUTHOR.
+- **Estratégia mobile-first**: Tailwind v3 com defaults = mobile,
+  prefixos `md:`/`lg:` adicionam comportamento desktop. Convenção
+  inversa do código atual — exige cuidado pra não quebrar desktop.
+- **Componentes novos** (3-4 client components):
+  - `<MobileDrawer>` — primitiva genérica (lateral OU bottom)
+  - `<MobileNav>` + `<MobileNavTrigger>` — drawer da nav (esquerda)
+  - `<FilterBottomSheet>` + `<FilterActiveChips>` — filtros mobile
+- **Refactor existente** (5-6 componentes): `track-curation-row`,
+  `candidate-row`, `montar-filters`, `filter-bar`, `record-grid-card`,
+  Header em `layout.tsx`, `/disco/[id]/page.tsx`,
+  `/sets/[id]/montar/page.tsx`.
+- **Decisões UX (do /speckit.clarify)**:
+  - Nav mobile = drawer lateral esquerdo (~75% largura)
+  - `/disco/[id]` mobile = banner full-width como hero (~200-240px)
+  - Filtros mobile = bottom sheet (~80vh, sticky "Aplicar")
+- **Tap targets ≥44×44px** universalmente em mobile.
+- **PWA fora de escopo** (Inc 2b futuro: manifest + service worker
+  + install + offline).
+- Sem dependência externa nova; constituição respeitada (sem shadcn,
+  sem Zustand, sem libs de UI).
 <!-- SPECKIT END -->

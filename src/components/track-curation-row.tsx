@@ -111,15 +111,40 @@ export function TrackCurationRow({
     ? 'text-accent font-medium'
     : 'text-ink-mute';
 
+  const actions = (
+    <>
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => save({ selected: !local.selected })}
+        aria-pressed={local.selected}
+        aria-label={local.selected ? 'Faixa selecionada — clique para desmarcar' : 'Clique para selecionar faixa'}
+        className={`font-mono text-[11px] uppercase tracking-[0.1em] px-3 min-h-[44px] min-w-[48px] rounded-sm border transition-colors ${
+          local.selected
+            ? 'bg-ink text-paper border-ink'
+            : 'text-ink-mute border-line hover:border-ink active:border-ink'
+        } disabled:opacity-50 disabled:cursor-not-allowed`}
+      >
+        {local.selected ? 'on' : 'off'}
+      </button>
+      <BombaToggle
+        value={local.isBomb}
+        onChange={(v) => save({ isBomb: v })}
+        disabled={isPending || !local.selected}
+        compact
+      />
+    </>
+  );
+
   return (
-    <article className="grid grid-cols-[36px_1fr_auto] gap-4 py-4 border-b border-line-soft items-start">
+    <article className="grid grid-cols-[28px_1fr] md:grid-cols-[36px_1fr_auto] gap-3 md:gap-4 py-4 border-b border-line-soft items-start">
       <span className={`font-mono text-[13px] tracking-wide pt-1 ${positionCls}`}>
         {local.position}
       </span>
 
       <div className="min-w-0">
         <div className="flex items-baseline gap-3 mb-2">
-          <h3 className="font-serif italic text-[19px] leading-tight">{local.title}</h3>
+          <h3 className="font-serif italic text-[18px] md:text-[19px] leading-tight">{local.title}</h3>
           {local.duration ? (
             <span className="font-mono text-[11px] text-ink-mute">{local.duration}</span>
           ) : null}
@@ -136,7 +161,7 @@ export function TrackCurationRow({
         </div>
 
         {/* Rating (+, ++, +++) */}
-        <div className="flex items-center gap-1 mb-2">
+        <div className="flex items-center gap-1 mb-2 flex-wrap">
           {[1, 2, 3].map((n) => {
             const active = local.rating === n;
             return (
@@ -146,10 +171,10 @@ export function TrackCurationRow({
                 disabled={isPending || !local.selected}
                 onClick={() => save({ rating: active ? null : n })}
                 aria-label={`Avaliação ${'+'.repeat(n)}`}
-                className={`font-mono text-[12px] px-2 py-1 border rounded-sm min-w-[40px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`font-mono text-[12px] px-2 py-1 border rounded-sm min-w-[44px] min-h-[44px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                   active
                     ? 'bg-accent text-paper border-accent'
-                    : 'text-ink-mute border-line hover:border-ink hover:text-ink'
+                    : 'text-ink-mute border-line hover:border-ink hover:text-ink active:border-ink active:text-ink'
                 }`}
               >
                 {'+'.repeat(n)}
@@ -217,10 +242,11 @@ export function TrackCurationRow({
             <summary className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute cursor-pointer hover:text-accent">
               {open ? 'fechar editor' : 'editar curadoria'}
             </summary>
-            <div className="grid grid-cols-2 gap-4 mt-3 p-4 bg-paper-raised border border-line-soft rounded-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 p-4 bg-paper-raised border border-line-soft rounded-sm">
               <Field label="BPM (0–250)">
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={0}
                   max={250}
                   defaultValue={local.bpm ?? ''}
@@ -237,6 +263,7 @@ export function TrackCurationRow({
               <Field label="Energia (1–5)">
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={1}
                   max={5}
                   defaultValue={local.energy ?? ''}
@@ -314,29 +341,16 @@ export function TrackCurationRow({
         ) : null}
 
         {error ? <p className="text-xs text-warn mt-2">{error}</p> : null}
+
+        {/* Mobile-only: actions inline depois do conteúdo */}
+        <div className="md:hidden flex items-center gap-2 mt-3 pt-3 border-t border-line-soft">
+          {actions}
+        </div>
       </div>
 
-      <div className="flex flex-col items-end gap-2 min-w-[96px]">
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => save({ selected: !local.selected })}
-          aria-pressed={local.selected}
-          aria-label={local.selected ? 'Faixa selecionada — clique para desmarcar' : 'Clique para selecionar faixa'}
-          className={`font-mono text-[11px] uppercase tracking-[0.1em] px-3 py-2 rounded-sm border min-w-[48px] transition-colors ${
-            local.selected
-              ? 'bg-ink text-paper border-ink'
-              : 'text-ink-mute border-line hover:border-ink'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          {local.selected ? 'on' : 'off'}
-        </button>
-        <BombaToggle
-          value={local.isBomb}
-          onChange={(v) => save({ isBomb: v })}
-          disabled={isPending || !local.selected}
-          compact
-        />
+      {/* Desktop: actions na 3ª coluna */}
+      <div className="hidden md:flex flex-col items-end gap-2 min-w-[96px]">
+        {actions}
       </div>
     </article>
   );

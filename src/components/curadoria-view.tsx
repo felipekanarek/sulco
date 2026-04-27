@@ -110,19 +110,19 @@ export function CuradoriaView({ disc, ids, currentIndex, status }: Props) {
   return (
     <>
       {/* Head */}
-      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-8">
+      <section className="flex flex-col md:grid md:grid-cols-[1fr_auto] md:items-end gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-2">Curadoria · {labelForStatus(status)}</p>
-          <h1 className="title-display text-[44px]">Triagem</h1>
+          <h1 className="title-display text-[30px] md:text-[44px]">Triagem</h1>
         </div>
-        <div className="flex gap-6 items-end">
-          <span className="font-serif italic text-[32px] leading-none">
+        <div className="flex justify-between md:justify-end gap-6 items-end">
+          <span className="font-serif italic text-[24px] md:text-[32px] leading-none">
             <span className="text-ink">{currentIndex + 1}</span>
             <span className="text-ink-mute"> de {total}</span>
           </span>
           <Link
             href="/"
-            className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 border border-line text-ink-mute hover:border-ink hover:text-ink rounded-full"
+            className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 min-h-[44px] flex items-center justify-center border border-line text-ink-mute hover:border-ink hover:text-ink rounded-full"
           >
             Sair
           </Link>
@@ -130,16 +130,16 @@ export function CuradoriaView({ disc, ids, currentIndex, status }: Props) {
       </section>
 
       {/* Disc */}
-      <section className="grid grid-cols-[320px_1fr] gap-10 items-start">
-        <div className="cover w-[320px] h-[320px] relative overflow-hidden border border-line">
+      <section className="flex flex-col md:grid md:grid-cols-[320px_1fr] gap-6 md:gap-10 md:items-start">
+        <div className="cover w-full md:w-[320px] aspect-square md:h-[320px] relative overflow-hidden border border-line bg-paper-raised">
           {disc.coverUrl && !coverFailed ? (
             <Image
               src={disc.coverUrl}
               alt=""
-              width={320}
-              height={320}
+              fill
+              sizes="(max-width: 768px) 100vw, 320px"
               unoptimized
-              className="w-full h-full object-cover"
+              className="object-cover"
               onError={() => setCoverFailed(true)}
             />
           ) : (
@@ -150,23 +150,24 @@ export function CuradoriaView({ disc, ids, currentIndex, status }: Props) {
         <div className="min-w-0">
           <p className="eyebrow mb-2">{disc.artist}</p>
           <h2
-            className="font-serif italic text-[40px] font-medium tracking-tight leading-[1.05] mb-5"
+            className="font-serif italic text-[28px] md:text-[40px] font-medium tracking-tight leading-[1.05] mb-3 md:mb-5"
             title={disc.title}
           >
             {disc.title}
           </h2>
           <p className="label-tech mb-2">{meta || '—'}</p>
           {genresText ? (
-            <p className="font-serif italic text-[15px] text-ink-soft mb-1">{genresText}</p>
+            <p className="font-serif italic text-[14px] md:text-[15px] text-ink-soft mb-1">{genresText}</p>
           ) : null}
           {stylesText ? (
-            <p className="font-serif italic text-[13px] text-ink-mute mb-6">{stylesText}</p>
+            <p className="font-serif italic text-[13px] text-ink-mute mb-5 md:mb-6">{stylesText}</p>
           ) : (
-            <div className="mb-6" />
+            <div className="mb-5 md:mb-6" />
           )}
 
-          {/* Actions */}
-          <div className="flex flex-wrap items-center gap-3 mb-8">
+          {/* Actions: mobile = grid 2-col com Ativo/Descartado fullwidth + nav abaixo;
+              desktop = layout flex-wrap atual */}
+          <div className="grid grid-cols-2 md:flex md:flex-wrap md:items-center gap-3 mb-4 md:mb-8">
             <ActionButton
               label="Ativo"
               shortcut="A"
@@ -183,7 +184,7 @@ export function CuradoriaView({ disc, ids, currentIndex, status }: Props) {
               disabled={isPending}
               onClick={() => applyStatus('discarded')}
             />
-            <div className="flex items-center gap-1 ml-2">
+            <div className="col-span-2 md:col-span-1 flex items-center gap-1 md:ml-2">
               <NavButton
                 label="← anterior"
                 onClick={goPrev}
@@ -199,13 +200,13 @@ export function CuradoriaView({ disc, ids, currentIndex, status }: Props) {
             </div>
             <Link
               href={`/disco/${disc.id}`}
-              className="ml-auto font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 border border-ink text-ink hover:bg-ink hover:text-paper rounded-sm"
+              className="col-span-2 md:col-span-1 md:ml-auto font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 min-h-[44px] flex items-center justify-center border border-ink text-ink hover:bg-ink hover:text-paper active:bg-ink active:text-paper rounded-sm"
             >
               Abrir disco →
             </Link>
           </div>
 
-          <p className="label-tech text-ink-mute">
+          <p className="label-tech text-ink-mute hidden md:block">
             Atalhos: <kbd className="kbd">A</kbd> Ativo ·{' '}
             <kbd className="kbd">D</kbd> Descartado · <kbd className="kbd">→</kbd> próximo ·{' '}
             <kbd className="kbd">←</kbd> anterior
@@ -278,7 +279,7 @@ function ActionButton({
   disabled: boolean;
   onClick: () => void;
 }) {
-  const base = 'font-mono text-[11px] uppercase tracking-[0.12em] px-5 py-3 border rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2';
+  const base = 'font-mono text-[11px] uppercase tracking-[0.12em] px-5 py-3 min-h-[56px] border rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2';
   const toneCls = active
     ? tone === 'ok'
       ? 'bg-ok text-paper border-ok'
@@ -311,7 +312,7 @@ function NavButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-3 border border-line hover:border-ink rounded-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      className="flex-1 md:flex-none font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-3 min-h-[44px] flex items-center justify-center border border-line hover:border-ink active:border-ink rounded-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
     >
       {label}
     </button>

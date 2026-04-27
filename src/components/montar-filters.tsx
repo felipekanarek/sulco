@@ -78,22 +78,22 @@ export function MontarFiltersForm({
   }
 
   return (
-    <section className="border border-line bg-paper-raised p-6 rounded-sm">
-      <div className="flex justify-between items-baseline mb-6 pb-3 border-b border-line-soft">
+    <section className="md:border md:border-line md:bg-paper-raised p-4 md:p-6 md:rounded-sm">
+      <div className="flex justify-between items-baseline mb-4 md:mb-6 pb-3 border-b border-line-soft">
         <div>
           <p className="eyebrow text-accent">02 · filtros</p>
-          <h2 className="font-serif italic text-[22px] font-medium">Busca precisa</h2>
+          <h2 className="font-serif italic text-[20px] md:text-[22px] font-medium">Busca precisa</h2>
         </div>
         <button
           type="button"
           onClick={clearAll}
-          className="label-tech hover:text-accent underline"
+          className="label-tech hover:text-accent active:text-accent underline min-h-[36px]"
         >
           limpar
         </button>
       </div>
 
-      <div className="grid grid-cols-12 gap-5">
+      <div className="grid grid-cols-12 gap-3 md:gap-5">
         {/* BPM range */}
         <Field label="BPM de" span={2}>
           <NumberInput
@@ -222,8 +222,21 @@ function Field({
   span: number;
   children: React.ReactNode;
 }) {
+  // Mobile-friendly: spans pequenos (BPM/Energy/Rating ranges) ficam 2 por linha em mobile;
+  // spans médios (Bomba/Moods/Contexts) ocupam linha cheia; spans grandes preservados.
+  const mobileSpanCls = span <= 2 ? 'col-span-6' : 'col-span-12';
+  const desktopSpanCls =
+    span === 2
+      ? 'md:col-span-2'
+      : span === 4
+        ? 'md:col-span-4'
+        : span === 6
+          ? 'md:col-span-6'
+          : span === 8
+            ? 'md:col-span-8'
+            : 'md:col-span-12';
   return (
-    <div className={`col-span-${span} flex flex-col gap-2`} style={{ gridColumn: `span ${span}` }}>
+    <div className={`${mobileSpanCls} ${desktopSpanCls} flex flex-col gap-2`}>
       <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
         {label}
       </label>
@@ -246,6 +259,7 @@ function NumberInput({
   return (
     <input
       type="number"
+      inputMode="numeric"
       min={min}
       max={max}
       value={value ?? ''}
@@ -256,7 +270,7 @@ function NumberInput({
         if (!Number.isFinite(n)) return;
         onChange(n);
       }}
-      className="font-serif text-[16px] bg-paper border border-line px-3 py-2 rounded-sm outline-none focus:border-ink"
+      className="font-serif text-[16px] bg-paper border border-line px-3 py-2 min-h-[44px] rounded-sm outline-none focus:border-ink"
     />
   );
 }

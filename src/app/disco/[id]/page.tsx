@@ -53,9 +53,9 @@ export default async function RecordDetailPage({
   const bombCount = disc.tracks.filter((t) => t.isBomb).length;
 
   return (
-    <div className="max-w-[1240px] mx-auto px-8">
+    <div className="max-w-[1240px] mx-auto px-4 md:px-8">
       {/* Head */}
-      <section className="flex items-end justify-between gap-8 pb-6 border-b border-line mb-8">
+      <section className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-2">
             <Link href="/" className="hover:text-ink transition-colors">
@@ -63,28 +63,29 @@ export default async function RecordDetailPage({
             </Link>{' '}
             · disco {disc.id}
           </p>
-          <h1 className="title-display text-[36px]">Em discoteca</h1>
+          <h1 className="title-display text-[28px] md:text-[36px]">Em discoteca</h1>
         </div>
         <Link
           href="/"
-          className="font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 rounded-sm hover:bg-accent transition-colors whitespace-nowrap"
+          className="hidden md:inline-flex font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 min-h-[44px] items-center justify-center rounded-sm hover:bg-accent transition-colors whitespace-nowrap"
         >
           ✓ Concluir e voltar à coleção
         </Link>
       </section>
 
-      <div className="grid grid-cols-[380px_1fr] gap-16 items-start">
-        {/* Left: cover, metadata, controls */}
-        <aside className="sticky top-28">
-          <div className="cover w-full aspect-square mb-6 relative overflow-hidden border border-line">
+      <div className="flex flex-col md:grid md:grid-cols-[380px_1fr] gap-6 md:gap-16 md:items-start">
+        {/* Capa + metadados + controles. Mobile: stack vertical full-width.
+            Desktop: sidebar 380px sticky. */}
+        <aside className="md:sticky md:top-28">
+          <div className="cover w-full aspect-square mb-4 md:mb-6 relative overflow-hidden border border-line bg-paper-raised">
             {disc.coverUrl ? (
               <Image
                 src={disc.coverUrl}
                 alt=""
-                width={380}
-                height={380}
+                fill
+                sizes="(max-width: 768px) 100vw, 380px"
                 unoptimized
-                className="w-full h-full object-cover"
+                className="object-cover"
               />
             ) : (
               <CoverPlaceholder artist={disc.artist} />
@@ -92,11 +93,11 @@ export default async function RecordDetailPage({
           </div>
 
           <p className="label-tech mb-2">{disc.artist}</p>
-          <h2 className="font-serif italic text-[40px] font-normal tracking-tight leading-none mb-5">
+          <h2 className="font-serif italic text-[30px] md:text-[40px] font-normal tracking-tight leading-none mb-4 md:mb-5">
             {disc.title}
           </h2>
 
-          <dl className="font-mono text-[13px] text-ink-mute tracking-wide py-4 border-t border-b border-line mb-6 leading-loose">
+          <dl className="font-mono text-[12px] md:text-[13px] text-ink-mute tracking-wide py-3 md:py-4 border-t border-b border-line mb-4 md:mb-6 leading-loose">
             <MetaRow label="Selo" value={disc.label} />
             <MetaRow label="Ano" value={disc.year?.toString()} />
             <MetaRow label="Formato" value={disc.format} />
@@ -123,13 +124,13 @@ export default async function RecordDetailPage({
                 href={`https://www.discogs.com/release/${record.discogsId}`}
                 target="_blank"
                 rel="noreferrer"
-                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-1"
+                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-2 min-h-[44px] flex items-center"
               >
                 → Ver no Discogs
               </a>
               <Link
                 href="/curadoria"
-                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-1"
+                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-2 min-h-[44px] flex items-center"
               >
                 → Voltar à triagem
               </Link>
@@ -139,11 +140,11 @@ export default async function RecordDetailPage({
 
         {/* Right: tracklist */}
         <section className="min-w-0">
-          <div className="flex justify-between items-baseline pb-4 border-b border-line mb-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline pb-3 md:pb-4 border-b border-line mb-4 md:mb-6 gap-1">
             <span className="eyebrow">
               Tracklist · {disc.tracks.length} {disc.tracks.length === 1 ? 'faixa' : 'faixas'}
             </span>
-            <span className="font-serif italic text-[16px] text-ink-soft">
+            <span className="font-serif italic text-[15px] md:text-[16px] text-ink-soft">
               {selectedCount} selecionadas
               {bombCount > 0 ? (
                 <span className="text-accent"> · {bombCount} bomba{bombCount > 1 ? 's' : ''}</span>
@@ -152,7 +153,7 @@ export default async function RecordDetailPage({
           </div>
 
           {disc.tracks.length === 0 ? (
-            <div className="border border-dashed border-line p-10 text-center">
+            <div className="border border-dashed border-line p-6 md:p-10 text-center">
               <p className="font-serif italic text-lg text-warn">
                 Tracklist indisponível no Discogs para este release.
               </p>
@@ -165,7 +166,7 @@ export default async function RecordDetailPage({
             </div>
           ) : (
             [...bySide.entries()].map(([side, items]) => (
-              <div key={side} className="mb-10">
+              <div key={side} className="mb-8 md:mb-10">
                 <p className="font-mono text-[13px] uppercase tracking-[0.14em] text-accent mb-3 pb-2 border-b border-accent/40">
                   Lado {side}
                 </p>
@@ -186,14 +187,14 @@ export default async function RecordDetailPage({
           {/* CTA de conclusão — todas as edições já foram salvas
               automaticamente via Server Actions; o botão é puramente
               navegacional, mas fecha o ciclo "curadoria deste disco". */}
-          <div className="border-t border-line pt-8 mt-10 flex items-center justify-between gap-6">
+          <div className="border-t border-line pt-6 md:pt-8 mt-8 md:mt-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6">
             <p className="font-serif italic text-[14px] text-ink-mute leading-relaxed">
               Todas as alterações já foram salvas. Volte à coleção quando
               terminar com este disco.
             </p>
             <Link
               href="/"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 rounded-sm hover:bg-accent transition-colors whitespace-nowrap"
+              className="font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 min-h-[44px] flex items-center justify-center rounded-sm hover:bg-accent transition-colors whitespace-nowrap self-start md:self-auto"
             >
               ✓ Concluir e voltar à coleção
             </Link>

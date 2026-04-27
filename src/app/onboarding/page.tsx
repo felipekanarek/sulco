@@ -19,12 +19,12 @@ export default async function OnboardingPage() {
   if (!user.needsOnboarding) redirect('/');
 
   return (
-    <div className="max-w-[640px] mx-auto px-8">
+    <div className="max-w-[640px] mx-auto px-4 md:px-8">
       <p className="eyebrow mb-4">Onboarding</p>
-      <h1 className="font-serif italic text-4xl mb-6 leading-tight">
+      <h1 className="font-serif italic text-3xl md:text-4xl mb-4 md:mb-6 leading-tight">
         Conecte sua coleção do Discogs
       </h1>
-      <p className="text-ink-soft mb-8 leading-relaxed">
+      <p className="text-ink-soft mb-6 md:mb-8 leading-relaxed">
         O Sulco lê sua coleção do Discogs para espelhar metadados de discos e faixas.
         A curadoria (status, faixas selecionadas, BPM, Bomba, etc.) é sempre sua e
         nunca é sobrescrita pelo Discogs.
@@ -32,8 +32,8 @@ export default async function OnboardingPage() {
 
       <OnboardingForm />
 
-      <details className="mt-10 text-sm text-ink-mute">
-        <summary className="cursor-pointer hover:text-ink">Como gerar um Personal Access Token no Discogs?</summary>
+      <details className="mt-8 md:mt-10 text-sm text-ink-mute">
+        <summary className="cursor-pointer hover:text-ink min-h-[44px] flex items-center">Como gerar um Personal Access Token no Discogs?</summary>
         <ol className="list-decimal list-inside space-y-2 mt-4 pl-2">
           <li>
             Faça login em{' '}

@@ -30,10 +30,10 @@ export async function ArchivedRecordsBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="bg-warn/10 border-y border-warn text-ink px-6 py-3 flex items-center justify-between gap-4"
+      className="bg-warn/10 border-y border-warn text-ink px-4 md:px-6 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4"
     >
-      <p className="font-serif text-[15px]">
-        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-warn mr-3">
+      <p className="font-serif text-[14px] md:text-[15px]">
+        <span className="font-mono text-[10px] md:text-[11px] uppercase tracking-[0.12em] text-warn mr-2 md:mr-3 block md:inline mb-1 md:mb-0">
           Coleção
         </span>
         {count === 1
@@ -42,7 +42,7 @@ export async function ArchivedRecordsBanner() {
       </p>
       <Link
         href="/status"
-        className="font-mono text-[11px] uppercase tracking-[0.12em] border border-ink text-ink hover:bg-ink hover:text-paper px-4 py-2 rounded-sm transition-colors whitespace-nowrap"
+        className="font-mono text-[11px] uppercase tracking-[0.12em] border border-ink text-ink hover:bg-ink hover:text-paper px-4 py-2 min-h-[44px] flex items-center justify-center rounded-sm transition-colors whitespace-nowrap self-start md:self-auto"
       >
         Revisar →
       </Link>

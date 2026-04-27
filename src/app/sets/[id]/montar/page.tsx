@@ -74,8 +74,8 @@ export default async function MontarSetPage({
   const atLimit = inSetTracks.length >= 300;
 
   return (
-    <div className="max-w-[1440px] mx-auto px-8">
-      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-8">
+    <div className="max-w-[1440px] mx-auto px-4 md:px-8">
+      <section className="flex flex-col md:grid md:grid-cols-[1fr_auto] md:items-end gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-2">
             <Link href={`/sets/${set.id}`} className="hover:text-ink transition-colors">
@@ -83,38 +83,56 @@ export default async function MontarSetPage({
             </Link>{' '}
             · montar
           </p>
-          <h1 className="title-display text-[32px]">{set.name}</h1>
+          <h1 className="title-display text-[26px] md:text-[32px]">{set.name}</h1>
         </div>
         <Link
           href={`/sets/${set.id}`}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 rounded-sm hover:bg-accent transition-colors"
+          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors self-start md:self-auto"
         >
           Finalizar →
         </Link>
       </section>
 
-      <div className="grid grid-cols-[1fr_400px] gap-12 items-start">
-        {/* Esquerda: briefing + filtros + candidatos */}
-        <div className="flex flex-col gap-8">
+      <div className="flex flex-col md:grid md:grid-cols-[1fr_400px] gap-6 md:gap-12 md:items-start">
+        {/* Esquerda: briefing + filtros + candidatos.
+            Mobile: order-2 (vai depois do SetSidePanel pra bag aparecer no topo).
+            Desktop: order natural — fica na coluna 1 do grid. */}
+        <div className="order-2 md:order-none flex flex-col gap-6 md:gap-8">
           {set.briefing ? (
-            <section className="border border-line bg-paper-raised p-6 rounded-sm">
+            <section className="border border-line bg-paper-raised p-4 md:p-6 rounded-sm">
               <p className="eyebrow text-accent mb-3">01 · briefing</p>
-              <p className="font-serif italic text-[19px] text-ink-soft leading-relaxed whitespace-pre-wrap">
+              <p className="font-serif italic text-[16px] md:text-[19px] text-ink-soft leading-relaxed whitespace-pre-wrap">
                 {set.briefing}
               </p>
             </section>
           ) : null}
 
-          <MontarFiltersForm
-            setId={setId}
-            initial={filters}
-            moodSuggestions={moodSuggestions}
-            contextSuggestions={contextSuggestions}
-          />
+          {/* Mobile: filtros colapsáveis em <details>; Desktop: inline expandido */}
+          <details className="md:hidden border border-line bg-paper-raised rounded-sm">
+            <summary className="cursor-pointer px-4 py-3 min-h-[48px] flex items-center font-mono text-[11px] uppercase tracking-[0.12em] text-ink hover:text-accent">
+              Filtros · clique para expandir
+            </summary>
+            <div className="border-t border-line-soft">
+              <MontarFiltersForm
+                setId={setId}
+                initial={filters}
+                moodSuggestions={moodSuggestions}
+                contextSuggestions={contextSuggestions}
+              />
+            </div>
+          </details>
+          <div className="hidden md:block">
+            <MontarFiltersForm
+              setId={setId}
+              initial={filters}
+              moodSuggestions={moodSuggestions}
+              contextSuggestions={contextSuggestions}
+            />
+          </div>
 
           <section>
-            <div className="flex justify-between items-baseline pb-4 border-b border-line mb-6">
-              <h2 className="font-serif italic text-[28px] font-medium tracking-tight">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline pb-3 md:pb-4 border-b border-line mb-4 md:mb-6 gap-1">
+              <h2 className="font-serif italic text-[24px] md:text-[28px] font-medium tracking-tight">
                 Candidatos
               </h2>
               <span className="label-tech">
@@ -151,21 +169,24 @@ export default async function MontarSetPage({
           </section>
         </div>
 
-        {/* Direita: set em construção */}
-        <SetSidePanel
-          setId={setId}
-          setName={set.name}
-          uniqueRecords={uniqueRecords}
-          tracks={inSetTracks.map((t) => ({
-            trackId: t.trackId,
-            position: t.position,
-            title: t.title,
-            rating: t.rating,
-            artist: t.artist,
-            recordId: t.recordId,
-            isBomb: t.isBomb,
-          }))}
-        />
+        {/* Direita desktop / topo mobile: set em construção (bag).
+            order-1 mobile pra ficar no topo; em desktop fica na col 2 do grid. */}
+        <div className="order-1 md:order-none">
+          <SetSidePanel
+            setId={setId}
+            setName={set.name}
+            uniqueRecords={uniqueRecords}
+            tracks={inSetTracks.map((t) => ({
+              trackId: t.trackId,
+              position: t.position,
+              title: t.title,
+              rating: t.rating,
+              artist: t.artist,
+              recordId: t.recordId,
+              isBomb: t.isBomb,
+            }))}
+          />
+        </div>
       </div>
     </div>
   );

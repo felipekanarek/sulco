@@ -39,10 +39,10 @@ export default async function SetDetailPage({
   const statusLabel = { draft: 'Rascunho', scheduled: 'Agendado', done: 'Realizado' }[status];
 
   return (
-    <div className="max-w-[1240px] mx-auto px-8">
-      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-8">
+    <div className="max-w-[1240px] mx-auto px-4 md:px-8">
+      <section className="flex flex-col md:grid md:grid-cols-[1fr_auto] md:items-end gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
-          <p className="eyebrow mb-2 flex items-center gap-3 flex-wrap">
+          <p className="eyebrow mb-2 flex items-center gap-2 md:gap-3 flex-wrap">
             <Link href="/sets" className="hover:text-ink transition-colors">
               ← Sets
             </Link>
@@ -51,29 +51,29 @@ export default async function SetDetailPage({
             {set.eventDate ? <span>· {formatForDisplay(set.eventDate)}</span> : null}
             {set.location ? <span>· {set.location}</span> : null}
           </p>
-          <h1 className="title-display text-[36px]">{set.name}</h1>
+          <h1 className="title-display text-[26px] md:text-[36px]">{set.name}</h1>
         </div>
         <Link
           href={`/sets/${set.id}/montar`}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 rounded-sm hover:bg-accent transition-colors"
+          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors self-start md:self-auto"
         >
           Editar set
         </Link>
       </section>
 
       {set.briefing ? (
-        <section className="mb-12 pb-8 border-b border-line">
+        <section className="mb-8 md:mb-12 pb-6 md:pb-8 border-b border-line">
           <p className="eyebrow mb-3">Briefing</p>
-          <p className="font-serif italic text-[22px] text-ink leading-relaxed max-w-[760px] whitespace-pre-wrap">
+          <p className="font-serif italic text-[17px] md:text-[22px] text-ink leading-relaxed md:max-w-[760px] whitespace-pre-wrap">
             {set.briefing}
           </p>
         </section>
       ) : null}
 
-      <section className="grid grid-cols-[1fr_340px] gap-12 items-start">
+      <section className="flex flex-col md:grid md:grid-cols-[1fr_340px] gap-6 md:gap-12 md:items-start">
         <div>
-          <div className="flex justify-between items-baseline pb-4 border-b border-line mb-6">
-            <h2 className="font-serif italic text-[32px] font-medium tracking-tight">Setlist</h2>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline pb-3 md:pb-4 border-b border-line mb-4 md:mb-6 gap-1">
+            <h2 className="font-serif italic text-[24px] md:text-[32px] font-medium tracking-tight">Setlist</h2>
             <span className="label-tech">
               {trackRows.length} {trackRows.length === 1 ? 'faixa' : 'faixas'}
             </span>
@@ -91,16 +91,16 @@ export default async function SetDetailPage({
               {trackRows.map((t, i) => (
                 <li
                   key={t.trackId}
-                  className="grid grid-cols-[40px_48px_1fr_auto] gap-4 py-4 border-b border-line-soft items-center"
+                  className="grid grid-cols-[32px_44px_1fr] md:grid-cols-[40px_48px_1fr_auto] gap-3 md:gap-4 py-3 md:py-4 border-b border-line-soft md:items-center"
                 >
                   <span className="font-mono text-[13px] text-ink-mute">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span className="font-mono text-[13px] text-accent font-medium">
+                  <span className="font-mono text-[13px] text-accent font-medium self-start md:self-auto">
                     {t.position}
                   </span>
                   <div className="min-w-0">
-                    <p className="font-serif italic text-[19px] leading-tight truncate">
+                    <p className="font-serif italic text-[17px] md:text-[19px] leading-tight">
                       {t.title}
                       {t.isBomb ? (
                         <span className="ml-2">
@@ -116,8 +116,15 @@ export default async function SetDetailPage({
                         {t.artist} · {t.recordTitle}
                       </Link>
                     </p>
+                    {/* Mobile: BPM/key inline na coluna info; desktop: col 4 */}
+                    {(t.bpm || t.musicalKey) ? (
+                      <p className="label-tech mt-0.5 md:hidden">
+                        {t.bpm ? `${t.bpm} BPM` : ''}
+                        {t.musicalKey ? ` · ${t.musicalKey}` : ''}
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="label-tech whitespace-nowrap">
+                  <span className="label-tech whitespace-nowrap hidden md:inline">
                     {t.bpm ? `${t.bpm} BPM` : ''}
                     {t.musicalKey ? ` · ${t.musicalKey}` : ''}
                   </span>

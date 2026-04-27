@@ -31,10 +31,10 @@ export default async function CuradoriaPage({
 
   if (ids.length === 0) {
     return (
-      <div className="max-w-[960px] mx-auto px-8">
+      <div className="max-w-[960px] mx-auto px-4 md:px-8">
         <header className="mb-8">
           <p className="eyebrow mb-2">Curadoria</p>
-          <h1 className="title-display text-[44px]">Nada para triar</h1>
+          <h1 className="title-display text-[30px] md:text-[44px]">Nada para triar</h1>
         </header>
         <EmptyState currentStatus={status} />
       </div>
@@ -53,7 +53,7 @@ export default async function CuradoriaPage({
   if (!disc) redirect(`/curadoria?status=${status}`);
 
   return (
-    <div className="max-w-[1240px] mx-auto px-8">
+    <div className="max-w-[1240px] mx-auto px-4 md:px-8">
       <CuradoriaView
         disc={disc}
         ids={ids}

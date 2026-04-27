@@ -75,18 +75,18 @@ export default async function CollectionPage({
     styles.length > 0;
 
   return (
-    <div className="max-w-[1240px] mx-auto px-8">
+    <div className="max-w-[1240px] mx-auto px-4 md:px-8">
       {/* Head editorial */}
-      <section className="grid grid-cols-[1fr_auto] items-end gap-8 pb-6 border-b border-line mb-6">
+      <section className="flex flex-col md:grid md:grid-cols-[1fr_auto] md:items-end gap-6 md:gap-8 pb-6 border-b border-line mb-6">
         <div>
           <p className="eyebrow mb-2">{user.discogsUsername} · discogs</p>
-          <h1 className="title-display text-[44px]">Coleção</h1>
+          <h1 className="title-display text-[34px] md:text-[44px]">Coleção</h1>
         </div>
-        <dl className="flex gap-10 items-end">
+        <dl className="grid grid-cols-2 md:flex md:gap-10 gap-4 md:items-end">
           <Stat label="Discos" value={counts.total.toLocaleString('pt-BR')} />
           <Stat label="Ativos" value={counts.ativos.toLocaleString('pt-BR')} />
           <Stat label="Não avaliados" value={counts.naoAvaliados.toLocaleString('pt-BR')} />
-          <Stat label="Faixas selecionadas" value={selectedTotal.toLocaleString('pt-BR')} />
+          <Stat label="Faixas sel." value={selectedTotal.toLocaleString('pt-BR')} />
         </dl>
       </section>
 
@@ -103,12 +103,12 @@ export default async function CollectionPage({
         counts={counts}
       />
 
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-line-soft gap-4">
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between mb-4 pb-2 border-b border-line-soft gap-3 sm:gap-4">
         <p className="label-tech">
           Mostrando {rows.length.toLocaleString('pt-BR')} de {counts.total.toLocaleString('pt-BR')}
           {hasFilters ? ' (filtrado)' : ''}
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 self-start sm:self-auto">
           <RandomCurationButton />
           <ViewToggle value={view} />
         </div>
@@ -117,7 +117,7 @@ export default async function CollectionPage({
       {rows.length === 0 ? (
         <EmptyState hasFilters={hasFilters} importRunning={progress.running} />
       ) : view === 'grade' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
           {rows.map((r) => (
             <RecordGridCard key={r.id} record={r} />
           ))}

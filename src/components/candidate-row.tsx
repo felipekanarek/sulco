@@ -89,40 +89,41 @@ export function CandidateRow({
 
   return (
     <li
-      className={`grid grid-cols-[48px_auto_56px_1fr_auto_auto] gap-4 py-4 border-b border-line-soft items-start ${containerClasses}`}
+      className={`flex flex-col md:grid md:grid-cols-[48px_auto_56px_1fr_auto_auto] gap-3 md:gap-4 py-4 border-b border-line-soft md:items-start ${containerClasses}`}
     >
-      {/* Col 1: cover */}
-      <Link
-        href={`/disco/${candidate.recordId}`}
-        className="w-12 h-12 block border border-line relative overflow-hidden mt-1"
-        aria-label={`Abrir ${candidate.artist} — ${candidate.recordTitle}`}
-      >
-        {candidate.coverUrl && !coverFailed ? (
-          <Image
-            src={candidate.coverUrl}
-            alt=""
-            width={48}
-            height={48}
-            unoptimized
-            className="w-full h-full object-cover"
-            onError={() => setCoverFailed(true)}
-          />
-        ) : (
-          <CoverPlaceholder artist={candidate.artist} />
-        )}
-      </Link>
+      {/* Mobile: row com cover + posição + rating; Desktop: cada um vira col 1/2/3 do grid pai via md:contents */}
+      <div className="flex items-center gap-3 md:contents">
+        <Link
+          href={`/disco/${candidate.recordId}`}
+          className="w-12 h-12 block border border-line relative overflow-hidden md:mt-1 shrink-0"
+          aria-label={`Abrir ${candidate.artist} — ${candidate.recordTitle}`}
+        >
+          {candidate.coverUrl && !coverFailed ? (
+            <Image
+              src={candidate.coverUrl}
+              alt=""
+              width={48}
+              height={48}
+              sizes="48px"
+              unoptimized
+              className="w-full h-full object-cover"
+              onError={() => setCoverFailed(true)}
+            />
+          ) : (
+            <CoverPlaceholder artist={candidate.artist} />
+          )}
+        </Link>
 
-      {/* Col 2: badge de posição */}
-      <span className="font-mono text-[13px] text-accent font-medium px-2 py-1 border border-accent/60 rounded-sm self-start mt-1">
-        {candidate.position}
-      </span>
+        <span className="font-mono text-[13px] text-accent font-medium px-2 py-1 border border-accent/60 rounded-sm self-start md:mt-1 shrink-0">
+          {candidate.position}
+        </span>
 
-      {/* Col 3: rating glyph */}
-      <RatingGlyph rating={candidate.rating} />
+        <RatingGlyph rating={candidate.rating} />
+      </div>
 
-      {/* Col 4: title + artist + meta + chips + comment */}
+      {/* Col 4 desktop / linha completa mobile: title + artist + meta + chips + comment */}
       <div className="min-w-0">
-        <p className="font-serif italic text-[19px] leading-tight truncate">
+        <p className="font-serif italic text-[18px] md:text-[19px] leading-tight truncate">
           {candidate.title}
           {candidate.isBomb ? (
             <span className="ml-2 align-middle">
@@ -278,15 +279,15 @@ export function CandidateRow({
         ) : null}
       </div>
 
-      {/* Col 5: BPM/tom/energia */}
-      <div className="label-tech text-right pr-2 whitespace-nowrap self-start mt-1">
+      {/* Col 5 desktop / mobile inline: BPM/tom/energia */}
+      <div className="label-tech md:text-right md:pr-2 whitespace-nowrap md:self-start md:mt-1 flex flex-wrap gap-x-2 md:block">
         {candidate.bpm ? <span>{candidate.bpm} BPM</span> : null}
-        {candidate.musicalKey ? <span> · {candidate.musicalKey}</span> : null}
-        {candidate.energy ? <div>energia {candidate.energy}</div> : null}
+        {candidate.musicalKey ? <span className="md:before:content-['·_']"> · {candidate.musicalKey}</span> : null}
+        {candidate.energy ? <span className="md:block"> · energia {candidate.energy}</span> : null}
       </div>
 
-      {/* Col 6: toggle expand + add/remove + erro */}
-      <div className="flex flex-col items-end gap-1 self-start mt-1">
+      {/* Col 6 desktop / final do stack mobile: toggle expand + add/remove + erro */}
+      <div className="flex md:flex-col md:items-end items-center justify-between md:justify-start gap-2 md:gap-1 md:self-start md:mt-1">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -294,13 +295,13 @@ export function CandidateRow({
             aria-expanded={expanded}
             aria-controls={detailsId}
             aria-label={expanded ? 'Recolher detalhes' : 'Expandir detalhes'}
-            className="w-8 h-8 rounded-sm border border-line hover:border-ink text-ink-soft hover:text-ink font-mono text-[14px] transition-colors"
+            className="w-11 h-11 md:w-8 md:h-8 rounded-sm border border-line hover:border-ink active:border-ink text-ink-soft hover:text-ink font-mono text-[14px] transition-colors"
           >
             {expanded ? '▾' : '▸'}
           </button>
           {inSet ? (
             <span
-              className="w-10 h-10 rounded-full bg-ok/15 text-ok border border-ok/40 flex items-center justify-center font-serif text-[20px]"
+              className="w-11 h-11 md:w-10 md:h-10 rounded-full bg-ok/15 text-ok border border-ok/40 flex items-center justify-center font-serif text-[20px]"
               aria-label="Faixa já na bag"
             >
               ✓
@@ -311,7 +312,7 @@ export function CandidateRow({
               onClick={add}
               disabled={isPending}
               aria-label="Adicionar faixa ao set"
-              className="w-10 h-10 rounded-full border border-line hover:bg-ink hover:text-paper hover:border-ink font-serif text-[22px] disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-mute transition-colors"
+              className="w-11 h-11 md:w-10 md:h-10 rounded-full border border-line hover:bg-ink hover:text-paper hover:border-ink active:bg-ink active:text-paper font-serif text-[22px] disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-mute transition-colors"
             >
               +
             </button>
@@ -323,13 +324,13 @@ export function CandidateRow({
             onClick={remove}
             disabled={isPending}
             aria-label="Remover faixa da bag"
-            className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute hover:text-warn px-2 py-1 border border-line hover:border-warn rounded-sm transition-colors disabled:opacity-50"
+            className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute hover:text-warn active:text-warn px-2 py-1 min-h-[36px] border border-line hover:border-warn active:border-warn rounded-sm transition-colors disabled:opacity-50"
           >
             remover
           </button>
         ) : null}
         {error ? (
-          <span className="text-[10px] text-warn max-w-[120px] text-right">
+          <span className="text-[10px] text-warn max-w-[160px] text-right">
             {error}
           </span>
         ) : null}

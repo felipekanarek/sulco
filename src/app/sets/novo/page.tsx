@@ -11,10 +11,10 @@ export default async function NovoSetPage() {
   if (user.needsOnboarding) redirect('/onboarding');
 
   return (
-    <div className="max-w-[720px] mx-auto px-8">
-      <section className="pb-6 border-b border-line mb-8">
+    <div className="max-w-[720px] mx-auto px-4 md:px-8">
+      <section className="pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <p className="eyebrow mb-2">novo set</p>
-        <h1 className="title-display text-[36px]">Montar set</h1>
+        <h1 className="title-display text-[28px] md:text-[36px]">Montar set</h1>
       </section>
 
       <NewSetForm />

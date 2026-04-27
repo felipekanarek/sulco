@@ -150,12 +150,40 @@ Estimativa: meio dia. **Gating: quando 3º DJ entrar no piloto** (com
 
 ### ⚪ Não-priorizados
 
-#### Incremento 2 — PWA / mobile
-- `next-pwa` ou manifest manual
-- Curadoria adaptada pra mobile (swipe entre cards)
-- `/sets/[id]/montar` responsiva
+#### Incremento 2b — PWA (manifest + service worker + offline)
+Pré-requisito **009 entregue** (responsividade mobile-first ✅).
+Próximo passo natural pra DJ instalar o Sulco como app no celular.
 
-**Quando fazer**: quando houver demanda real de uso mobile.
+Escopo:
+- `manifest.json` com nome, ícones (192/512), theme-color, display
+  standalone, scope, start_url
+- Ícones SVG/PNG seguindo a estética editorial (logo "Sulco." em
+  fundo paper)
+- `<link rel="manifest">` + meta theme-color em `layout.tsx`
+- Service worker básico (next-pwa ou manual): cache de assets
+  estáticos + offline fallback page mínima
+- Detecção "Add to Home Screen" prompt (iOS Safari + Android Chrome)
+- Splash screen automático via manifest
+
+**Não inclui** (escopo separado se virar dor real):
+- Background sync de queries
+- Push notifications
+- Cache aggressive de dados de Discogs/Deezer
+
+Estimativa: 1-2 dias via speckit. Sem schema delta.
+
+Registrado a pedido em 2026-04-27 após 009 completo (responsividade).
+
+#### Incremento 2 — Gestos avançados mobile (swipe)
+- Swipe entre faixas no `/disco/[id]` (substitui scroll por
+  navegação gestual)
+- Swipe pra adicionar/remover candidata em `/sets/[id]/montar`
+- Drag-to-close real no `<MobileDrawer>` e `<FilterBottomSheet>`
+- Pull-to-refresh em listagens
+
+**Quando fazer**: depois de feedback de uso real do 009 indicando
+fricção pontual. Pode requerer biblioteca de gestures (Framer Motion
+ou similar) — avaliar trade-off com a constituição.
 
 #### Incremento 3 — Playlists (blocos reutilizáveis)
 Schema já existe (`playlists`, `playlist_tracks` com `user_id` FK
@@ -279,6 +307,7 @@ spec/plan/data-model/contracts/quickstart.
 - **006** — Curadoria aleatória · 2026-04-24 · `specs/006-curadoria-aleatoria/`
 - **007** — Fix sync snapshot fallback · 2026-04-25 · `specs/007-fix-sync-snapshot-fallback/` · resolveu Bug 11 (timeout 1º sync) + Bug 12 (falso-positivo archives) via paginação completa
 - **008** — Preview de áudio Deezer + Spotify + YouTube · 2026-04-26 · `specs/008-preview-audio-deezer-spotify-youtube/` · 3 botões inline em `/disco/[id]` e `/sets/[id]/montar`; Deezer 30s player + Spotify/YouTube link-out; cache lazy on-demand em `tracks.preview_url`/`tracks.preview_url_cached_at`
+- **009** — Responsividade mobile-first · 2026-04-27 · `specs/009-responsividade-mobile-first/` · todas as rotas autenticadas funcionam em viewport ≤640px sem scroll horizontal; nav drawer lateral + filtros bottom sheet + tap targets ≥44px universais; zero schema delta, zero novas Server Actions; PWA fica como Inc 2b
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
