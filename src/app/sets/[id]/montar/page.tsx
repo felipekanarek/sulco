@@ -12,6 +12,7 @@ import {
 import { MontarFiltersForm } from '@/components/montar-filters';
 import { MontarCandidates } from '@/components/montar-candidates';
 import { SetSidePanel } from '@/components/set-side-panel';
+import { EditSetModal } from '@/components/edit-set-modal';
 import { getUserAIConfigStatus } from '@/lib/ai';
 
 type SearchParams = Promise<{
@@ -89,12 +90,23 @@ export default async function MontarSetPage({
           </p>
           <h1 className="title-display text-[26px] md:text-[32px]">{set.name}</h1>
         </div>
-        <Link
-          href={`/sets/${set.id}`}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors self-start md:self-auto"
-        >
-          Finalizar →
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <EditSetModal
+            set={{
+              id: set.id,
+              name: set.name,
+              eventDate: set.eventDate,
+              location: set.location,
+              briefing: set.briefing,
+            }}
+          />
+          <Link
+            href={`/sets/${set.id}`}
+            className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors"
+          >
+            Finalizar →
+          </Link>
+        </div>
       </section>
 
       <div className="flex flex-col md:grid md:grid-cols-[1fr_400px] gap-6 md:gap-12 md:items-start">
