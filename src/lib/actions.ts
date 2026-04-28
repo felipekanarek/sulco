@@ -7,6 +7,7 @@ import { asc, and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
+import { buildCollectionFilters } from '@/lib/queries/collection';
 import { encryptPAT } from '@/lib/crypto';
 import { markCredentialValid } from '@/lib/discogs';
 import {
@@ -587,28 +588,53 @@ export async function enrichRecordOnDemand(
 }
 
 /* ============================================================
-   pickRandomUnratedRecord — 006 (curadoria aleatória)
+   pickRandomUnratedRecord — 006 (curadoria aleatória) + 011 (filtros)
    Sorteia 1 record unrated do acervo do user e devolve o id.
    Cliente faz router.push pra evitar Server Action redirect throw.
+
+   Inc 011: aceita filtros opcionais (text/genres/styles/bomba) com
+   semântica idêntica à listagem da home, via helper compartilhado
+   `buildCollectionFilters`. status='unrated' e archived=false
+   permanecem forçados internamente (FR-002, FR-003).
    ============================================================ */
 
-export async function pickRandomUnratedRecord(): Promise<
-  ActionResult<{ recordId: number } | { recordId: null }>
-> {
+const pickRandomFiltersSchema = z
+  .object({
+    text: z.string().trim().default(''),
+    genres: z.array(z.string()).default([]),
+    styles: z.array(z.string()).default([]),
+    bomba: z.enum(['any', 'only', 'none']).default('any'),
+  })
+  .optional();
+
+export async function pickRandomUnratedRecord(
+  input?: z.input<typeof pickRandomFiltersSchema>,
+): Promise<ActionResult<{ recordId: number } | { recordId: null }>> {
   const user = await requireCurrentUser();
 
-  // ORDER BY RANDOM() LIMIT 1 sobre records do user com status='unrated'
-  // e archived=false. Multi-user isolation via records.userId.
+  const parsed = pickRandomFiltersSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Filtros inválidos.' };
+  }
+
+  // Filtros base: ownership + não-arquivado + status unrated forçado
+  // (Princípio I + FR-002/FR-003 do 011).
+  const conds = [
+    eq(records.userId, user.id),
+    eq(records.archived, false),
+    eq(records.status, 'unrated'),
+  ];
+
+  // Filtros refinos opcionais (text/genres/styles/bomba) com semântica
+  // idêntica à da listagem (FR-004 do 011).
+  if (parsed.data) {
+    conds.push(...buildCollectionFilters(parsed.data));
+  }
+
   const row = await db
     .select({ id: records.id })
     .from(records)
-    .where(
-      and(
-        eq(records.userId, user.id),
-        eq(records.archived, false),
-        eq(records.status, 'unrated'),
-      ),
-    )
+    .where(and(...conds))
     .orderBy(sql`RANDOM()`)
     .limit(1);
 

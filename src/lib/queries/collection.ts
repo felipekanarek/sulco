@@ -44,12 +44,21 @@ export type CollectionCounts = {
   descartados: number;
 };
 
-export async function queryCollection(q: CollectionQuery): Promise<CollectionRow[]> {
-  const conds: SQL[] = [eq(records.userId, q.userId), eq(records.archived, false)];
-
-  if (q.status !== 'all') {
-    conds.push(eq(records.status, q.status));
-  }
+/**
+ * Helper compartilhado entre `queryCollection` (listagem) e
+ * `pickRandomUnratedRecord` (sorteio aleatório, Inc 010). Garante
+ * paridade semântica entre listagem e sorteio (FR-004 do 011).
+ *
+ * Recebe apenas filtros refinos (texto, genres, styles, bomba). Filtros
+ * base (`userId`, `archived`, `status`) são responsabilidade do caller.
+ */
+export function buildCollectionFilters(q: {
+  text: string;
+  genres: string[];
+  styles: string[];
+  bomba: BombaFilter;
+}): SQL[] {
+  const conds: SQL[] = [];
 
   if (q.text.length > 0) {
     const pattern = `%${q.text.toLowerCase()}%`;
@@ -86,6 +95,18 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
       sql`NOT EXISTS (SELECT 1 FROM ${tracks} WHERE ${tracks.recordId} = ${records.id} AND ${tracks.isBomb} = 1)`,
     );
   }
+
+  return conds;
+}
+
+export async function queryCollection(q: CollectionQuery): Promise<CollectionRow[]> {
+  const conds: SQL[] = [eq(records.userId, q.userId), eq(records.archived, false)];
+
+  if (q.status !== 'all') {
+    conds.push(eq(records.status, q.status));
+  }
+
+  conds.push(...buildCollectionFilters(q));
 
   const rows = await db
     .select({
