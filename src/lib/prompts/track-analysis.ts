@@ -39,34 +39,28 @@ export function buildTrackAnalysisPrompt(input: TrackAnalysisPromptInput): strin
 
   // L3 — instrução
   const l3 =
-    'Escreva uma análise técnica curta da faixa, no formato de ficha ' +
-    'de curadoria de DJ. Em pt-BR, 4-5 frases concisas, tom técnico-' +
-    'curatorial ensaístico. Estrutura sugerida (sem listar como ' +
-    'tópicos): (a) abre situando a faixa em micro-gênero/categoria ' +
-    'específica ("Sophisti-pop brasileiro", "Soul instrumental ' +
-    'orquestral", "Disco-funk de pista") e/ou definindo seu uso ' +
-    'funcional (warm-up, sing-along, pico, transição, encerramento, ' +
-    'slow-jam); (b) ancora em metadados concretos (BPM, tom, período, ' +
-    'gêneros/estilos) e aponta o trunfo técnico — instrumentação, ' +
-    'produção, dinâmica, vocais, linha de baixo, sintetizadores; (c) ' +
-    'sugere artistas/faixas nominais para transição quando possível ' +
-    '("transição fluida com Sade ou Marina Lima", "casa com Caetano ' +
-    'fase 80"); senão, gêneros específicos ("baladas de MPB", "R&B ' +
-    'contemporâneo"); (d) quando aplicável, oferece leituras duplas de ' +
-    'uso (clássico para um público vs camp/vintage/re-edit para outro, ' +
-    'set de "Brasilidades" vs Nu-Disco); (e) opcionalmente fecha com ' +
-    'síntese funcional em uma linha ("Slow jam definitivo do pop ' +
-    'nacional 80", "Coringa de pico para sets de soul"). Linguagem ' +
-    'direta mas com permissão pra prosa de curadoria — expressões como ' +
-    '"ferramenta estratégica", "trunfo técnico", "clímax dramático", ' +
-    '"alto impacto emocional", "ímã emocional", "groove marcado" são ' +
-    'bem-vindas quando ancoradas. Proibido: tom coloquial ou de papo ' +
-    '("brother", "mano", "essa aqui"), vocativos, adjetivos vazios ' +
-    'sem ancoragem técnica ("incrível", "mágica", "imperdível"), ' +
-    'construções como "trata-se de" ou "essa faixa é". Não inventar ' +
-    'datas, gravações, formações ou colaborações específicas. Se a ' +
-    'faixa for desconhecida, analisar apenas com base nos metadados ' +
-    'informados, sem especular biografia.';
+    'Escreva uma análise técnica curta da faixa, em pt-BR, 4-5 frases ' +
+    'concisas, tom técnico e direto, como uma ficha pessoal de ' +
+    'curadoria de DJ. A análise deve cobrir naturalmente, em prosa ' +
+    'fluida (NÃO como tópicos): situar a faixa em gênero/sub-gênero ' +
+    'específico, ancorar em metadados concretos (BPM, tom, período), ' +
+    'descrever o que ela tem de notável tecnicamente (instrumentação, ' +
+    'produção, dinâmica, vocais), apontar uso funcional em set ' +
+    '(warm-up, pico, transição, encerramento, etc.) e sugerir ' +
+    'transições com artistas ou faixas nominais quando possível.\n\n' +
+    'CRÍTICO — evitar clichês: cada análise é única; NÃO repita as ' +
+    'mesmas expressões em todas. Em particular, EVITE termos batidos ' +
+    'como "ferramenta estratégica", "ímã emocional", "trunfo técnico", ' +
+    '"alto impacto emocional", "clímax dramático", "apelo camp", ' +
+    '"groove marcado", "obra-prima", "definitivo". Se for usar uma ' +
+    'expressão de curadoria, que seja específica e ancorada em algo ' +
+    'concreto da faixa, não fórmula reciclada.\n\n' +
+    'Proibido: tom coloquial ("brother", "mano", "essa aqui"), ' +
+    'vocativos, adjetivos vazios sem ancoragem ("incrível", "mágica", ' +
+    '"imperdível"), construções como "trata-se de" ou "essa faixa é". ' +
+    'Não inventar datas, gravações, formações ou colaborações ' +
+    'específicas. Se a faixa for desconhecida, analisar com base ' +
+    'apenas nos metadados informados, sem especular biografia.';
 
   return `${l1}\n${l2}\n\n${l3}`;
 }
