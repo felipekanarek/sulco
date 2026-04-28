@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-27
+**Última atualização**: 2026-04-27 (Inc 10 entregue)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -69,30 +69,6 @@ existente de "Reconhecer" individual.
 
 Registrado a pedido em 2026-04-25 após sync 268 marcar 9 archived
 de uma vez (limpeza de coleção do Felipe).
-
-#### Incremento 10 — Curadoria aleatória respeita filtros aplicados
-Hoje o botão 🎲 (006, em prod) sorteia entre TODOS os discos `unrated`
-não-arquivados. Quando o DJ tem filtro de gênero/estilo ativo na
-coleção (ex: `?style=MPB`), faz sentido o aleatório respeitar — sortear
-MPB unrated em vez de qualquer disco.
-
-Comportamento desejado:
-- Botão 🎲 lê os mesmos searchParams que `<FilterBar>` (status, q,
-  bomba, genre[], style[]) e passa pra Server Action
-- `pickRandomUnratedRecord` aceita filtros opcionais (mesmos da
-  `queryCollection`) e aplica `WHERE` na query do `ORDER BY RANDOM()`
-- Se filtro retorna 0 elegíveis: feedback "Nenhum disco unrated com
-  esses filtros" (atualizar mensagem do empty state)
-
-Ganho concreto pós-batch 005: filtra "Samba" + click 🎲 → cai num
-Caetano enriquecido com BPM/tom já preenchidos. Triagem temática
-focada.
-
-Sem schema delta. Esforço: ~30 min. Pode aproveitar pra adicionar o
-botão também em `/curadoria` (caso a rota não seja deletada) ou em
-qualquer lugar que faça sentido sortear.
-
-Registrado a pedido em 2026-04-25.
 
 #### Incremento 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
 Acervo do Felipe tem 150+ estilos catalogados; quando o DJ expande os
@@ -299,6 +275,7 @@ spec/plan/data-model/contracts/quickstart.
 - **008** — Preview de áudio Deezer + Spotify + YouTube · 2026-04-26 · `specs/008-preview-audio-deezer-spotify-youtube/` · 3 botões inline em `/disco/[id]` e `/sets/[id]/montar`; Deezer 30s player + Spotify/YouTube link-out; cache lazy on-demand em `tracks.preview_url`/`tracks.preview_url_cached_at`
 - **009** — Responsividade mobile-first · 2026-04-27 · `specs/009-responsividade-mobile-first/` · todas as rotas autenticadas funcionam em viewport ≤640px sem scroll horizontal; nav drawer lateral + filtros bottom sheet + tap targets ≥44px universais; zero schema delta, zero novas Server Actions; PWA fica como Inc 2b
 - **010** — Fix Bug 13 (banner de import com acknowledge) · 2026-04-27 · `specs/010-fix-import-banner-acknowledge/` · banner some após reconhecimento explícito; schema delta de 1 coluna (`users.import_acknowledged_at`); `getImportProgress` ganha `runStartedAt`/`lastAck`; Server Action nova `acknowledgeImportProgress`; running permanece não-fechável; multi-user isolation por construção
+- **011** — Curadoria aleatória respeita filtros · 2026-04-27 · `specs/011-random-respects-filters/` · botão 🎲 da home lê searchParams (text/genres/styles/bomba) e passa pra `pickRandomUnratedRecord`; helper `buildCollectionFilters` extraído de `queryCollection` e compartilhado (FR-004 paridade semântica); empty state contextual ("Nenhum disco unrated com esses filtros"); status filter da URL intencionalmente ignorado; zero schema delta
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).

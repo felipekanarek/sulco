@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **010-fix-import-banner-acknowledge**
+Current active feature: **011-random-respects-filters**
 
 Authoritative planning artifacts (read these before making changes
-ao banner de progresso de import na home, ao retorno de
-`getImportProgress` ou ao schema de `users`):
+ao botão 🎲 da home, à Server Action `pickRandomUnratedRecord`, ou
+à função `queryCollection`/helper de filtros):
 
-- Plan: [specs/010-fix-import-banner-acknowledge/plan.md](specs/010-fix-import-banner-acknowledge/plan.md)
-- Spec: [specs/010-fix-import-banner-acknowledge/spec.md](specs/010-fix-import-banner-acknowledge/spec.md)
-- Data model: [specs/010-fix-import-banner-acknowledge/data-model.md](specs/010-fix-import-banner-acknowledge/data-model.md)
-- Contracts: [specs/010-fix-import-banner-acknowledge/contracts/](specs/010-fix-import-banner-acknowledge/contracts/)
-- Research: [specs/010-fix-import-banner-acknowledge/research.md](specs/010-fix-import-banner-acknowledge/research.md)
-- Quickstart: [specs/010-fix-import-banner-acknowledge/quickstart.md](specs/010-fix-import-banner-acknowledge/quickstart.md)
+- Plan: [specs/011-random-respects-filters/plan.md](specs/011-random-respects-filters/plan.md)
+- Spec: [specs/011-random-respects-filters/spec.md](specs/011-random-respects-filters/spec.md)
+- Data model: [specs/011-random-respects-filters/data-model.md](specs/011-random-respects-filters/data-model.md)
+- Contracts: [specs/011-random-respects-filters/contracts/](specs/011-random-respects-filters/contracts/)
+- Research: [specs/011-random-respects-filters/research.md](specs/011-random-respects-filters/research.md)
+- Quickstart: [specs/011-random-respects-filters/quickstart.md](specs/011-random-respects-filters/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -285,23 +285,26 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   `/disco/[id]` e `/sets/[id]/montar`)
 - 009 responsividade-mobile-first (todas as rotas autenticadas
   funcionam em viewport ≤640px sem scroll horizontal)
+- 010 fix-import-banner-acknowledge (Bug 13: banner de import some
+  após reconhecimento; schema delta `users.import_acknowledged_at`)
 
-Key points of 010 (Bug 13):
-- **Schema delta aditivo de 1 coluna**: `users.import_acknowledged_at`
-  (timestamp nullable). Sem backfill, sem migração de dados.
-- **1 Server Action nova**: `acknowledgeImportProgress` em
-  `src/lib/actions.ts`. Sem input, lê `requireCurrentUser`, escreve
-  timestamp, `revalidatePath('/')`.
-- **`getImportProgress` ganha 2 campos** no retorno: `runStartedAt`
-  e `lastAck`. Comportamento existente preservado.
-- **`<ImportProgressCard>` decide visibilidade no client** com 3
-  condições simples: zero-state preservado, terminal-acked oculta,
-  running sem botão fechar, terminal não-acked mostra botão.
-- **Princípio I respeitado**: `import_acknowledged_at` é zona SYS
-  (não AUTHOR); só o próprio DJ escreve via clique.
-- **Pattern reusado**: `users.importAcknowledgedAt` espelha
-  `records.archivedAcknowledgedAt` — single-timestamp, comparado
-  contra `startedAt` do último run.
-- **Sem nova dependência**, sem libs externas. `useTransition` +
-  `router.refresh()` no client.
+Key points of 011 (Inc 10):
+- **Zero schema delta**. Reusa colunas existentes (`records.userId`,
+  `archived`, `status`, `genres`, `styles`, `tracks.is_bomb`).
+- **Refator localizado**: `pickRandomUnratedRecord` aceita filtros
+  opcionais; helper `buildCollectionFilters` extraído de
+  `queryCollection` em `src/lib/queries/collection.ts` e reusado
+  pelas duas funções (garante FR-004 — semântica idêntica entre
+  listagem e sorteio).
+- **`<RandomCurationButton>` ganha prop `filters`** (lida de
+  searchParams na `page.tsx`). Sem `useSearchParams` no client.
+- **Status filter da URL é intencionalmente ignorado** pelo sorteio:
+  o botão é "Curar disco aleatório", semântica = `status='unrated'`
+  forçado.
+- **Empty state contextual**: mensagem distinta quando há filtros
+  ativos ("Nenhum disco unrated com esses filtros") vs sem filtros
+  (mensagem original preservada).
+- **Validação Zod** no input da action. Filtros inválidos viram
+  erro retornado (não throw).
+- **Princípio I respeitado**: action é read-only (apenas SELECT).
 <!-- SPECKIT END -->

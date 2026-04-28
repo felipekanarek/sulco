@@ -109,7 +109,7 @@ export default async function CollectionPage({
           {hasFilters ? ' (filtrado)' : ''}
         </p>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <RandomCurationButton />
+          <RandomCurationButton filters={{ text, genres, styles, bomba }} />
           <ViewToggle value={view} />
         </div>
       </div>
