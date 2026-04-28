@@ -55,7 +55,9 @@ export const geminiAdapter: AIAdapter = {
       const m = client.getGenerativeModel({ model });
       const result = await m.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+        // 800 tokens dá ~600 palavras pt-BR — folga confortável pras
+        // 3-4 frases curtas que o prompt pede. 400 truncava mid-frase.
+        generationConfig: { maxOutputTokens: 800, temperature: 0.7 },
       });
       const text = result.response.text();
       return { ok: true, text };

@@ -42,7 +42,8 @@ export const anthropicAdapter: AIAdapter = {
       const client = new Anthropic({ apiKey });
       const msg = await client.messages.create({
         model,
-        max_tokens: 400,
+        // 800 tokens dá folga pras 3-4 frases pt-BR pedidas no prompt.
+        max_tokens: 800,
         temperature: 0.7,
         messages: [{ role: 'user', content: prompt }],
       });

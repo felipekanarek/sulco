@@ -59,7 +59,8 @@ export function openaiCompatAdapter(provider: Provider): AIAdapter {
         const client = buildClient(provider, apiKey);
         const completion = await client.chat.completions.create({
           model,
-          max_tokens: 400,
+          // 800 tokens dá folga pras 3-4 frases pt-BR pedidas no prompt.
+          max_tokens: 800,
           temperature: 0.7,
           messages: [{ role: 'user', content: prompt }],
         });
