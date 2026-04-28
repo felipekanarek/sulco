@@ -39,16 +39,17 @@ export function buildTrackAnalysisPrompt(input: TrackAnalysisPromptInput): strin
 
   // L3 — instrução
   const l3 =
-    'Você é um DJ experiente conversando com outro DJ sobre essa faixa. ' +
-    'Em pt-BR, escreva 3-5 frases curtas e diretas, com perspectiva ' +
-    'prática de uso em set. Cubra de forma natural (sem listar como ' +
-    'tópicos): (1) quando ela funciona — warm-up, pico, after, transição, ' +
-    'fechamento; (2) que tipo de pista/público recebe bem; (3) com que ' +
-    'sonoridades ela conversa, faixas ou artistas que casam antes ou ' +
-    'depois. Use vocabulário de DJ — direto, sem floreio crítico nem ' +
-    'literário, sem "trata-se de", sem adjetivos vazios ("incrível", ' +
-    '"mágica"). Não invente datas, gravações ou colaborações. Se não ' +
-    'conhecer a faixa, seja honesto e use só os metadados disponíveis.';
+    'Escreva uma análise técnica curta da faixa para ficha de curadoria ' +
+    'de DJ. Em pt-BR, 3-5 frases, tom impessoal e direto. Cubra: ' +
+    'características musicais relevantes (estrutura, dinâmica, ' +
+    'instrumentação, andamento, intensidade), posição funcional em set ' +
+    '(warm-up, pico, transição, encerramento) e referências de ' +
+    'sonoridade que dialogam. Linguagem técnica e factual. Proibido: ' +
+    'tom coloquial ou de conversa, vocativos ("brother", "mano"), ' +
+    'adjetivos vazios ("incrível", "mágica", "imperdível"), construções ' +
+    'como "trata-se de" ou "essa faixa é". Não inventar datas, ' +
+    'gravações, formações ou colaborações. Se a faixa for desconhecida, ' +
+    'analisar apenas com base nos metadados informados.';
 
   return `${l1}\n${l2}\n\n${l3}`;
 }
