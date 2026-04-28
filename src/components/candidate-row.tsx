@@ -91,9 +91,17 @@ export function CandidateRow({
     moodsVisible.length > 0 || contextsVisible.length > 0;
   const detailsId = `candidate-${candidate.id}-details`;
 
-  const containerClasses = inSet
-    ? 'border-l-2 border-l-ok bg-ok/[0.04]'
-    : '';
+  // 015 (Inc 16): destaque visual extra quando é card de sugestão IA
+  // (border accent grossa + bg paper-raised + padding maior + margin
+  // entre cards). Aditivo ao destaque existente de "no set" (border-l-ok).
+  const containerClasses = [
+    inSet ? 'border-l-2 border-l-ok bg-ok/[0.04]' : '',
+    aiSuggestion
+      ? 'border-2 border-accent/60 bg-paper-raised px-3 md:px-4 mb-2 rounded-sm'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <li
@@ -132,7 +140,7 @@ export function CandidateRow({
       {/* Col 4 desktop / linha completa mobile: title + artist + meta + chips + comment */}
       <div className="min-w-0">
         {aiSuggestion ? (
-          <span className="inline-block font-mono text-[10px] uppercase tracking-[0.12em] border border-accent text-accent px-2 py-0.5 mb-1">
+          <span className="inline-block font-mono text-[11px] uppercase tracking-[0.14em] bg-accent text-paper px-2.5 py-1 mb-1.5">
             ✨ Sugestão IA
           </span>
         ) : null}
@@ -225,7 +233,7 @@ export function CandidateRow({
 
         {aiSuggestion ? (
           <p
-            className="font-serif italic text-[14px] text-ink-soft mt-2 leading-snug"
+            className="font-serif italic text-[15px] text-ink leading-relaxed mt-2"
             title={aiSuggestion.justificativa}
           >
             {aiSuggestion.justificativa}
