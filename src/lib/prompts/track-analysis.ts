@@ -39,17 +39,26 @@ export function buildTrackAnalysisPrompt(input: TrackAnalysisPromptInput): strin
 
   // L3 — instrução
   const l3 =
-    'Escreva uma análise técnica curta da faixa para ficha de curadoria ' +
-    'de DJ. Em pt-BR, 3-5 frases, tom impessoal e direto. Cubra: ' +
-    'características musicais relevantes (estrutura, dinâmica, ' +
-    'instrumentação, andamento, intensidade), posição funcional em set ' +
-    '(warm-up, pico, transição, encerramento) e referências de ' +
-    'sonoridade que dialogam. Linguagem técnica e factual. Proibido: ' +
-    'tom coloquial ou de conversa, vocativos ("brother", "mano"), ' +
-    'adjetivos vazios ("incrível", "mágica", "imperdível"), construções ' +
-    'como "trata-se de" ou "essa faixa é". Não inventar datas, ' +
-    'gravações, formações ou colaborações. Se a faixa for desconhecida, ' +
-    'analisar apenas com base nos metadados informados.';
+    'Escreva uma análise técnica curta da faixa, no formato de ficha ' +
+    'de curadoria de DJ. Em pt-BR, 3-4 frases concisas, tom técnico-' +
+    'curatorial. Estrutura sugerida: (a) primeira frase define a faixa ' +
+    'como ferramenta estratégica e seu uso funcional principal — ' +
+    'warm-up, sing-along, pico, transição, encerramento, etc.; (b) ' +
+    'frases seguintes ancoram em metadados concretos (BPM, tom, ' +
+    'gêneros/estilos, período), apontam o trunfo técnico (produção, ' +
+    'instrumentação, dinâmica, vocais) e, quando fizer sentido, ' +
+    'oferecem leituras duplas de uso (ex: clássico para um público vs ' +
+    'item camp/vintage para outro); (c) sugira transições ou mashups ' +
+    'com gêneros nominais ("baladas de MPB", "R&B contemporâneo", ' +
+    '"techno melódico"). Linguagem direta, sem ser árida — pode usar ' +
+    'expressões de curadoria como "ferramenta estratégica", "trunfo ' +
+    'técnico", "clímax dramático", "alto impacto emocional". ' +
+    'Proibido: tom coloquial ou de papo ("brother", "mano", "essa ' +
+    'aqui"), vocativos, adjetivos vazios sem ancoragem ("incrível", ' +
+    '"mágica", "imperdível"), construções como "trata-se de" ou ' +
+    '"essa faixa é". Não inventar datas, gravações, formações ou ' +
+    'colaborações. Se a faixa for desconhecida, analisar apenas com ' +
+    'base nos metadados informados.';
 
   return `${l1}\n${l2}\n\n${l3}`;
 }
