@@ -175,6 +175,59 @@ function extractByBrackets(text: string): string | null {
   return text.slice(firstOpen, lastClose + 1);
 }
 
+/**
+ * Recovery de array JSON parcial truncado: encontra o último objeto
+ * `{...}` completo dentro do array e fecha o array com `]`.
+ *
+ * Útil quando provider trunca a resposta no meio de uma string
+ * (`max_tokens` exhausted) — vimos isso com Gemini 2.5 Flash
+ * em prompts grandes do Inc 014.
+ *
+ * Algoritmo: state machine que respeita strings e escapes pra
+ * evitar contar `{`/`}` dentro de aspas como balanced brackets.
+ */
+function recoverPartialJSONArray(text: string): string | null {
+  const firstOpen = text.indexOf('[');
+  if (firstOpen === -1) return null;
+
+  let depth = 0;
+  let lastCompleteObjEnd = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = firstOpen + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        lastCompleteObjEnd = i;
+      }
+    }
+  }
+
+  if (lastCompleteObjEnd === -1) return null;
+  // Reconstrói array com objetos completos + fechamento
+  return text.slice(firstOpen, lastCompleteObjEnd + 1) + ']';
+}
+
 function tryParseRaw(raw: string): unknown | null {
   try {
     return JSON.parse(raw);
@@ -213,15 +266,33 @@ export function parseAISuggestionsResponse(
     if (validated) return { ok: true, data: validated };
   }
 
-  // Estratégia 3 (último recurso): extrai do primeiro `[` ao último `]`.
-  // Cobre casos onde fence inicial veio mas closing não, ou texto tem
-  // prosa antes/depois da array.
+  // Estratégia 3: extrai do primeiro `[` ao último `]`. Cobre casos
+  // onde fence inicial veio mas closing não, ou texto tem prosa
+  // antes/depois da array.
   const bracketed = extractByBrackets(text);
   if (bracketed) {
     const parsed = tryParseRaw(bracketed);
     if (parsed) {
       const validated = validateParsed(parsed);
       if (validated) return { ok: true, data: validated };
+    }
+  }
+
+  // Estratégia 4 (último recurso): recovery de array parcial truncado.
+  // Salva os objetos completos e descarta o último (corrompido).
+  const recovered = recoverPartialJSONArray(text);
+  if (recovered) {
+    const parsed = tryParseRaw(recovered);
+    if (parsed) {
+      const validated = validateParsed(parsed);
+      if (validated) {
+        console.warn(
+          '[ai/parse] recuperou JSON truncado, usando',
+          validated.length,
+          'objetos completos',
+        );
+        return { ok: true, data: validated };
+      }
     }
   }
 

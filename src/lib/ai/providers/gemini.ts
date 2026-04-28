@@ -108,12 +108,13 @@ export const geminiAdapter: AIAdapter = {
       const client = new GoogleGenerativeAI(apiKey);
       const m = client.getGenerativeModel({ model });
       // Gemini 2.5 Flash usa "thinking tokens" (raciocínio interno) que
-      // consomem do maxOutputTokens. Por isso precisamos um budget bem
-      // generoso (2048) — caso contrário o modelo "pensa" demais e o
-      // texto final fica truncado mid-frase.
+      // consomem do maxOutputTokens. Pra prompts grandes (Inc 014:
+      // briefing + setTracks + 50 candidatos) com output JSON estruturado
+      // (Inc 014: 5-10 sugestões com justificativas), 2048 truncava
+      // resposta no meio. 4096 dá margem confortável.
       const result = await m.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: 4096, temperature: 0.7 },
       });
       const text = result.response.text();
       return { ok: true, text };
