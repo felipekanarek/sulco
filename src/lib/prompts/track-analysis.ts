@@ -40,25 +40,33 @@ export function buildTrackAnalysisPrompt(input: TrackAnalysisPromptInput): strin
   // L3 — instrução
   const l3 =
     'Escreva uma análise técnica curta da faixa, no formato de ficha ' +
-    'de curadoria de DJ. Em pt-BR, 3-4 frases concisas, tom técnico-' +
-    'curatorial. Estrutura sugerida: (a) primeira frase define a faixa ' +
-    'como ferramenta estratégica e seu uso funcional principal — ' +
-    'warm-up, sing-along, pico, transição, encerramento, etc.; (b) ' +
-    'frases seguintes ancoram em metadados concretos (BPM, tom, ' +
-    'gêneros/estilos, período), apontam o trunfo técnico (produção, ' +
-    'instrumentação, dinâmica, vocais) e, quando fizer sentido, ' +
-    'oferecem leituras duplas de uso (ex: clássico para um público vs ' +
-    'item camp/vintage para outro); (c) sugira transições ou mashups ' +
-    'com gêneros nominais ("baladas de MPB", "R&B contemporâneo", ' +
-    '"techno melódico"). Linguagem direta, sem ser árida — pode usar ' +
-    'expressões de curadoria como "ferramenta estratégica", "trunfo ' +
-    'técnico", "clímax dramático", "alto impacto emocional". ' +
-    'Proibido: tom coloquial ou de papo ("brother", "mano", "essa ' +
-    'aqui"), vocativos, adjetivos vazios sem ancoragem ("incrível", ' +
-    '"mágica", "imperdível"), construções como "trata-se de" ou ' +
-    '"essa faixa é". Não inventar datas, gravações, formações ou ' +
-    'colaborações. Se a faixa for desconhecida, analisar apenas com ' +
-    'base nos metadados informados.';
+    'de curadoria de DJ. Em pt-BR, 4-5 frases concisas, tom técnico-' +
+    'curatorial ensaístico. Estrutura sugerida (sem listar como ' +
+    'tópicos): (a) abre situando a faixa em micro-gênero/categoria ' +
+    'específica ("Sophisti-pop brasileiro", "Soul instrumental ' +
+    'orquestral", "Disco-funk de pista") e/ou definindo seu uso ' +
+    'funcional (warm-up, sing-along, pico, transição, encerramento, ' +
+    'slow-jam); (b) ancora em metadados concretos (BPM, tom, período, ' +
+    'gêneros/estilos) e aponta o trunfo técnico — instrumentação, ' +
+    'produção, dinâmica, vocais, linha de baixo, sintetizadores; (c) ' +
+    'sugere artistas/faixas nominais para transição quando possível ' +
+    '("transição fluida com Sade ou Marina Lima", "casa com Caetano ' +
+    'fase 80"); senão, gêneros específicos ("baladas de MPB", "R&B ' +
+    'contemporâneo"); (d) quando aplicável, oferece leituras duplas de ' +
+    'uso (clássico para um público vs camp/vintage/re-edit para outro, ' +
+    'set de "Brasilidades" vs Nu-Disco); (e) opcionalmente fecha com ' +
+    'síntese funcional em uma linha ("Slow jam definitivo do pop ' +
+    'nacional 80", "Coringa de pico para sets de soul"). Linguagem ' +
+    'direta mas com permissão pra prosa de curadoria — expressões como ' +
+    '"ferramenta estratégica", "trunfo técnico", "clímax dramático", ' +
+    '"alto impacto emocional", "ímã emocional", "groove marcado" são ' +
+    'bem-vindas quando ancoradas. Proibido: tom coloquial ou de papo ' +
+    '("brother", "mano", "essa aqui"), vocativos, adjetivos vazios ' +
+    'sem ancoragem técnica ("incrível", "mágica", "imperdível"), ' +
+    'construções como "trata-se de" ou "essa faixa é". Não inventar ' +
+    'datas, gravações, formações ou colaborações específicas. Se a ' +
+    'faixa for desconhecida, analisar apenas com base nos metadados ' +
+    'informados, sem especular biografia.';
 
   return `${l1}\n${l2}\n\n${l3}`;
 }
