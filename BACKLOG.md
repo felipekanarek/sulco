@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-27 (Inc 10 entregue)
+**Última atualização**: 2026-04-27 (Inc 10 entregue + Inc 13 IA registrada)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -49,6 +49,104 @@ adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
 
+#### Incremento 14 — Configuração de IA do DJ (BYOK)
+**Pré-requisito de Inc 13 e Inc 1**. Ao invés de o Sulco gerenciar
+chaves de IA centralmente (custo + lock-in num provider), cada DJ
+traz sua própria chave (BYOK = Bring Your Own Key) e escolhe o
+provider/modelo que quer usar.
+
+Vantagens:
+- Zero custo operacional pro Sulco
+- DJ escolhe Gemini, Claude, OpenAI conforme preferência/tier grátis
+  que já tem
+- Privacidade: dados não passam pela API key do mantenedor
+- Reusa pattern de criptografia já existente (`encryptPAT` do Discogs)
+
+Escopo provável (decidir no `/speckit.specify`):
+- Schema delta em `users`:
+  - `ai_provider`: enum (`'gemini' | 'anthropic' | 'openai'`), nullable
+  - `ai_api_key_encrypted`: text, nullable (criptografado igual ao PAT)
+  - `ai_model`: text, nullable (ex: `gemini-2.5-flash`,
+    `claude-haiku-4-5`, `gpt-4o-mini`)
+- Tela em `/conta` (seção "Inteligência Artificial"):
+  - Dropdown de provider
+  - Input de API key (mascarado, com "✓ verificada" após teste)
+  - Dropdown de modelo (lista curada por provider — evita DJ escolher
+    modelo deprecado)
+  - Botão "Testar conexão" → Server Action chama o provider com
+    prompt mínimo ("ping") e devolve sucesso/erro
+- Adapter pattern em `src/lib/ai/`:
+  - `src/lib/ai/index.ts` — interface comum `enrich(prompt, opts)`
+  - `src/lib/ai/providers/gemini.ts`, `anthropic.ts`, `openai.ts`
+  - Cada provider sabe converter prompt comum pro formato nativo
+- Sem chave configurada → botões dependentes (Inc 13, Inc 1) ficam
+  disabled com tooltip "Configure sua chave em /conta"
+
+Decisões pendentes pra `/speckit.specify`:
+- **Lista curada de modelos por provider** (que modelos aparecem no
+  dropdown). Manter atualizado é dívida de manutenção — provavelmente
+  hardcoded em `src/lib/ai/models.ts` com data de revisão.
+- **Storage da key**: SQL encrypted (mesma estratégia do PAT) ou
+  Vercel env var por user (overkill).
+- **Ping test**: prompt fixo neutro ("Reply with 'ok'.") ou usa o
+  primeiro caso real (gerar comment dum disco de teste)?
+- **Trocar de provider perde key**: ao mudar provider, key anterior é
+  apagada (UI confirma) — ou guarda histórico por provider?
+
+Estimativa: 1-1.5 dia via speckit. Schema delta de 3 colunas + tela de
+config + adapter pattern.
+
+Registrado a pedido em 2026-04-27 como infra compartilhada entre
+Inc 13 (enriquecer comment) e Inc 1 (briefing com IA em /sets).
+
+#### Incremento 13 — Enriquecer `comment` da faixa com IA
+**Depende de Inc 14** (config BYOK). Felipe testou o Gemini gerando
+descrições de faixas e o resultado foi excelente (palavras dele).
+Trazer pro Sulco como botão **"✨ Enriquecer com IA"** por faixa em
+`/disco/[id]`. IA preenche `tracks.comment` direto (DJ pode editar
+depois — sem preview/confirmação prévia). Disparo **manual e
+intencional** (não automático/batch) pra DJ controlar quando queima
+token da própria conta.
+
+Escopo provável (decidir no `/speckit.specify`):
+- Botão por faixa em `/disco/[id]` no card/row de track. Estado
+  `pending` durante chamada (~2-5s).
+- Server Action `enrichTrackCommentWithAI(trackId)` — auth via
+  `requireCurrentUser` + ownership check (track pertence a record do
+  user). Chama o adapter de IA do Inc 14 (provider escolhido pelo
+  DJ), atualiza `tracks.comment`, `revalidatePath('/disco/[id]')`.
+- **Prompt multi-linha**:
+  - L1 essencial: `Artist - Album (Year) - Track Title (Position)`
+  - L2 contexto adicional: `Genres: [...] | Styles: [...] | BPM: 120 | Key: 8A | Energy: 4`
+    — só inclui campos não-nulos (audio features podem estar ausentes
+    pré-005, BPM/key podem ter sido preenchidos manualmente).
+- **Idioma de saída**: pt-BR (mesma língua das demais notas autorais).
+- **Tom/formato**: 1 parágrafo curto (3-5 frases), descrevendo
+  sensação/contexto/uso do disco. Definir no system prompt durante
+  speckit.specify.
+- Princípio I: `comment` é AUTHOR. IA escreve, mas é ato explícito do
+  DJ (clique). Sobrescreve `comment` existente sem confirmar — DJ pode
+  editar depois.
+- Sem chave configurada (Inc 14 não rodou) → botão disabled com
+  tooltip "Configure sua chave em /conta".
+- Sem schema delta (`tracks.comment` já existe, AUTHOR field).
+
+Decisões pendentes pra `/speckit.specify`:
+- **Tratamento de erro**: API down → toast "Falha temporária, tente
+  novamente" sem mexer em `comment`. Rate limit → mesma coisa.
+- **Sobrescrever `comment` existente?**: spec atual diz que sim. Talvez
+  abrir confirmação se já há texto não-vazio.
+- **System prompt e exemplos few-shot**: definir tom em pt-BR, evitar
+  alucinação sobre datas/fatos não-verificáveis, focar em sensação
+  musical (não biografia).
+
+Estimativa: 0.5-1 dia via speckit (depois de Inc 14). Botão isolado,
+sem batch. Inc 9 (batch enrich em /conta) pode reusar o pipeline
+quando virar dor real.
+
+Registrado a pedido em 2026-04-27 após teste manual do Felipe com
+Gemini retornando descrições de qualidade.
+
 #### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
 Quando sync detecta vários discos removidos do Discogs (caso típico:
 DJ faz limpeza de coleção e remove 5-10 de uma vez), banner em `/sync`
@@ -93,15 +191,18 @@ Estimativa: 1 dia. Sem schema delta.
 ### 🟡 Médios (próximos meses)
 
 #### Incremento 1 — Briefing com IA
-Botão "Sugerir com IA" em `/sets/[id]/montar`:
+**Depende de Inc 14** (config BYOK). Botão "Sugerir com IA" em
+`/sets/[id]/montar`:
 1. Lê briefing do set
 2. Busca faixas selecionadas com metadados
-3. Chama Anthropic SDK (`claude-sonnet-4-7`) com prompt estruturado
-4. Retorna lista ranqueada com justificativa
+3. Chama o adapter de IA do Inc 14 (provider escolhido pelo DJ) com
+   prompt estruturado pedindo lista ranqueada + justificativa
+4. Retorna lista ranqueada — DJ revisa e adiciona ao set
 
-Env var nova: `ANTHROPIC_API_KEY`.
+**Sem env var central**: chave é do DJ via Inc 14.
 
-**Quando fazer**: depois de ter mais sets criados pra calibrar prompts.
+**Quando fazer**: depois de ter mais sets criados pra calibrar
+prompts. Inc 14 deve estar entregue antes (estrutura BYOK).
 
 #### Incremento 9 — Batch enrich sob demanda em /conta (multi-user)
 Hoje o pipeline 005 on-demand (botão em `/disco/[id]`) já funciona pra
