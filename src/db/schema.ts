@@ -20,6 +20,13 @@ export const users = sqliteTable(
     // na home. NULL = nunca reconheceu. Banner só aparece em estado terminal
     // se este timestamp < startedAt do último syncRun kind='initial_import'.
     importAcknowledgedAt: integer('import_acknowledged_at', { mode: 'timestamp' }),
+    // 012 (Inc 14, BYOK): config de IA do DJ. Atomicidade garantida
+    // (3 nulas = sem config OU 3 preenchidas = config ativa).
+    aiProvider: text('ai_provider', {
+      enum: ['gemini', 'anthropic', 'openai', 'deepseek', 'qwen'],
+    }),
+    aiModel: text('ai_model'),
+    aiApiKeyEncrypted: text('ai_api_key_encrypted'),
     // 002-multi-conta: travas de autorização (FR-012, FR-001..003)
     isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
     allowlisted: integer('allowlisted', { mode: 'boolean' }).notNull().default(false),

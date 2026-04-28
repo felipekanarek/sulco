@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { UpdateCredentialForm } from '@/components/update-credential-form';
 import { DeleteAccountModal } from '@/components/delete-account-modal';
+import { AIConfigForm } from '@/components/ai-config-form';
+import { getUserAIConfigStatus } from '@/lib/ai';
 
 // Substituir credencial dispara runInitialImport via after() — mesmo motivo
 // de /onboarding (página pode precisar de até 60s de fôlego em Hobby).
@@ -13,6 +15,8 @@ export const maxDuration = 60;
 export default async function ContaPage() {
   const user = await requireCurrentUser();
   if (user.needsOnboarding) redirect('/onboarding');
+
+  const aiStatus = await getUserAIConfigStatus(user.id);
 
   return (
     <div className="max-w-[760px] mx-auto px-4 md:px-8">
@@ -38,6 +42,16 @@ export default async function ContaPage() {
           </p>
         ) : null}
         <UpdateCredentialForm currentUsername={user.discogsUsername ?? ''} />
+      </section>
+
+      <section className="mb-8 md:mb-12 pb-6 md:pb-8 border-b border-line-soft">
+        <h2 className="font-serif italic text-[20px] md:text-[24px] font-medium mb-3 md:mb-4">Inteligência Artificial</h2>
+        <p className="font-serif italic text-[15px] md:text-[16px] text-ink-soft leading-relaxed mb-5 md:max-w-[560px]">
+          Conecte sua chave de IA pra habilitar recursos como enriquecimento
+          de comentários e sugestões para sets. Você usa sua própria conta
+          do provider — Sulco não armazena nem cobra pelo uso.
+        </p>
+        <AIConfigForm initialStatus={aiStatus} />
       </section>
 
       <section>

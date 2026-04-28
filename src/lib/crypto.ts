@@ -34,6 +34,13 @@ export function encryptPAT(plaintext: string): string {
 }
 
 /**
+ * Alias semanticamente neutro de `encryptPAT`. Usar em código novo
+ * (ex: chave de IA do Inc 014/BYOK) onde "PAT" é nome confuso. Mesmo
+ * mecanismo AES-256-GCM via `MASTER_ENCRYPTION_KEY`.
+ */
+export const encryptSecret = encryptPAT;
+
+/**
  * Decifra um PAT previamente cifrado. Lança erro se a chave mudou ou o envelope
  * está corrompido (MAC inválido).
  */
@@ -55,3 +62,9 @@ export function decryptPAT(stored: string): string {
   const pt = Buffer.concat([decipher.update(ct), decipher.final()]);
   return pt.toString('utf8');
 }
+
+/**
+ * Alias semanticamente neutro de `decryptPAT`. Mesmo mecanismo, nome
+ * que deixa claro que serve pra qualquer segredo (chave de IA, etc).
+ */
+export const decryptSecret = decryptPAT;
