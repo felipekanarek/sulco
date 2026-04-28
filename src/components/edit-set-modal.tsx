@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateSet } from '@/lib/actions';
 
@@ -30,7 +30,7 @@ export function EditSetModal({ set }: { set: SetData }) {
   const [eventDate, setEventDate] = useState(formatForInput(set.eventDate));
   const [location, setLocation] = useState(set.location ?? '');
   const [briefing, setBriefing] = useState(set.briefing ?? '');
-  const [isPending, setIsPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // Reset on reopen (decisão 7 do research): descarta edits anteriores
@@ -48,32 +48,32 @@ export function EditSetModal({ set }: { set: SetData }) {
   const isValid =
     name.trim().length > 0 && name.length <= 200 && briefing.length <= 5000;
 
-  async function submit() {
+  function submit() {
     if (!isValid) return;
-    setIsPending(true);
     setError(null);
-    try {
-      const res = await updateSet({
-        setId: set.id,
-        name: name.trim(),
-        // datetime-local entrega "" quando vazio — mandamos null pra
-        // limpar o campo. Browser parseia "YYYY-MM-DDTHH:mm" como hora
-        // local; normalizeDate (server) descarta Invalid Date pra null.
-        eventDate: eventDate ? new Date(eventDate).toISOString() : null,
-        location: location.trim() || null,
-        briefing: briefing.trim() || null,
-      });
-      if (!res.ok) {
-        setError(res.error);
-        return;
+    // useTransition + router.refresh() é o pattern do Next 15 pra
+    // coordenar Server Action com revalidatePath. Sem o transition,
+    // o refresh pode chegar antes da revalidação completar e a
+    // página re-renderiza com cache antigo.
+    startTransition(async () => {
+      try {
+        const res = await updateSet({
+          setId: set.id,
+          name: name.trim(),
+          eventDate: eventDate ? new Date(eventDate).toISOString() : null,
+          location: location.trim() || null,
+          briefing: briefing.trim() || null,
+        });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        router.refresh();
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro inesperado.');
       }
-      setOpen(false);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro inesperado.');
-    } finally {
-      setIsPending(false);
-    }
+    });
   }
 
   if (!open) {
