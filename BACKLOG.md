@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-27 (Inc 10 entregue + Inc 13 IA registrada)
+**Última atualização**: 2026-04-28 (Inc 14 BYOK entregue)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,56 +48,6 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
-
-#### Incremento 14 — Configuração de IA do DJ (BYOK)
-**Pré-requisito de Inc 13 e Inc 1**. Ao invés de o Sulco gerenciar
-chaves de IA centralmente (custo + lock-in num provider), cada DJ
-traz sua própria chave (BYOK = Bring Your Own Key) e escolhe o
-provider/modelo que quer usar.
-
-Vantagens:
-- Zero custo operacional pro Sulco
-- DJ escolhe Gemini, Claude, OpenAI conforme preferência/tier grátis
-  que já tem
-- Privacidade: dados não passam pela API key do mantenedor
-- Reusa pattern de criptografia já existente (`encryptPAT` do Discogs)
-
-Escopo provável (decidir no `/speckit.specify`):
-- Schema delta em `users`:
-  - `ai_provider`: enum (`'gemini' | 'anthropic' | 'openai'`), nullable
-  - `ai_api_key_encrypted`: text, nullable (criptografado igual ao PAT)
-  - `ai_model`: text, nullable (ex: `gemini-2.5-flash`,
-    `claude-haiku-4-5`, `gpt-4o-mini`)
-- Tela em `/conta` (seção "Inteligência Artificial"):
-  - Dropdown de provider
-  - Input de API key (mascarado, com "✓ verificada" após teste)
-  - Dropdown de modelo (lista curada por provider — evita DJ escolher
-    modelo deprecado)
-  - Botão "Testar conexão" → Server Action chama o provider com
-    prompt mínimo ("ping") e devolve sucesso/erro
-- Adapter pattern em `src/lib/ai/`:
-  - `src/lib/ai/index.ts` — interface comum `enrich(prompt, opts)`
-  - `src/lib/ai/providers/gemini.ts`, `anthropic.ts`, `openai.ts`
-  - Cada provider sabe converter prompt comum pro formato nativo
-- Sem chave configurada → botões dependentes (Inc 13, Inc 1) ficam
-  disabled com tooltip "Configure sua chave em /conta"
-
-Decisões pendentes pra `/speckit.specify`:
-- **Lista curada de modelos por provider** (que modelos aparecem no
-  dropdown). Manter atualizado é dívida de manutenção — provavelmente
-  hardcoded em `src/lib/ai/models.ts` com data de revisão.
-- **Storage da key**: SQL encrypted (mesma estratégia do PAT) ou
-  Vercel env var por user (overkill).
-- **Ping test**: prompt fixo neutro ("Reply with 'ok'.") ou usa o
-  primeiro caso real (gerar comment dum disco de teste)?
-- **Trocar de provider perde key**: ao mudar provider, key anterior é
-  apagada (UI confirma) — ou guarda histórico por provider?
-
-Estimativa: 1-1.5 dia via speckit. Schema delta de 3 colunas + tela de
-config + adapter pattern.
-
-Registrado a pedido em 2026-04-27 como infra compartilhada entre
-Inc 13 (enriquecer comment) e Inc 1 (briefing com IA em /sets).
 
 #### Incremento 13 — Enriquecer `comment` da faixa com IA
 **Depende de Inc 14** (config BYOK). Felipe testou o Gemini gerando
@@ -342,6 +292,10 @@ no Discogs.
 Ideias não-comprometidas. Gating: cada uma precisa virar discussão
 estruturada antes de subir pra Roadmap como Incremento numerado.
 
+- **Modal de confirmação custom** — substituir `window.confirm()` (em
+  uso no Inc 14 e potencialmente outros lugares) por um modal próprio
+  alinhado à estética editorial (NYT Magazine + Teenage Engineering).
+  Registrado a pedido em 2026-04-28 (analyze do Inc 14, finding U2).
 - **Modo aleatório por gênero** — sortear disco unrated dentro de
   filtro pré-aplicado. Depende de 8 (filtros) + curadoria aleatória
   (006, já em prod).
@@ -377,6 +331,7 @@ spec/plan/data-model/contracts/quickstart.
 - **009** — Responsividade mobile-first · 2026-04-27 · `specs/009-responsividade-mobile-first/` · todas as rotas autenticadas funcionam em viewport ≤640px sem scroll horizontal; nav drawer lateral + filtros bottom sheet + tap targets ≥44px universais; zero schema delta, zero novas Server Actions; PWA fica como Inc 2b
 - **010** — Fix Bug 13 (banner de import com acknowledge) · 2026-04-27 · `specs/010-fix-import-banner-acknowledge/` · banner some após reconhecimento explícito; schema delta de 1 coluna (`users.import_acknowledged_at`); `getImportProgress` ganha `runStartedAt`/`lastAck`; Server Action nova `acknowledgeImportProgress`; running permanece não-fechável; multi-user isolation por construção
 - **011** — Curadoria aleatória respeita filtros · 2026-04-27 · `specs/011-random-respects-filters/` · botão 🎲 da home lê searchParams (text/genres/styles/bomba) e passa pra `pickRandomUnratedRecord`; helper `buildCollectionFilters` extraído de `queryCollection` e compartilhado (FR-004 paridade semântica); empty state contextual ("Nenhum disco unrated com esses filtros"); status filter da URL intencionalmente ignorado; zero schema delta
+- **012** — Configuração de IA do DJ (BYOK) · 2026-04-28 · `specs/012-ai-byok-config/` · 5 providers suportados (Gemini, Anthropic, OpenAI, DeepSeek, Qwen) via adapter pattern em `src/lib/ai/`; schema delta de 3 colunas em users (aiProvider/aiModel/aiApiKeyEncrypted); criptografia reusa MASTER_ENCRYPTION_KEY via aliases encryptSecret/decryptSecret; "Testar" é único caminho de salvar (FR-005); timeout 10s; trocar provider apaga key com confirmação; tela em /conta seção "Inteligência Artificial"; pré-requisito de Inc 13 e Inc 1
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).

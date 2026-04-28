@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **011-random-respects-filters**
+Current active feature: **012-ai-byok-config**
 
 Authoritative planning artifacts (read these before making changes
-ao botão 🎲 da home, à Server Action `pickRandomUnratedRecord`, ou
-à função `queryCollection`/helper de filtros):
+à seção "Inteligência Artificial" em `/conta`, ao schema de `users`,
+ou ao adapter pattern em `src/lib/ai/`):
 
-- Plan: [specs/011-random-respects-filters/plan.md](specs/011-random-respects-filters/plan.md)
-- Spec: [specs/011-random-respects-filters/spec.md](specs/011-random-respects-filters/spec.md)
-- Data model: [specs/011-random-respects-filters/data-model.md](specs/011-random-respects-filters/data-model.md)
-- Contracts: [specs/011-random-respects-filters/contracts/](specs/011-random-respects-filters/contracts/)
-- Research: [specs/011-random-respects-filters/research.md](specs/011-random-respects-filters/research.md)
-- Quickstart: [specs/011-random-respects-filters/quickstart.md](specs/011-random-respects-filters/quickstart.md)
+- Plan: [specs/012-ai-byok-config/plan.md](specs/012-ai-byok-config/plan.md)
+- Spec: [specs/012-ai-byok-config/spec.md](specs/012-ai-byok-config/spec.md)
+- Data model: [specs/012-ai-byok-config/data-model.md](specs/012-ai-byok-config/data-model.md)
+- Contracts: [specs/012-ai-byok-config/contracts/](specs/012-ai-byok-config/contracts/)
+- Research: [specs/012-ai-byok-config/research.md](specs/012-ai-byok-config/research.md)
+- Quickstart: [specs/012-ai-byok-config/quickstart.md](specs/012-ai-byok-config/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -287,24 +287,38 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   funcionam em viewport ≤640px sem scroll horizontal)
 - 010 fix-import-banner-acknowledge (Bug 13: banner de import some
   após reconhecimento; schema delta `users.import_acknowledged_at`)
+- 011 random-respects-filters (botão 🎲 da home respeita filtros
+  ativos; helper `buildCollectionFilters` compartilhado)
 
-Key points of 011 (Inc 10):
-- **Zero schema delta**. Reusa colunas existentes (`records.userId`,
-  `archived`, `status`, `genres`, `styles`, `tracks.is_bomb`).
-- **Refator localizado**: `pickRandomUnratedRecord` aceita filtros
-  opcionais; helper `buildCollectionFilters` extraído de
-  `queryCollection` em `src/lib/queries/collection.ts` e reusado
-  pelas duas funções (garante FR-004 — semântica idêntica entre
-  listagem e sorteio).
-- **`<RandomCurationButton>` ganha prop `filters`** (lida de
-  searchParams na `page.tsx`). Sem `useSearchParams` no client.
-- **Status filter da URL é intencionalmente ignorado** pelo sorteio:
-  o botão é "Curar disco aleatório", semântica = `status='unrated'`
-  forçado.
-- **Empty state contextual**: mensagem distinta quando há filtros
-  ativos ("Nenhum disco unrated com esses filtros") vs sem filtros
-  (mensagem original preservada).
-- **Validação Zod** no input da action. Filtros inválidos viram
-  erro retornado (não throw).
-- **Princípio I respeitado**: action é read-only (apenas SELECT).
+Key points of 012 (Inc 14 — BYOK):
+- **5 providers de IA suportados**: Gemini, Anthropic, OpenAI,
+  DeepSeek, Qwen. Lista de modelos curada em `src/lib/ai/models.ts`,
+  versionada com `MODELS_REVIEWED_AT`.
+- **Schema delta de 3 colunas** em `users`: `aiProvider` (enum
+  nullable), `aiModel` (text nullable), `aiApiKeyEncrypted` (text
+  nullable). Atomicidade garantida (3 nulas OU 3 preenchidas).
+- **Reusa criptografia AES-256-GCM** existente: `MASTER_ENCRYPTION_KEY`
+  + helpers `encryptSecret`/`decryptSecret` (aliases novos de
+  `encryptPAT`/`decryptPAT`). Sem nova env var.
+- **Adapter pattern** em `src/lib/ai/`: 1 interface `AIAdapter`,
+  3 implementações (Gemini SDK próprio, Anthropic SDK próprio,
+  `openai-compat` compartilhado entre OpenAI/DeepSeek/Qwen via
+  `baseURL` parametrizado).
+- **Testar é o único caminho de salvar** (FR-005): ping bem-sucedido
+  persiste imediatamente; sem botão "Salvar sem testar". Garante
+  config no DB sempre válida no momento do salvamento.
+- **Timeout do ping = 10s** (Q3). Server Actions ≤60s.
+- **Server-render decide visibilidade** de UIs dependentes (Q4).
+  Inc 13/1 vão consumir `getUserAIConfigStatus` do RSC. Sem flash de
+  estado, alinha com Server-First (Princípio II).
+- **Trocar provider apaga key** (decisão UX): exige confirmação
+  explícita. Sem dead state.
+- **Princípio I respeitado**: `ai_*` é zona SYS (credencial), não
+  AUTHOR. Apenas o próprio DJ escreve via `/conta`.
+- **Pré-requisito de Inc 13** (enriquecer comment) **e Inc 1**
+  (briefing). Esta feature entrega só infra; botões consumidores
+  ficam fora de escopo.
+- **3 SDKs novos**: `@google/generative-ai`, `@anthropic-ai/sdk`,
+  `openai`. Justificáveis (compat OpenAI permite 3 providers em 1
+  SDK). Sem libs proibidas.
 <!-- SPECKIT END -->

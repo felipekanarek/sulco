@@ -8,6 +8,9 @@ import { db } from '@/db';
 import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { buildCollectionFilters } from '@/lib/queries/collection';
+import { encryptSecret } from '@/lib/crypto';
+import { getAdapter } from '@/lib/ai';
+import { isModelSupported, MODELS_BY_PROVIDER } from '@/lib/ai/models';
 import { encryptPAT } from '@/lib/crypto';
 import { markCredentialValid } from '@/lib/discogs';
 import {
@@ -309,6 +312,91 @@ export async function acknowledgeImportProgress(): Promise<ActionResult> {
     .where(eq(users.id, user.id));
 
   revalidatePath('/');
+  return { ok: true };
+}
+
+/* ============================================================
+   testAndSaveAIConfig + removeAIConfig — 012 (Inc 14, BYOK)
+   Config de IA do DJ. "Testar" é o único caminho de salvar
+   (FR-005): ping bem-sucedido persiste imediatamente. Sem botão
+   "Salvar sem testar". Timeout 10s (Q3 da clarificação).
+   ============================================================ */
+
+const aiConfigInputSchema = z.object({
+  provider: z.enum(['gemini', 'anthropic', 'openai', 'deepseek', 'qwen']),
+  model: z.string().min(1).max(100),
+  apiKey: z.string().trim().min(10).max(500),
+});
+
+const PING_TIMEOUT_MS = 10_000;
+
+export async function testAndSaveAIConfig(
+  input: z.infer<typeof aiConfigInputSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+
+  const parsed = aiConfigInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Dados inválidos.' };
+  }
+  const { provider, model, apiKey } = parsed.data;
+
+  if (!isModelSupported(provider, model)) {
+    return {
+      ok: false,
+      error: `Modelo "${model}" não suportado pra ${provider}. Modelos válidos: ${MODELS_BY_PROVIDER[provider].join(', ')}.`,
+    };
+  }
+
+  const adapter = getAdapter(provider);
+
+  // Promise.race com timeout 10s pra evitar travar o DJ esperando.
+  const pingPromise = adapter.ping({ apiKey, model });
+  const timeoutPromise = new Promise<{ ok: false; error: { kind: 'timeout'; message: string } }>(
+    (resolve) => {
+      setTimeout(
+        () =>
+          resolve({
+            ok: false,
+            error: { kind: 'timeout', message: 'Provider não respondeu — tente novamente.' },
+          }),
+        PING_TIMEOUT_MS,
+      );
+    },
+  );
+
+  const result = await Promise.race([pingPromise, timeoutPromise]);
+
+  if (!result.ok) {
+    return { ok: false, error: result.error.message };
+  }
+
+  await db
+    .update(users)
+    .set({
+      aiProvider: provider,
+      aiModel: model,
+      aiApiKeyEncrypted: encryptSecret(apiKey),
+    })
+    .where(eq(users.id, user.id));
+
+  revalidatePath('/conta');
+  return { ok: true };
+}
+
+export async function removeAIConfig(): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+
+  await db
+    .update(users)
+    .set({
+      aiProvider: null,
+      aiModel: null,
+      aiApiKeyEncrypted: null,
+    })
+    .where(eq(users.id, user.id));
+
+  revalidatePath('/conta');
   return { ok: true };
 }
 
