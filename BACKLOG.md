@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 13 entregue + Bug 14 registrado)
+**Última atualização**: 2026-04-28 (Inc 1 briefing com IA entregue)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -91,20 +91,6 @@ Estimativa: 1 dia. Sem schema delta.
 ---
 
 ### 🟡 Médios (próximos meses)
-
-#### Incremento 1 — Briefing com IA
-**Depende de Inc 14** (config BYOK). Botão "Sugerir com IA" em
-`/sets/[id]/montar`:
-1. Lê briefing do set
-2. Busca faixas selecionadas com metadados
-3. Chama o adapter de IA do Inc 14 (provider escolhido pelo DJ) com
-   prompt estruturado pedindo lista ranqueada + justificativa
-4. Retorna lista ranqueada — DJ revisa e adiciona ao set
-
-**Sem env var central**: chave é do DJ via Inc 14.
-
-**Quando fazer**: depois de ter mais sets criados pra calibrar
-prompts. Inc 14 deve estar entregue antes (estrutura BYOK).
 
 #### Incremento 9 — Batch enrich sob demanda em /conta (multi-user)
 Hoje o pipeline 005 on-demand (botão em `/disco/[id]`) já funciona pra
@@ -292,6 +278,7 @@ spec/plan/data-model/contracts/quickstart.
 - **011** — Curadoria aleatória respeita filtros · 2026-04-27 · `specs/011-random-respects-filters/` · botão 🎲 da home lê searchParams (text/genres/styles/bomba) e passa pra `pickRandomUnratedRecord`; helper `buildCollectionFilters` extraído de `queryCollection` e compartilhado (FR-004 paridade semântica); empty state contextual ("Nenhum disco unrated com esses filtros"); status filter da URL intencionalmente ignorado; zero schema delta
 - **012** — Configuração de IA do DJ (BYOK) · 2026-04-28 · `specs/012-ai-byok-config/` · 5 providers suportados (Gemini, Anthropic, OpenAI, DeepSeek, Qwen) via adapter pattern em `src/lib/ai/`; schema delta de 3 colunas em users (aiProvider/aiModel/aiApiKeyEncrypted); criptografia reusa MASTER_ENCRYPTION_KEY via aliases encryptSecret/decryptSecret; "Testar" é único caminho de salvar (FR-005); timeout 10s; trocar provider apaga key com confirmação; tela em /conta seção "Inteligência Artificial"; pré-requisito de Inc 13 e Inc 1
 - **013** — Análise da faixa via IA · 2026-04-28 · `specs/013-ai-track-analysis/` · botão "✨ Analisar com IA" por faixa em /disco/[id]; campo novo tracks.ai_analysis (AUTHOR híbrido — IA escreve via clique do DJ, DJ pode editar livremente); 2 Server Actions (analyzeTrackWithAI com Promise.race 30s + updateTrackAiAnalysis pra edição manual); reusa enrichTrackComment do Inc 14; bloco "Análise" sempre visível com placeholder; re-gerar com confirmação; bump constitucional 1.1.0 (aiAnalysis adicionado à lista AUTHOR de tracks)
+- **014** — Briefing com IA em /sets/montar · 2026-04-28 · `specs/014-ai-set-suggestions/` · botão "✨ Sugerir com IA" em /sets/[id]/montar; Server Action `suggestSetTracks` orquestra ownership + briefing + setTracks (L2 sem ceiling) + catálogo via `queryCandidates` estendida com `rankByCuration` (L3 ceiling 50, score = 9 campos AUTHOR não-nulos); prompt builder em src/lib/prompts/set-suggestions.ts com parse JSON defensivo (regex fenced + inline + Zod); reusa <CandidateRow> com prop opcional `aiSuggestion` (badge + justificativa); cards adicionados permanecem visíveis; sem batch (DJ adiciona uma a uma); IA propõe apenas complementos; curto-circuito quando catálogo elegível vazio; timeout 60s; briefing truncado em 2000 chars; payload reduzido (só candidates referenciados)
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
