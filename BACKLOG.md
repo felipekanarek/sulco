@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 1 briefing com IA entregue)
+**Última atualização**: 2026-04-28 (Inc 15 + Inc 16 registrados pós-Inc 14)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,6 +48,64 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
+
+#### Incremento 16 — UI rework das sugestões IA (inline na lista de candidatos)
+Pós-Inc 014, Felipe testou o painel "Sugestões da IA" (bloco
+separado abaixo do briefing) e apontou 3 ajustes UX:
+
+1. **Posição**: bloco deve ficar **abaixo da seção de filtros**, não
+   logo após o briefing. (Briefing → filtros → sugestões IA →
+   listagem manual.)
+2. **Inline com candidatos**: em vez de lista separada, sugestões
+   aparecem **no topo da lista de candidatos** já existente, com
+   moldura/border de destaque, badge "✨ Sugestão IA" e
+   justificativa em destaque visual maior. Reusa o mesmo
+   container — uma só lista, ordem = sugestões IA primeiro,
+   candidatos comuns depois.
+3. **Botão "Ignorar sugestões"**: limpa o estado de sugestões da
+   IA e retorna a lista de candidatos pura (sem destacados, sem
+   justificativas). Pra DJ que quer revisar acervo livre depois
+   de ver/usar sugestões.
+
+Escopo (decidir no `/speckit.specify`):
+- Refator de `<AISuggestionsPanel>` ou nova arquitetura: panel só
+  carrega botão + estado, lista é renderizada inline pela page
+  com candidates ordenados (suggested first).
+- Prop `aiSuggestion` em `<CandidateRow>` ganha mais peso visual
+  (border accent + bg sutil + justificativa em texto maior).
+- Botão "Ignorar sugestões" reseta state local da página.
+- Reusa `suggestSetTracks` action (sem mudança).
+
+Sem schema delta. Esforço: ~1-2h via speckit.
+
+Registrado a pedido em 2026-04-28 após validação visual do Inc 14.
+
+#### Incremento 15 — Editar briefing e dados do set após criação
+Hoje, ao criar um set em `/sets/novo`, DJ define name/eventDate/
+location/briefing. Depois de criado, esses campos ficam imutáveis na
+UI — pra alterar precisa abrir o DB direto. Faz sentido permitir
+edição em `/sets/[id]` ou `/sets/[id]/montar`, especialmente do
+briefing (DJ refina ao montar) e do eventDate (mudou de dia).
+
+Escopo provável:
+- Botão "Editar set" em `/sets/[id]/montar` (header) abre form modal
+  ou inline com os 4 campos.
+- Server Action `updateSet({ setId, name?, eventDate?, location?,
+  briefing? })` — partial update via Zod com todos campos opcionais.
+  Ownership check.
+- `revalidatePath('/sets/[id]')` + `revalidatePath('/sets/[id]/montar')`.
+- Edição de `name` reflete na lista `/sets`. Edição de `briefing`
+  alimenta novas sugestões da IA (Inc 1).
+- `montar_filters_json` NÃO entra nesse form (filtros são salvos
+  inline em outra action, `saveMontarFilters`).
+
+Princípio I respeitado: campos do set são AUTHOR puros, DJ é único
+escritor — já era assim na criação.
+
+Sem schema delta. Esforço: ~30-45min via speckit.
+
+Registrado a pedido em 2026-04-28 após Inc 14 (sugestões IA) deixar
+claro que iterar briefing pós-criação é fluxo natural.
 
 #### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
 Quando sync detecta vários discos removidos do Discogs (caso típico:
