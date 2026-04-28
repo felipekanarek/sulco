@@ -16,6 +16,10 @@ export const users = sqliteTable(
       .notNull()
       .default('valid'),
     lastStatusVisitAt: integer('last_status_visit_at', { mode: 'timestamp' }),
+    // 010 (Bug 13): timestamp do último reconhecimento do banner de import
+    // na home. NULL = nunca reconheceu. Banner só aparece em estado terminal
+    // se este timestamp < startedAt do último syncRun kind='initial_import'.
+    importAcknowledgedAt: integer('import_acknowledged_at', { mode: 'timestamp' }),
     // 002-multi-conta: travas de autorização (FR-012, FR-001..003)
     isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
     allowlisted: integer('allowlisted', { mode: 'boolean' }).notNull().default(false),

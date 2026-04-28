@@ -180,6 +180,10 @@ export type ImportProgress = {
   y: number; // total anunciado pela primeira página (do snapshotJson); null se desconhecido
   outcome: 'running' | 'ok' | 'erro' | 'rate_limited' | 'parcial' | 'idle';
   errorMessage: string | null;
+  // 010 (Bug 13): startedAt do último syncRun + lastAck do user.
+  // Componente client decide visibilidade comparando os dois.
+  runStartedAt: Date | null;
+  lastAck: Date | null;
 };
 
 export async function getImportProgress(): Promise<ImportProgress> {
@@ -195,6 +199,7 @@ export async function getImportProgress(): Promise<ImportProgress> {
       snapshotJson: syncRuns.snapshotJson,
       errorMessage: syncRuns.errorMessage,
       newCount: syncRuns.newCount,
+      startedAt: syncRuns.startedAt,
     })
     .from(syncRuns)
     .where(and(eq(syncRuns.userId, user.id), eq(syncRuns.kind, 'initial_import')))
@@ -206,6 +211,13 @@ export async function getImportProgress(): Promise<ImportProgress> {
     .from(records)
     .where(eq(records.userId, user.id));
 
+  // 010 (Bug 13): lastAck do user para comparação client-side.
+  const [{ ack: lastAck = null } = { ack: null }] = await db
+    .select({ ack: users.importAcknowledgedAt })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
   const x = Number(recordCount);
 
   if (latest.length === 0) {
@@ -215,6 +227,8 @@ export async function getImportProgress(): Promise<ImportProgress> {
       y: x, // não conhecido; exibe apenas X
       outcome: 'idle',
       errorMessage: null,
+      runStartedAt: null,
+      lastAck,
     };
   }
 
@@ -273,7 +287,28 @@ export async function getImportProgress(): Promise<ImportProgress> {
         ? 'idle'
         : row.outcome,
     errorMessage: isZombieResidual ? null : row.errorMessage,
+    runStartedAt: row.startedAt,
+    lastAck,
   };
+}
+
+/* ============================================================
+   acknowledgeImportProgress — 010 (Bug 13)
+   Marca o usuário corrente como tendo reconhecido o estado terminal
+   do banner de import. Próximo render do RSC `/` recebe `lastAck >=
+   runStartedAt` e o componente decide não renderizar.
+   ============================================================ */
+
+export async function acknowledgeImportProgress(): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+
+  await db
+    .update(users)
+    .set({ importAcknowledgedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  revalidatePath('/');
+  return { ok: true };
 }
 
 /* ============================================================

@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-25
+**Última atualização**: 2026-04-27
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -220,26 +220,16 @@ no Discogs.
 
 ### Abertos
 
-#### Bug 13 — Banner de import permanente na home
-Reportado em 2026-04-25. O `<ImportProgressCard>` aparece na home (`/`)
-mesmo quando não há import em andamento nem recém-concluído. Esperado:
-
-- **Em andamento** (`outcome='running'`) → banner sempre visível, não-fechável
-- **Recém-concluído** (não acknowledged ainda) → banner visível com
-  botão **"× fechar"**; click marca acknowledge; banner some até
-  próxima execução
-- **Idle/antigo** → banner não renderiza
-
-Implementação sugerida:
-- Schema delta aditivo: `users.import_acknowledged_at` (nullable)
-- `getImportProgress()` retorna estado atual + lastAck
-- `<ImportProgressCard>` renderiza só se: running OR (concluído AND
-  lastAck < startedAt do último run)
-- Server Action `acknowledgeImportProgress()` seta timestamp
-
-Esforço: ~1h via speckit.
+(nenhum aberto no momento)
 
 ### Histórico (fechados)
+
+- **Bug 13** — Banner de import permanente na home — ✅ Incremento
+  010 (`specs/010-fix-import-banner-acknowledge/`). Schema delta aditivo
+  `users.import_acknowledged_at`; `getImportProgress` expõe `runStartedAt`
+  + `lastAck`; `<ImportProgressCard>` renderiza só em running OR
+  (terminal AND lastAck < runStartedAt); botão "× fechar" via
+  `acknowledgeImportProgress` Server Action.
 
 - **Bug 8** — Sync trava em "em andamento" — ✅ commit `1952d33`
   (`killZombieSyncRuns` passivo no `loadStatusSnapshot`)
@@ -308,6 +298,7 @@ spec/plan/data-model/contracts/quickstart.
 - **007** — Fix sync snapshot fallback · 2026-04-25 · `specs/007-fix-sync-snapshot-fallback/` · resolveu Bug 11 (timeout 1º sync) + Bug 12 (falso-positivo archives) via paginação completa
 - **008** — Preview de áudio Deezer + Spotify + YouTube · 2026-04-26 · `specs/008-preview-audio-deezer-spotify-youtube/` · 3 botões inline em `/disco/[id]` e `/sets/[id]/montar`; Deezer 30s player + Spotify/YouTube link-out; cache lazy on-demand em `tracks.preview_url`/`tracks.preview_url_cached_at`
 - **009** — Responsividade mobile-first · 2026-04-27 · `specs/009-responsividade-mobile-first/` · todas as rotas autenticadas funcionam em viewport ≤640px sem scroll horizontal; nav drawer lateral + filtros bottom sheet + tap targets ≥44px universais; zero schema delta, zero novas Server Actions; PWA fica como Inc 2b
+- **010** — Fix Bug 13 (banner de import com acknowledge) · 2026-04-27 · `specs/010-fix-import-banner-acknowledge/` · banner some após reconhecimento explícito; schema delta de 1 coluna (`users.import_acknowledged_at`); `getImportProgress` ganha `runStartedAt`/`lastAck`; Server Action nova `acknowledgeImportProgress`; running permanece não-fechável; multi-user isolation por construção
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
