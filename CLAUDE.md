@@ -262,19 +262,20 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **014-ai-set-suggestions**
+Current active feature: **015-ai-suggestions-inline** (BACKLOG: Inc 16)
 
 Authoritative planning artifacts (read these before making changes
-ao botão "✨ Sugerir com IA" em `/sets/[id]/montar`, ao
-`<AISuggestionsPanel>`, à action `suggestSetTracks`, ou ao prompt
-builder `set-suggestions.ts`):
+ao header "Candidatos" em `/sets/[id]/montar`, ao
+`<MontarCandidates>` (novo client wrapper), à listagem unificada
+de sugestões IA + candidatos comuns, ou ao destaque visual da
+prop `aiSuggestion` em `<CandidateRow>`):
 
-- Plan: [specs/014-ai-set-suggestions/plan.md](specs/014-ai-set-suggestions/plan.md)
-- Spec: [specs/014-ai-set-suggestions/spec.md](specs/014-ai-set-suggestions/spec.md)
-- Data model: [specs/014-ai-set-suggestions/data-model.md](specs/014-ai-set-suggestions/data-model.md)
-- Contracts: [specs/014-ai-set-suggestions/contracts/](specs/014-ai-set-suggestions/contracts/)
-- Research: [specs/014-ai-set-suggestions/research.md](specs/014-ai-set-suggestions/research.md)
-- Quickstart: [specs/014-ai-set-suggestions/quickstart.md](specs/014-ai-set-suggestions/quickstart.md)
+- Plan: [specs/015-ai-suggestions-inline/plan.md](specs/015-ai-suggestions-inline/plan.md)
+- Spec: [specs/015-ai-suggestions-inline/spec.md](specs/015-ai-suggestions-inline/spec.md)
+- Data model: [specs/015-ai-suggestions-inline/data-model.md](specs/015-ai-suggestions-inline/data-model.md)
+- Contracts: [specs/015-ai-suggestions-inline/contracts/](specs/015-ai-suggestions-inline/contracts/)
+- Research: [specs/015-ai-suggestions-inline/research.md](specs/015-ai-suggestions-inline/research.md)
+- Quickstart: [specs/015-ai-suggestions-inline/quickstart.md](specs/015-ai-suggestions-inline/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -294,6 +295,40 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   encriptada por user; `enrichTrackComment` público pra Inc 13/1)
 - 013 ai-track-analysis (botão "✨ Analisar com IA" por faixa em
   /disco/[id]; campo `tracks.ai_analysis`; bump constitucional 1.1.0)
+- 014 ai-set-suggestions (Inc 1 — botão "✨ Sugerir com IA" em
+  /sets/[id]/montar; suggestSetTracks com Promise.race 60s + parse
+  JSON defensivo; reusa enrichTrackComment do Inc 14)
+
+Key points of 015 (Inc 16 — UI rework sugestões IA inline):
+- **Zero schema delta, zero novas Server Actions**. Refator
+  puramente de UI/orquestração.
+- **Lista única**: cards de sugestão IA aparecem no TOPO da
+  listagem de candidatos existente (mesma `<ol>`), com moldura
+  accent + bg paper-raised + badge solid + justificativa em
+  destaque (text-[15px] text-ink). Candidatos comuns abaixo sem
+  destaque, ordem original.
+- **Dedup explícita** (FR-002a, Q1 da clarify): trackIds que estão
+  nas sugestões IA são removidos da lista de candidatos comuns.
+  Cada faixa aparece apenas uma vez visualmente.
+- **Reposicionamento**: painel sai de "entre briefing e filtros"
+  pra "abaixo dos filtros". Hierarquia: briefing → filtros →
+  Candidatos (header + listagem unificada).
+- **Botão "Ignorar sugestões"** novo: aparece apenas quando há
+  sugestões ativas, reseta state pra `idle` (volta candidatos
+  default). Sem confirmação.
+- **`<MontarCandidates>`** novo client wrapper que absorve
+  responsabilidades do `<AISuggestionsPanel>` (REMOVIDO) e do
+  `<ol>` de cards no page.tsx. Estado de sugestões encapsulado
+  no wrapper.
+- **`<CandidateRow>` extensão visual** quando `aiSuggestion`
+  presente: border-2 border-accent/60, bg-paper-raised, badge
+  solid bg-accent text-paper, justificativa text-[15px] italic
+  text-ink leading-relaxed.
+- **Comportamento Inc 14 preservado**: confirmação no re-gerar,
+  cards adicionados permanecem visíveis, multi-user isolation,
+  mensagens de erro contextuais.
+- **`suggestSetTracks` e `addTrackToSet` intactos** — apenas
+  componentes consumindo são refatorados.
 
 Key points of 014 (Inc 1 — Briefing com IA em /sets/montar):
 - **Zero schema delta**. Reusa `sets`, `set_tracks`, `tracks`,

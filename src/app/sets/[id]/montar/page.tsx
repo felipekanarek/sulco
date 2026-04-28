@@ -10,9 +10,8 @@ import {
   type MontarFilters,
 } from '@/lib/queries/montar';
 import { MontarFiltersForm } from '@/components/montar-filters';
-import { CandidateRow } from '@/components/candidate-row';
+import { MontarCandidates } from '@/components/montar-candidates';
 import { SetSidePanel } from '@/components/set-side-panel';
-import { AISuggestionsPanel } from '@/components/ai-suggestions-panel';
 import { getUserAIConfigStatus } from '@/lib/ai';
 
 type SearchParams = Promise<{
@@ -112,9 +111,6 @@ export default async function MontarSetPage({
             </section>
           ) : null}
 
-          {/* 014 — Painel de sugestões da IA (entre briefing e listagem manual) */}
-          <AISuggestionsPanel setId={setId} aiConfigured={aiConfigured} />
-
           {/* Mobile: filtros colapsáveis em <details>; Desktop: inline expandido */}
           <details className="md:hidden border border-line bg-paper-raised rounded-sm">
             <summary className="cursor-pointer px-4 py-3 min-h-[48px] flex items-center font-mono text-[11px] uppercase tracking-[0.12em] text-ink hover:text-accent">
@@ -138,43 +134,13 @@ export default async function MontarSetPage({
             />
           </div>
 
-          <section>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline pb-3 md:pb-4 border-b border-line mb-4 md:mb-6 gap-1">
-              <h2 className="font-serif italic text-[24px] md:text-[28px] font-medium tracking-tight">
-                Candidatos
-              </h2>
-              <span className="label-tech">
-                {candidates.length} {candidates.length === 1 ? 'faixa' : 'faixas'} ·
-                selecionadas + ativas
-              </span>
-            </div>
-
-            {atLimit ? (
-              <div className="border border-warn/40 bg-warn/5 p-4 rounded-sm mb-6">
-                <p className="font-serif italic text-ink-soft">
-                  Você atingiu o limite de <strong>300 faixas por set</strong>. Remova alguma
-                  faixa à direita para continuar adicionando.
-                </p>
-              </div>
-            ) : null}
-
-            {candidates.length === 0 ? (
-              <p className="font-serif italic text-ink-mute text-center py-12">
-                Nenhuma faixa encontrada com esses filtros.
-              </p>
-            ) : (
-              <ol>
-                {candidates.map((c) => (
-                  <CandidateRow
-                    key={c.id}
-                    candidate={c}
-                    setId={setId}
-                    alreadyIn={inSetIds.has(c.id)}
-                  />
-                ))}
-              </ol>
-            )}
-          </section>
+          <MontarCandidates
+            candidates={candidates}
+            inSetIds={Array.from(inSetIds)}
+            setId={setId}
+            aiConfigured={aiConfigured}
+            atLimit={atLimit}
+          />
         </div>
 
         {/* Direita desktop / topo mobile: set em construção (bag).

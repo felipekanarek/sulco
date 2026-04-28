@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 15 + Inc 16 registrados pós-Inc 14)
+**Última atualização**: 2026-04-28 (Inc 16 entregue)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,37 +48,6 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
-
-#### Incremento 16 — UI rework das sugestões IA (inline na lista de candidatos)
-Pós-Inc 014, Felipe testou o painel "Sugestões da IA" (bloco
-separado abaixo do briefing) e apontou 3 ajustes UX:
-
-1. **Posição**: bloco deve ficar **abaixo da seção de filtros**, não
-   logo após o briefing. (Briefing → filtros → sugestões IA →
-   listagem manual.)
-2. **Inline com candidatos**: em vez de lista separada, sugestões
-   aparecem **no topo da lista de candidatos** já existente, com
-   moldura/border de destaque, badge "✨ Sugestão IA" e
-   justificativa em destaque visual maior. Reusa o mesmo
-   container — uma só lista, ordem = sugestões IA primeiro,
-   candidatos comuns depois.
-3. **Botão "Ignorar sugestões"**: limpa o estado de sugestões da
-   IA e retorna a lista de candidatos pura (sem destacados, sem
-   justificativas). Pra DJ que quer revisar acervo livre depois
-   de ver/usar sugestões.
-
-Escopo (decidir no `/speckit.specify`):
-- Refator de `<AISuggestionsPanel>` ou nova arquitetura: panel só
-  carrega botão + estado, lista é renderizada inline pela page
-  com candidates ordenados (suggested first).
-- Prop `aiSuggestion` em `<CandidateRow>` ganha mais peso visual
-  (border accent + bg sutil + justificativa em texto maior).
-- Botão "Ignorar sugestões" reseta state local da página.
-- Reusa `suggestSetTracks` action (sem mudança).
-
-Sem schema delta. Esforço: ~1-2h via speckit.
-
-Registrado a pedido em 2026-04-28 após validação visual do Inc 14.
 
 #### Incremento 15 — Editar briefing e dados do set após criação
 Hoje, ao criar um set em `/sets/novo`, DJ define name/eventDate/
@@ -337,6 +306,7 @@ spec/plan/data-model/contracts/quickstart.
 - **012** — Configuração de IA do DJ (BYOK) · 2026-04-28 · `specs/012-ai-byok-config/` · 5 providers suportados (Gemini, Anthropic, OpenAI, DeepSeek, Qwen) via adapter pattern em `src/lib/ai/`; schema delta de 3 colunas em users (aiProvider/aiModel/aiApiKeyEncrypted); criptografia reusa MASTER_ENCRYPTION_KEY via aliases encryptSecret/decryptSecret; "Testar" é único caminho de salvar (FR-005); timeout 10s; trocar provider apaga key com confirmação; tela em /conta seção "Inteligência Artificial"; pré-requisito de Inc 13 e Inc 1
 - **013** — Análise da faixa via IA · 2026-04-28 · `specs/013-ai-track-analysis/` · botão "✨ Analisar com IA" por faixa em /disco/[id]; campo novo tracks.ai_analysis (AUTHOR híbrido — IA escreve via clique do DJ, DJ pode editar livremente); 2 Server Actions (analyzeTrackWithAI com Promise.race 30s + updateTrackAiAnalysis pra edição manual); reusa enrichTrackComment do Inc 14; bloco "Análise" sempre visível com placeholder; re-gerar com confirmação; bump constitucional 1.1.0 (aiAnalysis adicionado à lista AUTHOR de tracks)
 - **014** — Briefing com IA em /sets/montar · 2026-04-28 · `specs/014-ai-set-suggestions/` · botão "✨ Sugerir com IA" em /sets/[id]/montar; Server Action `suggestSetTracks` orquestra ownership + briefing + setTracks (L2 sem ceiling) + catálogo via `queryCandidates` estendida com `rankByCuration` (L3 ceiling 50, score = 9 campos AUTHOR não-nulos); prompt builder em src/lib/prompts/set-suggestions.ts com parse JSON defensivo (regex fenced + inline + Zod); reusa <CandidateRow> com prop opcional `aiSuggestion` (badge + justificativa); cards adicionados permanecem visíveis; sem batch (DJ adiciona uma a uma); IA propõe apenas complementos; curto-circuito quando catálogo elegível vazio; timeout 60s; briefing truncado em 2000 chars; payload reduzido (só candidates referenciados)
+- **015** — UI rework sugestões IA inline (Inc 16) · 2026-04-28 · `specs/015-ai-suggestions-inline/` · sugestões IA viram cards inline no topo da listagem de candidatos com moldura accent (border-2/60) + bg paper-raised + badge solid (bg-accent text-paper) + justificativa em destaque (text-[15px] text-ink leading-relaxed); painel reposicionado abaixo dos filtros (briefing → filtros → MontarCandidates); botão "Ignorar sugestões" reseta state client-side ≤200ms; dedup de trackIds (sugestão vs comum) garante zero duplicação visual; <MontarCandidates> client wrapper substitui <AISuggestionsPanel> (deletado); zero schema delta, zero novas Server Actions
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
