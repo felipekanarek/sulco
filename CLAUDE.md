@@ -262,20 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **015-ai-suggestions-inline** (BACKLOG: Inc 16)
+Current active feature: **016-edit-set-fields** (BACKLOG: Inc 15)
 
 Authoritative planning artifacts (read these before making changes
-ao header "Candidatos" em `/sets/[id]/montar`, ao
-`<MontarCandidates>` (novo client wrapper), à listagem unificada
-de sugestões IA + candidatos comuns, ou ao destaque visual da
-prop `aiSuggestion` em `<CandidateRow>`):
+ao botão "✏️ Editar set" em `/sets/[id]/montar`, ao
+`<EditSetModal>` (novo client component), ou ao form de edição de
+campos do set):
 
-- Plan: [specs/015-ai-suggestions-inline/plan.md](specs/015-ai-suggestions-inline/plan.md)
-- Spec: [specs/015-ai-suggestions-inline/spec.md](specs/015-ai-suggestions-inline/spec.md)
-- Data model: [specs/015-ai-suggestions-inline/data-model.md](specs/015-ai-suggestions-inline/data-model.md)
-- Contracts: [specs/015-ai-suggestions-inline/contracts/](specs/015-ai-suggestions-inline/contracts/)
-- Research: [specs/015-ai-suggestions-inline/research.md](specs/015-ai-suggestions-inline/research.md)
-- Quickstart: [specs/015-ai-suggestions-inline/quickstart.md](specs/015-ai-suggestions-inline/quickstart.md)
+- Plan: [specs/016-edit-set-fields/plan.md](specs/016-edit-set-fields/plan.md)
+- Spec: [specs/016-edit-set-fields/spec.md](specs/016-edit-set-fields/spec.md)
+- Contracts: [specs/016-edit-set-fields/contracts/](specs/016-edit-set-fields/contracts/)
+- Research: [specs/016-edit-set-fields/research.md](specs/016-edit-set-fields/research.md)
+- Quickstart: [specs/016-edit-set-fields/quickstart.md](specs/016-edit-set-fields/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -298,6 +296,37 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 014 ai-set-suggestions (Inc 1 — botão "✨ Sugerir com IA" em
   /sets/[id]/montar; suggestSetTracks com Promise.race 60s + parse
   JSON defensivo; reusa enrichTrackComment do Inc 14)
+- 015 ai-suggestions-inline (Inc 16 — UI rework sugestões IA inline
+  na lista de candidatos; <MontarCandidates> wrapper com dedup;
+  zero schema delta)
+
+Key points of 016 (Inc 15 — Editar briefing/set após criação):
+- **Server Action `updateSet` JÁ existe** em `src/lib/actions.ts:945`
+  (partial update via Zod, ownership check, normalizeDate,
+  revalidatePath nas 3 rotas). Esta feature entrega APENAS a UI.
+- **`<EditSetModal>`** novo client component em
+  `src/components/edit-set-modal.tsx` (~150 linhas). Pattern espelha
+  `<DeleteAccountModal>` existente: state local `open`, modal
+  fullscreen com `role="dialog"`, ESC + clique no overlay fecham.
+- **Botão "✏️ Editar set"** no header de `/sets/[id]/montar`,
+  posicionado próximo ao título do set.
+- **4 campos**: name (required, max 200), eventDate (datetime-local
+  nativo, opcional), location (max 200, opcional), briefing
+  (textarea, max 5000, opcional). Pré-preenchidos com valores
+  atuais ao abrir.
+- **Validação client-side**: botão Salvar disabled se name vazio
+  ou >200 chars; briefing >5000 bloqueado por maxLength input.
+  Defesa em profundidade — Zod do `updateSet` valida server-side.
+- **Reset do form ao reabrir**: useEffect dispara quando `open`
+  muda de false→true, descarta edits cancelados (Decisão 7).
+- **Salvamento bem-sucedido** fecha modal + chama `router.refresh()`
+  pra RSC re-fetch valores.
+- **Editar briefing alimenta IA imediatamente**: `revalidatePath`
+  garante que próxima invocação do "✨ Sugerir com IA" (Inc 14)
+  usa novo briefing (FR-008 do Inc 15).
+- **Princípio I respeitado**: `updateSet` (existente) tem ownership
+  check; sem nova escrita, sem regressão.
+- **Zero schema delta, zero novas Server Actions**.
 
 Key points of 015 (Inc 16 — UI rework sugestões IA inline):
 - **Zero schema delta, zero novas Server Actions**. Refator
