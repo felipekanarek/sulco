@@ -36,6 +36,7 @@ function mapGeminiError(err: unknown): AdapterError {
   if (
     lower.includes('[429') ||
     lower.includes('quota exceeded') ||
+    lower.includes('resource has been exhausted') ||
     lower.includes('rate limit')
   ) {
     return {
@@ -44,9 +45,37 @@ function mapGeminiError(err: unknown): AdapterError {
     };
   }
 
+  // Erros transientes do servidor / network — tratar como retryable
+  // genérico mas com mensagem específica.
+  if (
+    lower.includes('[500') ||
+    lower.includes('[502') ||
+    lower.includes('[503') ||
+    lower.includes('internal error') ||
+    lower.includes('service unavailable') ||
+    lower.includes('fetch failed')
+  ) {
+    return {
+      kind: 'unknown',
+      message: 'Provider indisponível no momento. Tente novamente em instantes.',
+    };
+  }
+
+  // Bad request — geralmente prompt mal-formatado, contexto excedido,
+  // ou bloqueio de safety filter.
+  if (lower.includes('[400') || lower.includes('bad request')) {
+    return {
+      kind: 'unknown',
+      message:
+        'Requisição rejeitada pelo provider (possível filtro de segurança ou contexto excedido). Tente um briefing mais curto ou outro modelo.',
+    };
+  }
+
   return {
     kind: 'unknown',
-    message: 'Provider retornou erro: ' + msg.slice(0, 120) + '. Tente novamente.',
+    // Aumentado pra 400 chars (era 120) — captura status HTTP real
+    // e snippet inicial do erro pra debug em produção.
+    message: 'Provider retornou erro: ' + msg.slice(0, 400) + ' Tente novamente.',
   };
 }
 
