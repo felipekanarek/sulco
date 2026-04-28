@@ -96,18 +96,26 @@ export function EditSetModal({ set }: { set: SetData }) {
       onKeyDown={(e) => {
         if (e.key === 'Escape') setOpen(false);
       }}
-      className="fixed inset-0 z-50 bg-ink/60 flex items-center justify-center p-4 md:p-6"
+      className="fixed inset-0 z-50 bg-ink/60 md:flex md:items-center md:justify-center md:p-6"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-set-title"
-        className="bg-paper border border-line max-w-[640px] w-full p-6 md:p-8 rounded-sm max-h-[90vh] overflow-y-auto"
+        className="relative bg-paper md:border md:border-line w-full h-full md:h-auto md:max-w-[640px] md:max-h-[90vh] p-5 pt-12 md:p-8 md:rounded-sm overflow-y-auto"
       >
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Fechar"
+          className="absolute top-3 right-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-ink-mute hover:text-ink text-2xl leading-none"
+        >
+          ×
+        </button>
         <p className="eyebrow mb-2">Editar set</p>
         <h2
           id="edit-set-title"
-          className="font-serif italic text-[24px] md:text-[28px] mb-5"
+          className="font-serif italic text-[24px] md:text-[28px] mb-5 pr-8"
         >
           {set.name}
         </h2>

@@ -1,25 +1,36 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
-Bump rationale (MINOR): expansão material do Princípio I — adiciona
-`aiAnalysis` à lista AUTHOR de `tracks` como campo AUTHOR híbrido
-(IA escreve via clique do DJ, DJ pode editar livremente). Sem mudança
-de regra; apenas extensão da lista de campos protegidos. Necessário
-após entrega do Inc 013 (`specs/013-ai-track-analysis/`).
+Version change: 1.1.0 → 1.2.0
+Bump rationale (MINOR): adição do Princípio V — Mobile-Native por
+Padrão. Motivado por falha de UX no modal de edição de set
+(Inc 016 EditSetModal): modal centrado com overlay funciona
+tecnicamente em mobile mas com navegação estranha — sintoma de
+adaptação tardia em vez de design mobile-first. Princípio formaliza
+a obrigação de pensar mobile desde a spec, não como adaptação
+posterior.
 
 Histórico:
 - 1.0.0 (initial ratification): 4 princípios + Restrições Técnicas.
 - 1.1.0 (Inc 013): `tracks.aiAnalysis` incluído em Princípio I.
+- 1.2.0 (Inc 016 follow-up): adiciona Princípio V — Mobile-Native
+  por Padrão.
 
 Modified principles:
-- I. Soberania dos Dados do DJ → adiciona `aiAnalysis` à lista AUTHOR de tracks
+- (nenhum existente alterado)
+
+Added principles:
+- V. Mobile-Native por Padrão
 
 Templates requiring updates:
-- ✅ .specify/templates/plan-template.md — sem mudança necessária.
-- ✅ .specify/templates/spec-template.md — sem mudança necessária.
-- ✅ .specify/templates/tasks-template.md — sem mudança necessária.
-- ✅ .specify/templates/checklist-template.md — sem mudança necessária.
+- ✅ .specify/templates/plan-template.md — sem mudança estrutural
+  necessária (Constitution Check é genérico e referencia princípios
+  por construção; novo princípio é checado automaticamente em PRs
+  com UI).
+- ✅ .specify/templates/spec-template.md — sem mudança estrutural
+  (princípio orienta CONTEÚDO de FR/Edge/SC, não seções).
+- ✅ .specify/templates/tasks-template.md — sem mudança.
+- ✅ .specify/templates/checklist-template.md — sem mudança.
 
 Follow-up TODOs:
 - Nenhum.
@@ -86,6 +97,28 @@ Dados curatoriais não são deletados silenciosamente por eventos externos.
 **Rationale**: Curadoria é patrimônio acumulado ao longo de anos. Qualquer perda
 automatizada é inaceitável.
 
+### V. Mobile-Native por Padrão
+
+Toda funcionalidade de UI MUST ser especificada considerando ativamente a experiência
+mobile, não apenas como adaptação responsiva da versão desktop.
+
+- Specs com UI nova MUST documentar o comportamento mobile (≤640px) em pelo menos uma
+  seção (Functional Requirements, Edge Cases ou Success Criteria).
+- Quickstart MUST incluir ≥1 cenário de validação mobile quando há componentes visuais
+  novos ou alterados.
+- Padrões nativos mobile (fullscreen sheets para modals, bottom sheets para filtros,
+  drawers para navegação) DEVEM ser preferidos sobre adaptações de UI desktop quando a
+  interação justifica.
+- Tap targets MUST ter ≥ 44×44 px (Inc 009 baseline).
+- Decisões de UI que ignorem mobile MUST ser justificadas explicitamente na spec ou
+  plan.
+
+**Rationale**: Sulco é usado em estúdio (desktop) e na rua/loja de discos (mobile).
+Sessão 2026-04-28 (Inc 016 EditSetModal) revelou modal centrado que funciona tecnicamente
+mas com navegação estranha em mobile — sintoma de adaptação tardia em vez de design
+mobile-first. Princípio garante que mobile seja considerado desde a especificação, não
+como retrofit pós-implementação.
+
 ## Restrições Técnicas
 
 Stack fixa enquanto esta constituição vigorar:
@@ -126,4 +159,4 @@ Procedimento de emenda:
 Revisão de conformidade: qualquer complexidade adicionada MUST ser justificada contra os
 princípios. Guia de runtime para desenvolvimento operacional vive em `CLAUDE.md`.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-04-22
+**Version**: 1.2.0 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-04-28
