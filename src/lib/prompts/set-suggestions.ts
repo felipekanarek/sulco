@@ -150,15 +150,30 @@ export type AISuggestion = z.infer<typeof aiSuggestionItemSchema>;
 
 // Múltiplos extractors, do mais estrito ao mais flexível.
 const EXTRACTORS: Array<{ name: string; re: RegExp }> = [
-  // ```json [ ... ] ```
-  { name: 'fenced-json', re: /```(?:json|javascript)?\s*(\[[\s\S]*?\])\s*```/i },
-  // ```json { ... } ```  (envelope)
+  // ```json [ ... ] ```  com fence fechado
+  { name: 'fenced-json-array', re: /```(?:json|javascript)?\s*(\[[\s\S]*?\])\s*```/i },
+  // ```json { ... } ```  com fence fechado
   { name: 'fenced-object', re: /```(?:json|javascript)?\s*(\{[\s\S]*?\})\s*```/i },
-  // [ ... ]  inline
-  { name: 'inline-array', re: /(\[\s*\{[\s\S]*?\}\s*\])/ },
+  // ```json [ ... ]  fence ABERTO (sem fechamento — caso comum quando
+  // modelo corta no fim) — pega tudo entre fence inicial e último `]`
+  { name: 'fenced-array-open', re: /```(?:json|javascript)?\s*(\[[\s\S]*\])/i },
+  // [ ... ]  inline (sem fence nenhum). Greedy pra pegar até último ].
+  { name: 'inline-array-greedy', re: /(\[\s*\{[\s\S]*\}\s*\])/ },
   // { ... }  inline (envelope sem fence)
-  { name: 'inline-object', re: /(\{\s*"[\s\S]*\}\s*)$/ },
+  { name: 'inline-object', re: /(\{\s*"[\s\S]*\}\s*)/ },
 ];
+
+/**
+ * Fallback: extrai do primeiro `[` ao último `]` do texto.
+ * Resgate quando todos os regex falham (ex: fence sem closing,
+ * texto desalinhado, etc).
+ */
+function extractByBrackets(text: string): string | null {
+  const firstOpen = text.indexOf('[');
+  const lastClose = text.lastIndexOf(']');
+  if (firstOpen === -1 || lastClose === -1 || lastClose <= firstOpen) return null;
+  return text.slice(firstOpen, lastClose + 1);
+}
 
 function tryParseRaw(raw: string): unknown | null {
   try {
@@ -196,6 +211,18 @@ export function parseAISuggestionsResponse(
     if (!parsed) continue;
     const validated = validateParsed(parsed);
     if (validated) return { ok: true, data: validated };
+  }
+
+  // Estratégia 3 (último recurso): extrai do primeiro `[` ao último `]`.
+  // Cobre casos onde fence inicial veio mas closing não, ou texto tem
+  // prosa antes/depois da array.
+  const bracketed = extractByBrackets(text);
+  if (bracketed) {
+    const parsed = tryParseRaw(bracketed);
+    if (parsed) {
+      const validated = validateParsed(parsed);
+      if (validated) return { ok: true, data: validated };
+    }
   }
 
   // Falhou em tudo — log defensivo pra debug em prod.

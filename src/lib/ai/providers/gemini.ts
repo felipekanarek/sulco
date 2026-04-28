@@ -45,12 +45,46 @@ function mapGeminiError(err: unknown): AdapterError {
     };
   }
 
-  // MODO DIAGNÓSTICO TEMPORÁRIO: exibe mensagem CRUA do SDK ao DJ
-  // pra identificar causa real do erro do Inc 014 reportado em prod.
-  // Reativar mapping específico depois que o erro for diagnosticado.
+  // Rate limit / quota.
+  if (
+    lower.includes('[429') ||
+    lower.includes('quota exceeded') ||
+    lower.includes('resource has been exhausted') ||
+    lower.includes('rate limit')
+  ) {
+    return {
+      kind: 'rate_limit',
+      message: 'Limite de uso atingido — tente novamente em alguns minutos.',
+    };
+  }
+
+  // Erros transientes do servidor / network.
+  if (
+    lower.includes('[500') ||
+    lower.includes('[502') ||
+    lower.includes('[503') ||
+    lower.includes('internal error') ||
+    lower.includes('service unavailable') ||
+    lower.includes('fetch failed')
+  ) {
+    return {
+      kind: 'unknown',
+      message: 'Provider indisponível no momento. Tente novamente em instantes.',
+    };
+  }
+
+  // Bad request.
+  if (lower.includes('[400') || lower.includes('bad request')) {
+    return {
+      kind: 'unknown',
+      message:
+        'Requisição rejeitada pelo provider (possível filtro de segurança ou contexto excedido).',
+    };
+  }
+
   return {
     kind: 'unknown',
-    message: '[DEBUG] ' + msg.slice(0, 800),
+    message: 'Provider retornou erro: ' + msg.slice(0, 200) + ' Tente novamente.',
   };
 }
 

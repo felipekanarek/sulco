@@ -1163,14 +1163,9 @@ export async function suggestSetTracks(
   if (!parseResult.ok) {
     // Log completo pra debugar formato real da resposta em prod.
     console.error('[suggestSetTracks] parse falhou. Resposta crua:', aiResult.text);
-    // MODO DIAGNÓSTICO TEMPORÁRIO: expõe primeiros 400 chars da
-    // resposta crua na UI pro DJ diagnosticar — depois da causa
-    // identificada, voltar pra mensagem amigável.
     return {
       ok: false,
-      error:
-        '[DEBUG-PARSE] IA respondeu em formato não-JSON. Primeiros 400 chars: ' +
-        aiResult.text.slice(0, 400),
+      error: 'IA retornou resposta em formato inesperado — tente novamente.',
     };
   }
 
