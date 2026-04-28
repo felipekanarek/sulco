@@ -63,6 +63,7 @@ export type CuradoriaDisc = {
     fineGenre: string | null;
     references: string | null;
     comment: string | null;
+    aiAnalysis: string | null;
     isBomb: boolean;
     // 005 — audio features source flag
     audioFeaturesSource: 'acousticbrainz' | 'manual' | null;
@@ -146,6 +147,7 @@ export async function loadDisc(
       fineGenre: t.fineGenre,
       references: t.references,
       comment: t.comment,
+      aiAnalysis: t.aiAnalysis,
       isBomb: t.isBomb,
       audioFeaturesSource: t.audioFeaturesSource,
       previewUrl: t.previewUrl,

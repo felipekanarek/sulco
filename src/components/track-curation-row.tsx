@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { updateTrackCuration } from '@/lib/actions';
+import {
+  analyzeTrackWithAI,
+  updateTrackAiAnalysis,
+  updateTrackCuration,
+} from '@/lib/actions';
 import { AudioFeaturesBadge } from './audio-features-badge';
 import { BombaToggle } from './bomba-toggle';
 import { CamelotWheel } from './camelot-wheel';
@@ -23,6 +27,7 @@ export type TrackData = {
   fineGenre: string | null;
   references: string | null;
   comment: string | null;
+  aiAnalysis: string | null;
   isBomb: boolean;
   audioFeaturesSource: 'acousticbrainz' | 'manual' | null;
   // 008 — preview de áudio
@@ -36,6 +41,8 @@ type Props = {
   recordArtist: string;
   moodSuggestions: string[];
   contextSuggestions: string[];
+  /** 013 — habilita botão "✨ Analisar com IA" se DJ tem config Inc 14. */
+  aiConfigured: boolean;
 };
 
 /**
@@ -49,9 +56,13 @@ export function TrackCurationRow({
   recordArtist,
   moodSuggestions,
   contextSuggestions,
+  aiConfigured,
 }: Props) {
   const [local, setLocal] = useState<TrackData>(track);
   const [isPending, startTransition] = useTransition();
+  // 013 — useTransition dedicado pra geração de IA: separar do save normal
+  // pra não bloquear edição enquanto IA gera (3-30s).
+  const [isAnalyzing, startAnalyzeTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -102,6 +113,41 @@ export function TrackCurationRow({
       });
       if (!res.ok) {
         setLocal(prev);
+        setError(res.error);
+      }
+    });
+  }
+
+  // 013 — gerar análise via IA. Re-gerar com confirmação se já existe texto.
+  function handleAnalyze() {
+    if (local.aiAnalysis && local.aiAnalysis.trim().length > 0) {
+      const ok = window.confirm('Substituir análise existente?');
+      if (!ok) return;
+    }
+    setError(null);
+    startAnalyzeTransition(async () => {
+      const res = await analyzeTrackWithAI({ trackId: track.id });
+      if (res.ok) {
+        setLocal((prev) => ({ ...prev, aiAnalysis: res.data!.text }));
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  // 013 — edição manual da análise (auto-save-on-blur, mesmo pattern do comment).
+  function saveAiAnalysis(next: string | null) {
+    const prev = local.aiAnalysis;
+    setLocal((cur) => ({ ...cur, aiAnalysis: next }));
+    setError(null);
+    startTransition(async () => {
+      const res = await updateTrackAiAnalysis({
+        trackId: track.id,
+        recordId,
+        text: next,
+      });
+      if (!res.ok) {
+        setLocal((cur) => ({ ...cur, aiAnalysis: prev }));
         setError(res.error);
       }
     });
@@ -325,6 +371,42 @@ export function TrackCurationRow({
                   className="w-full font-serif text-[16px] bg-transparent border border-line p-2 outline-none focus:border-accent resize-y"
                 />
               </Field>
+              {/* 013 — Bloco "Análise" sempre visível (placeholder quando vazio).
+                  Botão "✨ Analisar com IA" no canto direito. */}
+              <div className="md:col-span-2 mt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-mute">
+                    Análise
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAnalyze}
+                    disabled={!aiConfigured || isAnalyzing}
+                    title={
+                      !aiConfigured
+                        ? 'Configure sua chave em /conta'
+                        : undefined
+                    }
+                    aria-label="Analisar faixa com IA"
+                    className="font-mono text-[11px] uppercase tracking-[0.12em] border border-line hover:border-ink px-3 py-2 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isAnalyzing ? 'Analisando…' : '✨ Analisar com IA'}
+                  </button>
+                </div>
+                <textarea
+                  key={local.aiAnalysis ?? 'empty'}
+                  rows={3}
+                  defaultValue={local.aiAnalysis ?? ''}
+                  maxLength={5000}
+                  placeholder="Sem análise — clique no botão pra gerar com IA"
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    const next = v === '' ? null : v;
+                    if (next !== local.aiAnalysis) saveAiAnalysis(next);
+                  }}
+                  className="w-full font-serif text-[16px] bg-transparent border border-line p-2 outline-none focus:border-accent resize-y placeholder:text-ink-mute placeholder:italic"
+                />
+              </div>
               <Field label="Referências" colSpan={2}>
                 <input
                   type="text"

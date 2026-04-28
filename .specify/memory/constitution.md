@@ -1,27 +1,25 @@
 <!--
 Sync Impact Report
 ==================
-Version change: template → 1.0.0
-Bump rationale: Initial ratification of the Sulco Constitution (first formal version).
+Version change: 1.0.0 → 1.1.0
+Bump rationale (MINOR): expansão material do Princípio I — adiciona
+`aiAnalysis` à lista AUTHOR de `tracks` como campo AUTHOR híbrido
+(IA escreve via clique do DJ, DJ pode editar livremente). Sem mudança
+de regra; apenas extensão da lista de campos protegidos. Necessário
+após entrega do Inc 013 (`specs/013-ai-track-analysis/`).
+
+Histórico:
+- 1.0.0 (initial ratification): 4 princípios + Restrições Técnicas.
+- 1.1.0 (Inc 013): `tracks.aiAnalysis` incluído em Princípio I.
 
 Modified principles:
-- [PRINCIPLE_1_NAME] → I. Soberania dos Dados do DJ (NON-NEGOTIABLE)
-- [PRINCIPLE_2_NAME] → II. Server-First por Padrão
-- [PRINCIPLE_3_NAME] → III. Schema é a Fonte da Verdade
-- [PRINCIPLE_4_NAME] → IV. Preservar em Vez de Destruir
-- [PRINCIPLE_5_NAME] → (omitido — 4 princípios no total)
-
-Added sections:
-- Restrições Técnicas
-
-Removed sections:
-- Placeholder [SECTION_3_NAME] (Development Workflow) — intencionalmente omitido a pedido do mantenedor.
+- I. Soberania dos Dados do DJ → adiciona `aiAnalysis` à lista AUTHOR de tracks
 
 Templates requiring updates:
-- ✅ .specify/templates/plan-template.md — Constitution Check permanece genérico; princípios aplicáveis via referência.
-- ✅ .specify/templates/spec-template.md — sem conflito de seções obrigatórias.
-- ✅ .specify/templates/tasks-template.md — sem conflito de categorização.
-- ✅ .specify/templates/checklist-template.md — sem referências a princípios antigos.
+- ✅ .specify/templates/plan-template.md — sem mudança necessária.
+- ✅ .specify/templates/spec-template.md — sem mudança necessária.
+- ✅ .specify/templates/tasks-template.md — sem mudança necessária.
+- ✅ .specify/templates/checklist-template.md — sem mudança necessária.
 
 Follow-up TODOs:
 - Nenhum.
@@ -37,7 +35,9 @@ Campos autorais pertencem ao usuário e nunca são sobrescritos por fontes exter
 
 - Os campos `status`, `shelfLocation` e `notes` de `records`, bem como todos os campos de
   curadoria de `tracks` (`selected`, `bpm`, `musicalKey`, `energy`, `moods`, `contexts`,
-  `fineGenre`, `references`, `comment`), MUST ser soberanos do DJ.
+  `fineGenre`, `references`, `comment`, `aiAnalysis`), MUST ser soberanos do DJ.
+  `aiAnalysis` é AUTHOR híbrido: IA escreve via clique explícito do DJ (ato intencional),
+  e DJ pode editar livremente como `comment`. Não é escrito por sync de fonte externa.
 - Sincronizações com o Discogs MUST apenas popular/atualizar campos originários do Discogs
   (`discogsId`, `artist`, `title`, `year`, `label`, `country`, `format`, `genres`, `styles`,
   `coverUrl`, e `position`/`title`/`duration` de faixas).

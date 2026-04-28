@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 14 BYOK entregue)
+**Última atualização**: 2026-04-28 (Inc 13 análise via IA entregue)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,54 +48,6 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
-
-#### Incremento 13 — Enriquecer `comment` da faixa com IA
-**Depende de Inc 14** (config BYOK). Felipe testou o Gemini gerando
-descrições de faixas e o resultado foi excelente (palavras dele).
-Trazer pro Sulco como botão **"✨ Enriquecer com IA"** por faixa em
-`/disco/[id]`. IA preenche `tracks.comment` direto (DJ pode editar
-depois — sem preview/confirmação prévia). Disparo **manual e
-intencional** (não automático/batch) pra DJ controlar quando queima
-token da própria conta.
-
-Escopo provável (decidir no `/speckit.specify`):
-- Botão por faixa em `/disco/[id]` no card/row de track. Estado
-  `pending` durante chamada (~2-5s).
-- Server Action `enrichTrackCommentWithAI(trackId)` — auth via
-  `requireCurrentUser` + ownership check (track pertence a record do
-  user). Chama o adapter de IA do Inc 14 (provider escolhido pelo
-  DJ), atualiza `tracks.comment`, `revalidatePath('/disco/[id]')`.
-- **Prompt multi-linha**:
-  - L1 essencial: `Artist - Album (Year) - Track Title (Position)`
-  - L2 contexto adicional: `Genres: [...] | Styles: [...] | BPM: 120 | Key: 8A | Energy: 4`
-    — só inclui campos não-nulos (audio features podem estar ausentes
-    pré-005, BPM/key podem ter sido preenchidos manualmente).
-- **Idioma de saída**: pt-BR (mesma língua das demais notas autorais).
-- **Tom/formato**: 1 parágrafo curto (3-5 frases), descrevendo
-  sensação/contexto/uso do disco. Definir no system prompt durante
-  speckit.specify.
-- Princípio I: `comment` é AUTHOR. IA escreve, mas é ato explícito do
-  DJ (clique). Sobrescreve `comment` existente sem confirmar — DJ pode
-  editar depois.
-- Sem chave configurada (Inc 14 não rodou) → botão disabled com
-  tooltip "Configure sua chave em /conta".
-- Sem schema delta (`tracks.comment` já existe, AUTHOR field).
-
-Decisões pendentes pra `/speckit.specify`:
-- **Tratamento de erro**: API down → toast "Falha temporária, tente
-  novamente" sem mexer em `comment`. Rate limit → mesma coisa.
-- **Sobrescrever `comment` existente?**: spec atual diz que sim. Talvez
-  abrir confirmação se já há texto não-vazio.
-- **System prompt e exemplos few-shot**: definir tom em pt-BR, evitar
-  alucinação sobre datas/fatos não-verificáveis, focar em sensação
-  musical (não biografia).
-
-Estimativa: 0.5-1 dia via speckit (depois de Inc 14). Botão isolado,
-sem batch. Inc 9 (batch enrich em /conta) pode reusar o pipeline
-quando virar dor real.
-
-Registrado a pedido em 2026-04-27 após teste manual do Felipe com
-Gemini retornando descrições de qualidade.
 
 #### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
 Quando sync detecta vários discos removidos do Discogs (caso típico:
@@ -332,6 +284,7 @@ spec/plan/data-model/contracts/quickstart.
 - **010** — Fix Bug 13 (banner de import com acknowledge) · 2026-04-27 · `specs/010-fix-import-banner-acknowledge/` · banner some após reconhecimento explícito; schema delta de 1 coluna (`users.import_acknowledged_at`); `getImportProgress` ganha `runStartedAt`/`lastAck`; Server Action nova `acknowledgeImportProgress`; running permanece não-fechável; multi-user isolation por construção
 - **011** — Curadoria aleatória respeita filtros · 2026-04-27 · `specs/011-random-respects-filters/` · botão 🎲 da home lê searchParams (text/genres/styles/bomba) e passa pra `pickRandomUnratedRecord`; helper `buildCollectionFilters` extraído de `queryCollection` e compartilhado (FR-004 paridade semântica); empty state contextual ("Nenhum disco unrated com esses filtros"); status filter da URL intencionalmente ignorado; zero schema delta
 - **012** — Configuração de IA do DJ (BYOK) · 2026-04-28 · `specs/012-ai-byok-config/` · 5 providers suportados (Gemini, Anthropic, OpenAI, DeepSeek, Qwen) via adapter pattern em `src/lib/ai/`; schema delta de 3 colunas em users (aiProvider/aiModel/aiApiKeyEncrypted); criptografia reusa MASTER_ENCRYPTION_KEY via aliases encryptSecret/decryptSecret; "Testar" é único caminho de salvar (FR-005); timeout 10s; trocar provider apaga key com confirmação; tela em /conta seção "Inteligência Artificial"; pré-requisito de Inc 13 e Inc 1
+- **013** — Análise da faixa via IA · 2026-04-28 · `specs/013-ai-track-analysis/` · botão "✨ Analisar com IA" por faixa em /disco/[id]; campo novo tracks.ai_analysis (AUTHOR híbrido — IA escreve via clique do DJ, DJ pode editar livremente); 2 Server Actions (analyzeTrackWithAI com Promise.race 30s + updateTrackAiAnalysis pra edição manual); reusa enrichTrackComment do Inc 14; bloco "Análise" sempre visível com placeholder; re-gerar com confirmação; bump constitucional 1.1.0 (aiAnalysis adicionado à lista AUTHOR de tracks)
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
