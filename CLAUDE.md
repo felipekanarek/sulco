@@ -262,18 +262,19 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **013-ai-track-analysis**
+Current active feature: **014-ai-set-suggestions**
 
 Authoritative planning artifacts (read these before making changes
-ao bloco "Análise" em `<TrackCurationRow>`, à coluna
-`tracks.ai_analysis`, ou às Server Actions de geração/edição):
+ao botão "✨ Sugerir com IA" em `/sets/[id]/montar`, ao
+`<AISuggestionsPanel>`, à action `suggestSetTracks`, ou ao prompt
+builder `set-suggestions.ts`):
 
-- Plan: [specs/013-ai-track-analysis/plan.md](specs/013-ai-track-analysis/plan.md)
-- Spec: [specs/013-ai-track-analysis/spec.md](specs/013-ai-track-analysis/spec.md)
-- Data model: [specs/013-ai-track-analysis/data-model.md](specs/013-ai-track-analysis/data-model.md)
-- Contracts: [specs/013-ai-track-analysis/contracts/](specs/013-ai-track-analysis/contracts/)
-- Research: [specs/013-ai-track-analysis/research.md](specs/013-ai-track-analysis/research.md)
-- Quickstart: [specs/013-ai-track-analysis/quickstart.md](specs/013-ai-track-analysis/quickstart.md)
+- Plan: [specs/014-ai-set-suggestions/plan.md](specs/014-ai-set-suggestions/plan.md)
+- Spec: [specs/014-ai-set-suggestions/spec.md](specs/014-ai-set-suggestions/spec.md)
+- Data model: [specs/014-ai-set-suggestions/data-model.md](specs/014-ai-set-suggestions/data-model.md)
+- Contracts: [specs/014-ai-set-suggestions/contracts/](specs/014-ai-set-suggestions/contracts/)
+- Research: [specs/014-ai-set-suggestions/research.md](specs/014-ai-set-suggestions/research.md)
+- Quickstart: [specs/014-ai-set-suggestions/quickstart.md](specs/014-ai-set-suggestions/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -291,6 +292,47 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   ativos; helper `buildCollectionFilters` compartilhado)
 - 012 ai-byok-config (5 providers de IA via adapter pattern; chave
   encriptada por user; `enrichTrackComment` público pra Inc 13/1)
+- 013 ai-track-analysis (botão "✨ Analisar com IA" por faixa em
+  /disco/[id]; campo `tracks.ai_analysis`; bump constitucional 1.1.0)
+
+Key points of 014 (Inc 1 — Briefing com IA em /sets/montar):
+- **Zero schema delta**. Reusa `sets`, `set_tracks`, `tracks`,
+  `records`, e config Inc 14.
+- **1 Server Action nova**: `suggestSetTracks(setId)` orquestra
+  ownership + carrega briefing + L2 (set tracks completo) + L3
+  (catálogo elegível truncado em 50 via `queryCandidates`
+  estendida com `rankByCuration`) + chama `enrichTrackComment`
+  com `Promise.race(60s)` + parse JSON defensivo + filtragem
+  anti-hallucination/duplicação.
+- **Prompt builder** novo em `src/lib/prompts/set-suggestions.ts`:
+  `buildSetSuggestionsPrompt` + `parseAISuggestionsResponse`
+  (extrai bloco JSON entre fences markdown ou inline; valida via
+  Zod).
+- **L2 sem ceiling** (todas as faixas atuais do set vão), **L3
+  ceiling 50** (truncamento "mais bem-curadas" — score = campos
+  AUTHOR não-nulos, desempate por `updatedAt DESC`).
+- **`queryCandidates` estendida** com `opts: { rankByCuration?,
+  limit? }` opcional. Comportamento default preservado (UI manual
+  intacta).
+- **UI**: bloco vertical em `/sets/[id]/montar` entre briefing e
+  listagem manual. Reusa `<CandidateRow>` com prop opcional
+  `aiSuggestion` que adiciona badge "✨ Sugestão IA" + justificativa
+  em itálico. Sem componente novo de card — DRY total.
+- **`<AISuggestionsPanel>`** client component novo: estado em
+  memória das sugestões + handlers (gerar, adicionar individual,
+  re-gerar com `window.confirm` se há pendentes).
+- **Cards adicionados permanecem visíveis** (FR-008): flag
+  `added=true` no estado, sem remover. Justificativa segue
+  acessível.
+- **Sem batch**: cada sugestão tem botão "Adicionar ao set"
+  individual. Sem "Aplicar todas".
+- **IA propõe COMPLEMENTOS apenas** — nunca sugere remover faixas
+  do set. Refatoração fica como Inc futuro.
+- **Catálogo elegível vazio** = curto-circuito ANTES de chamar
+  provider (FR-011, SC-006). Zero tokens consumidos.
+- **5-10 sugestões alvo** por geração (instruído no prompt).
+- **Princípio I respeitado**: IA não escreve em `set_tracks` —
+  apenas sugere. DJ executa via `addTrackToSet` (existente).
 
 Key points of 013 (Inc 13 — Análise via IA):
 - **Schema delta de 1 coluna**: `tracks.ai_analysis` (text nullable).

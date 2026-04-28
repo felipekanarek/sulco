@@ -12,6 +12,16 @@ import { encryptSecret } from '@/lib/crypto';
 import { enrichTrackComment, getAdapter } from '@/lib/ai';
 import { isModelSupported, MODELS_BY_PROVIDER } from '@/lib/ai/models';
 import { buildTrackAnalysisPrompt } from '@/lib/prompts/track-analysis';
+import {
+  buildSetSuggestionsPrompt,
+  parseAISuggestionsResponse,
+} from '@/lib/prompts/set-suggestions';
+import {
+  listSetTracks,
+  queryCandidates,
+  type Candidate,
+  type MontarFilters,
+} from '@/lib/queries/montar';
 import { encryptPAT } from '@/lib/crypto';
 import { markCredentialValid } from '@/lib/discogs';
 import {
@@ -1033,6 +1043,163 @@ export async function saveMontarFilters(
 /* ============================================================
    addTrackToSet / removeTrackFromSet — FR-025, FR-029, FR-029a (T076)
    ============================================================ */
+
+/* ============================================================
+   suggestSetTracks — 014 (Inc 1, Briefing com IA em /sets/montar)
+   Orquestra: ownership → carrega briefing+setTracks+catálogo
+   (queryCandidates com rankByCuration+limit 50) → curto-circuita
+   se vazio → monta prompt → enrichTrackComment com Promise.race
+   60s → parse JSON defensivo → filtragem anti-hallucination/
+   anti-duplicação → retorna sugestões + candidatos referenciados.
+
+   IA NÃO escreve em set_tracks. Cada sugestão tem botão
+   "Adicionar ao set" no client que dispara addTrackToSet.
+   ============================================================ */
+
+const suggestInputSchema = z.object({
+  setId: z.number().int().positive(),
+});
+
+const SUGGEST_TIMEOUT_MS = 60_000;
+const SUGGEST_CANDIDATES_LIMIT = 50;
+const SUGGEST_MAX_RESULTS = 10;
+
+export async function suggestSetTracks(
+  input: z.infer<typeof suggestInputSchema>,
+): Promise<
+  ActionResult<{
+    suggestions: { trackId: number; justificativa: string }[];
+    candidates: Candidate[];
+  }>
+> {
+  const user = await requireCurrentUser();
+
+  const parsed = suggestInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Dados inválidos.' };
+  }
+  const { setId } = parsed.data;
+
+  // Ownership + load do set
+  const setRows = await db
+    .select({
+      id: setsTable.id,
+      name: setsTable.name,
+      eventDate: setsTable.eventDate,
+      location: setsTable.location,
+      briefing: setsTable.briefing,
+      montarFiltersJson: setsTable.montarFiltersJson,
+    })
+    .from(setsTable)
+    .where(and(eq(setsTable.id, setId), eq(setsTable.userId, user.id)))
+    .limit(1);
+
+  if (setRows.length === 0) {
+    return { ok: false, error: 'Set não encontrado.' };
+  }
+  const set = setRows[0];
+
+  // Faixas atuais do set (L2 do prompt — sem ceiling, todas vão)
+  const currentTracks = await listSetTracks(setId, user.id);
+  const inSetIds = currentTracks.map((t) => t.trackId);
+
+  // Parse dos filtros persistidos (montar_filters_json)
+  let filters: MontarFilters = {};
+  try {
+    const raw = set.montarFiltersJson;
+    if (raw && raw.trim().length > 0) {
+      filters = JSON.parse(raw) as MontarFilters;
+    }
+  } catch {
+    // Filtros corrompidos: trata como vazio em vez de falhar
+    filters = {};
+  }
+
+  // Catálogo elegível (L3) — truncado em 50, ranqueado por curadoria
+  const candidates = await queryCandidates(user.id, filters, {
+    excludeTrackIds: inSetIds,
+    rankByCuration: true,
+    limit: SUGGEST_CANDIDATES_LIMIT,
+  });
+
+  // Curto-circuito antes de chamar IA (FR-011, SC-006)
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      error: 'Nenhum candidato elegível com os filtros atuais. Relaxe os filtros e tente de novo.',
+    };
+  }
+
+  // Monta prompt
+  const prompt = buildSetSuggestionsPrompt({
+    briefing: set.briefing,
+    setName: set.name,
+    eventDate: set.eventDate,
+    location: set.location,
+    setTracks: currentTracks.map((t) => ({
+      artist: t.artist,
+      title: t.title,
+      position: t.position,
+    })),
+    candidates,
+  });
+
+  // Promise.race com timeout 60s
+  const aiPromise = enrichTrackComment(user.id, prompt);
+  const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) => {
+    setTimeout(
+      () => resolve({ ok: false, error: 'Provider não respondeu — tente novamente.' }),
+      SUGGEST_TIMEOUT_MS,
+    );
+  });
+
+  const aiResult = await Promise.race([aiPromise, timeoutPromise]);
+  if (!aiResult.ok) {
+    return { ok: false, error: aiResult.error };
+  }
+
+  // Parse JSON defensivo
+  const parseResult = parseAISuggestionsResponse(aiResult.text);
+  if (!parseResult.ok) {
+    return {
+      ok: false,
+      error: 'IA retornou resposta em formato inesperado — tente novamente.',
+    };
+  }
+
+  // Filtragem anti-hallucination + anti-duplicação + dedup
+  const candidateIds = new Set(candidates.map((c) => c.id));
+  const inSetIdsSet = new Set(inSetIds);
+  const seen = new Set<number>();
+  const filteredSuggestions = parseResult.data
+    .filter((s) => candidateIds.has(s.trackId)) // existe no catálogo
+    .filter((s) => !inSetIdsSet.has(s.trackId)) // não está no set (defensivo — já excluído pela query)
+    .filter((s) => {
+      if (seen.has(s.trackId)) return false;
+      seen.add(s.trackId);
+      return true;
+    })
+    .slice(0, SUGGEST_MAX_RESULTS);
+
+  if (filteredSuggestions.length === 0) {
+    return {
+      ok: false,
+      error: 'IA não retornou sugestões válidas — tente novamente.',
+    };
+  }
+
+  // Reduzir payload — só candidates referenciados nas sugestões finais (mitiga O1)
+  const usedIds = new Set(filteredSuggestions.map((s) => s.trackId));
+  const usedCandidates = candidates.filter((c) => usedIds.has(c.id));
+
+  return {
+    ok: true,
+    data: {
+      suggestions: filteredSuggestions,
+      candidates: usedCandidates,
+    },
+  };
+}
 
 const setTrackSchema = z.object({
   setId: z.number().int().positive(),

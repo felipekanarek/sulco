@@ -18,10 +18,18 @@ export function CandidateRow({
   candidate,
   setId,
   alreadyIn,
+  aiSuggestion,
 }: {
   candidate: Candidate;
   setId: number;
   alreadyIn: boolean;
+  /**
+   * 014 (Inc 1): quando presente, renderiza badge "✨ Sugestão IA" +
+   * justificativa em itálico. Card mantém comportamento de
+   * "Adicionar ao set" via `add()` interno (chama addTrackToSet
+   * existente).
+   */
+  aiSuggestion?: { justificativa: string };
 }) {
   const router = useRouter();
   const [coverFailed, setCoverFailed] = useState(false);
@@ -123,6 +131,11 @@ export function CandidateRow({
 
       {/* Col 4 desktop / linha completa mobile: title + artist + meta + chips + comment */}
       <div className="min-w-0">
+        {aiSuggestion ? (
+          <span className="inline-block font-mono text-[10px] uppercase tracking-[0.12em] border border-accent text-accent px-2 py-0.5 mb-1">
+            ✨ Sugestão IA
+          </span>
+        ) : null}
         <p className="font-serif italic text-[18px] md:text-[19px] leading-tight truncate">
           {candidate.title}
           {candidate.isBomb ? (
@@ -207,6 +220,15 @@ export function CandidateRow({
             title={candidate.comment}
           >
             “{candidate.comment}”
+          </p>
+        ) : null}
+
+        {aiSuggestion ? (
+          <p
+            className="font-serif italic text-[14px] text-ink-soft mt-2 leading-snug"
+            title={aiSuggestion.justificativa}
+          >
+            {aiSuggestion.justificativa}
           </p>
         ) : null}
 

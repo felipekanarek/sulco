@@ -57,7 +57,19 @@ export type Candidate = {
 export async function queryCandidates(
   userId: number,
   filters: MontarFilters,
-  opts: { excludeTrackIds?: number[]; limit?: number } = {},
+  opts: {
+    excludeTrackIds?: number[];
+    limit?: number;
+    /**
+     * 014 (Inc 1): quando true, ordena por score de campos AUTHOR
+     * preenchidos (mais bem-curadas primeiro). Desempate por
+     * `tracks.updatedAt DESC`. Usado pelo `suggestSetTracks` pra
+     * truncar catálogo elegível em 50 candidatos com mais contexto
+     * pra IA. Default false preserva ordem original (rating DESC,
+     * artist ASC, position ASC) usada na UI manual.
+     */
+    rankByCuration?: boolean;
+  } = {},
 ): Promise<Candidate[]> {
   const conds: SQL[] = [
     eq(records.userId, userId),
@@ -102,6 +114,25 @@ export async function queryCandidates(
     conds.push(sql`${tracks.id} NOT IN ${opts.excludeTrackIds}`);
   }
 
+  // 014 (Inc 1): score de "mais bem-curadas" pra ranking quando
+  // rankByCuration=true. Soma 1 por campo AUTHOR não-nulo. Inclui
+  // ai_analysis (Inc 013). Empate desfeito por updatedAt DESC.
+  const curationScore = sql`(
+    (CASE WHEN ${tracks.bpm} IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN ${tracks.musicalKey} IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN ${tracks.energy} IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN json_array_length(${tracks.moods}) > 0 THEN 1 ELSE 0 END) +
+    (CASE WHEN json_array_length(${tracks.contexts}) > 0 THEN 1 ELSE 0 END) +
+    (CASE WHEN ${tracks.comment} IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN ${tracks.aiAnalysis} IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN ${tracks.rating} IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN ${tracks.fineGenre} IS NOT NULL THEN 1 ELSE 0 END)
+  )`;
+
+  const orderBy = opts.rankByCuration
+    ? [desc(curationScore), desc(tracks.updatedAt)]
+    : [desc(tracks.rating), asc(records.artist), asc(tracks.position)];
+
   const rows = await db
     .select({
       id: tracks.id,
@@ -132,7 +163,7 @@ export async function queryCandidates(
     .from(tracks)
     .innerJoin(records, eq(records.id, tracks.recordId))
     .where(and(...conds))
-    .orderBy(desc(tracks.rating), asc(records.artist), asc(tracks.position))
+    .orderBy(...orderBy)
     .limit(opts.limit ?? 300);
 
   return rows.map((r) => ({
