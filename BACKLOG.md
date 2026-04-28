@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 13 análise via IA entregue)
+**Última atualização**: 2026-04-28 (Inc 13 entregue + Bug 14 registrado)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -203,6 +203,13 @@ no Discogs.
 
 ### Histórico (fechados)
 
+- **Bug 14** — Bloco "Análise" não ocupava 100% da largura no mobile —
+  ✅ fix direto sem speckit (commit a seguir, autorizado pelo
+  mantenedor pra ser CSS-only). `md:col-span-2` Tailwind responsive
+  trocado por `style={{ gridColumn: 'span 2' }}` inline (mesmo pattern
+  do `<Field>` adjacente que já funciona em mobile). +`w-full` defensivo
+  no outer e `block w-full` na textarea. Header do bloco ganha
+  `flex-wrap gap-2` pra acomodar viewport estreita.
 - **Bug 13** — Banner de import permanente na home — ✅ Incremento
   010 (`specs/010-fix-import-banner-acknowledge/`). Schema delta aditivo
   `users.import_acknowledged_at`; `getImportProgress` expõe `runStartedAt`

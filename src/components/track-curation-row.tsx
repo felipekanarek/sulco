@@ -372,9 +372,11 @@ export function TrackCurationRow({
                 />
               </Field>
               {/* 013 — Bloco "Análise" sempre visível (placeholder quando vazio).
-                  Botão "✨ Analisar com IA" no canto direito. */}
-              <div className="md:col-span-2 mt-1">
-                <div className="flex items-center justify-between mb-1">
+                  Botão "✨ Analisar com IA" no canto direito.
+                  Bug 14: usa `gridColumn: span 2` inline (mesmo pattern do
+                  Field) pra garantir largura 100% em qualquer breakpoint. */}
+              <div style={{ gridColumn: 'span 2' }} className="w-full mt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-mute">
                     Análise
                   </p>
@@ -404,7 +406,7 @@ export function TrackCurationRow({
                     const next = v === '' ? null : v;
                     if (next !== local.aiAnalysis) saveAiAnalysis(next);
                   }}
-                  className="w-full font-serif text-[16px] bg-transparent border border-line p-2 outline-none focus:border-accent resize-y placeholder:text-ink-mute placeholder:italic"
+                  className="block w-full font-serif text-[16px] bg-transparent border border-line p-2 outline-none focus:border-accent resize-y placeholder:text-ink-mute placeholder:italic"
                 />
               </div>
               <Field label="Referências" colSpan={2}>
