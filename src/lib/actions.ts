@@ -9,8 +9,9 @@ import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { buildCollectionFilters } from '@/lib/queries/collection';
 import { encryptSecret } from '@/lib/crypto';
-import { getAdapter } from '@/lib/ai';
+import { enrichTrackComment, getAdapter } from '@/lib/ai';
 import { isModelSupported, MODELS_BY_PROVIDER } from '@/lib/ai/models';
+import { buildTrackAnalysisPrompt } from '@/lib/prompts/track-analysis';
 import { encryptPAT } from '@/lib/crypto';
 import { markCredentialValid } from '@/lib/discogs';
 import {
@@ -397,6 +398,150 @@ export async function removeAIConfig(): Promise<ActionResult> {
     .where(eq(users.id, user.id));
 
   revalidatePath('/conta');
+  return { ok: true };
+}
+
+/* ============================================================
+   analyzeTrackWithAI — 013 (Inc 13, Análise via IA)
+   Gera análise musical pra uma faixa via provider configurado pelo
+   DJ (Inc 14). Persiste em tracks.ai_analysis. Ownership check
+   estrito. Timeout 30s (FR-012, mitigando que enrichTrackComment do
+   Inc 14 não tem timeout próprio).
+   ============================================================ */
+
+const analyzeTrackInputSchema = z.object({
+  trackId: z.number().int().positive(),
+});
+
+const ANALYZE_TIMEOUT_MS = 30_000;
+
+export async function analyzeTrackWithAI(
+  input: z.infer<typeof analyzeTrackInputSchema>,
+): Promise<ActionResult<{ text: string }>> {
+  const user = await requireCurrentUser();
+
+  const parsed = analyzeTrackInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Dados inválidos.' };
+  }
+  const { trackId } = parsed.data;
+
+  // Ownership check + load do track + record numa query única.
+  const rows = await db
+    .select({
+      trackPosition: tracks.position,
+      trackTitle: tracks.title,
+      bpm: tracks.bpm,
+      musicalKey: tracks.musicalKey,
+      energy: tracks.energy,
+      recordId: records.id,
+      artist: records.artist,
+      album: records.title,
+      year: records.year,
+      genres: records.genres,
+      styles: records.styles,
+    })
+    .from(tracks)
+    .innerJoin(records, eq(records.id, tracks.recordId))
+    .where(and(eq(tracks.id, trackId), eq(records.userId, user.id)))
+    .limit(1);
+
+  if (rows.length === 0) {
+    return { ok: false, error: 'Faixa não encontrada.' };
+  }
+  const row = rows[0];
+
+  const prompt = buildTrackAnalysisPrompt({
+    artist: row.artist,
+    album: row.album,
+    year: row.year,
+    trackTitle: row.trackTitle,
+    position: row.trackPosition,
+    genres: (row.genres ?? []) as string[],
+    styles: (row.styles ?? []) as string[],
+    bpm: row.bpm,
+    musicalKey: row.musicalKey,
+    energy: row.energy,
+  });
+
+  // Promise.race com timeout 30s — mitiga finding I1 do speckit.analyze
+  // (enrichTrackComment do Inc 14 não tem timeout próprio).
+  const aiPromise = enrichTrackComment(user.id, prompt);
+  const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) => {
+    setTimeout(
+      () => resolve({ ok: false, error: 'Provider não respondeu — tente novamente.' }),
+      ANALYZE_TIMEOUT_MS,
+    );
+  });
+
+  const result = await Promise.race([aiPromise, timeoutPromise]);
+
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  const text = result.text.trim();
+  if (text.length === 0) {
+    return { ok: false, error: 'IA retornou resposta vazia — tente novamente.' };
+  }
+
+  await db
+    .update(tracks)
+    .set({ aiAnalysis: text, updatedAt: new Date() })
+    .where(eq(tracks.id, trackId));
+
+  revalidatePath(`/disco/${row.recordId}`);
+  return { ok: true, data: { text } };
+}
+
+/* ============================================================
+   updateTrackAiAnalysis — 013 (Inc 13)
+   Edição manual do campo `tracks.ai_analysis`. Auto-save-on-blur
+   no client (mesmo pattern do `comment`). Trim → null pra evitar
+   string vazia no DB.
+   ============================================================ */
+
+const updateAiAnalysisSchema = z.object({
+  trackId: z.number().int().positive(),
+  recordId: z.number().int().positive(),
+  text: z.string().max(5000).nullable(),
+});
+
+export async function updateTrackAiAnalysis(
+  input: z.infer<typeof updateAiAnalysisSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+
+  const parsed = updateAiAnalysisSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Dados inválidos.' };
+  }
+  const { trackId, recordId, text } = parsed.data;
+
+  // Ownership check via record_id IN (...) com filtro por user.
+  const ownerRows = await db
+    .select({ id: tracks.id })
+    .from(tracks)
+    .innerJoin(records, eq(records.id, tracks.recordId))
+    .where(
+      and(
+        eq(tracks.id, trackId),
+        eq(tracks.recordId, recordId),
+        eq(records.userId, user.id),
+      ),
+    )
+    .limit(1);
+
+  if (ownerRows.length === 0) {
+    return { ok: false, error: 'Faixa não encontrada.' };
+  }
+
+  await db
+    .update(tracks)
+    .set({ aiAnalysis: text, updatedAt: new Date() })
+    .where(eq(tracks.id, trackId));
+
+  revalidatePath(`/disco/${recordId}`);
   return { ok: true };
 }
 

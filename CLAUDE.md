@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **012-ai-byok-config**
+Current active feature: **013-ai-track-analysis**
 
 Authoritative planning artifacts (read these before making changes
-à seção "Inteligência Artificial" em `/conta`, ao schema de `users`,
-ou ao adapter pattern em `src/lib/ai/`):
+ao bloco "Análise" em `<TrackCurationRow>`, à coluna
+`tracks.ai_analysis`, ou às Server Actions de geração/edição):
 
-- Plan: [specs/012-ai-byok-config/plan.md](specs/012-ai-byok-config/plan.md)
-- Spec: [specs/012-ai-byok-config/spec.md](specs/012-ai-byok-config/spec.md)
-- Data model: [specs/012-ai-byok-config/data-model.md](specs/012-ai-byok-config/data-model.md)
-- Contracts: [specs/012-ai-byok-config/contracts/](specs/012-ai-byok-config/contracts/)
-- Research: [specs/012-ai-byok-config/research.md](specs/012-ai-byok-config/research.md)
-- Quickstart: [specs/012-ai-byok-config/quickstart.md](specs/012-ai-byok-config/quickstart.md)
+- Plan: [specs/013-ai-track-analysis/plan.md](specs/013-ai-track-analysis/plan.md)
+- Spec: [specs/013-ai-track-analysis/spec.md](specs/013-ai-track-analysis/spec.md)
+- Data model: [specs/013-ai-track-analysis/data-model.md](specs/013-ai-track-analysis/data-model.md)
+- Contracts: [specs/013-ai-track-analysis/contracts/](specs/013-ai-track-analysis/contracts/)
+- Research: [specs/013-ai-track-analysis/research.md](specs/013-ai-track-analysis/research.md)
+- Quickstart: [specs/013-ai-track-analysis/quickstart.md](specs/013-ai-track-analysis/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -289,6 +289,37 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   após reconhecimento; schema delta `users.import_acknowledged_at`)
 - 011 random-respects-filters (botão 🎲 da home respeita filtros
   ativos; helper `buildCollectionFilters` compartilhado)
+- 012 ai-byok-config (5 providers de IA via adapter pattern; chave
+  encriptada por user; `enrichTrackComment` público pra Inc 13/1)
+
+Key points of 013 (Inc 13 — Análise via IA):
+- **Schema delta de 1 coluna**: `tracks.ai_analysis` (text nullable).
+  Aplicar via sqlite3 local + Turso CLI prod (mesmo padrão Inc 010/012).
+- **AUTHOR híbrido**: IA escreve via clique do DJ (intencional,
+  manual). DJ pode editar livremente como `comment`. Princípio I OK.
+- **2 Server Actions novas**: `analyzeTrackWithAI(trackId)` (gera +
+  persiste) e `updateTrackAiAnalysis(trackId, recordId, text)`
+  (edição manual, auto-save-on-blur). Ambas com ownership check.
+- **Reusa `enrichTrackComment` do Inc 14** sem mudança. Adapter
+  pattern já validado.
+- **Prompt isolado** em `src/lib/prompts/track-analysis.ts`
+  (função pura `buildTrackAnalysisPrompt`). Multi-linha:
+  L1=metadados Discogs, L2=audio features, L3=instrução pt-BR
+  com soft limit 500 chars + max_tokens 200.
+- **Bloco "Análise" sempre visível** dentro do estado expandido do
+  `<TrackCurationRow>`, abaixo do bloco "Sua nota". Placeholder
+  quando vazio. Botão "✨ Analisar com IA" dentro do bloco (não
+  inline com botões de preview do Inc 008).
+- **Re-gerar exige confirmação** se já há conteúdo
+  (`window.confirm`, mesmo pattern do Inc 14). Apagar texto vira
+  `NULL`.
+- **Botão visível em todas as faixas** independente de `selected`
+  (FR-010a — análise antecede decisão de selecionar).
+- **Sem chave configurada** → botão disabled com tooltip "Configure
+  sua chave em /conta" (estado server-render via
+  `getUserAIConfigStatus`).
+- **Constituição bump 1.1.0**: `aiAnalysis` adicionado à lista
+  AUTHOR de tracks no Princípio I.
 
 Key points of 012 (Inc 14 — BYOK):
 - **5 providers de IA suportados**: Gemini, Anthropic, OpenAI,

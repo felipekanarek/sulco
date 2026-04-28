@@ -127,6 +127,10 @@ export const tracks = sqliteTable(
     fineGenre: text('fine_genre'),
     references: text('references'),
     comment: text('comment'),
+    // 013 (Inc 13): análise gerada via IA. AUTHOR híbrido — IA escreve
+    // via clique do DJ (intencional); DJ pode editar como `comment`.
+    // Nunca escrita por sync de fonte externa.
+    aiAnalysis: text('ai_analysis'),
     isBomb: integer('is_bomb', { mode: 'boolean' }).notNull().default(false),
     // 005-acousticbrainz-audio-features
     mbid: text('mbid'),

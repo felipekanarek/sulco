@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { listUserVocabulary } from '@/lib/actions';
+import { getUserAIConfigStatus } from '@/lib/ai';
 import { loadDisc } from '@/lib/queries/curadoria';
 import { CoverPlaceholder } from '@/components/cover-placeholder';
 import { EnrichRecordButton } from '@/components/enrich-record-button';
@@ -36,10 +37,12 @@ export default async function RecordDetailPage({
     .limit(1);
   const record = full[0]!;
 
-  const [moodSuggestions, contextSuggestions] = await Promise.all([
+  const [moodSuggestions, contextSuggestions, aiStatus] = await Promise.all([
     listUserVocabulary('moods'),
     listUserVocabulary('contexts'),
+    getUserAIConfigStatus(user.id),
   ]);
+  const aiConfigured = aiStatus.configured;
 
   // Agrupar faixas por lado (letra inicial da posição)
   const bySide = new Map<string, typeof disc.tracks>();
@@ -178,6 +181,7 @@ export default async function RecordDetailPage({
                     recordArtist={disc.artist}
                     moodSuggestions={moodSuggestions}
                     contextSuggestions={contextSuggestions}
+                    aiConfigured={aiConfigured}
                   />
                 ))}
               </div>
