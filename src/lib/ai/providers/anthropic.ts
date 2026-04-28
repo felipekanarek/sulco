@@ -42,8 +42,10 @@ export const anthropicAdapter: AIAdapter = {
       const client = new Anthropic({ apiKey });
       const msg = await client.messages.create({
         model,
-        // 800 tokens dá folga pras 3-4 frases pt-BR pedidas no prompt.
-        max_tokens: 800,
+        // 2048 tokens — alinhado com Gemini (que precisa de budget alto
+        // por causa de thinking tokens). Anthropic não tem thinking, mas
+        // padronizar evita pegadinha futura.
+        max_tokens: 2048,
         temperature: 0.7,
         messages: [{ role: 'user', content: prompt }],
       });

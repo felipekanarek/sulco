@@ -59,8 +59,10 @@ export function openaiCompatAdapter(provider: Provider): AIAdapter {
         const client = buildClient(provider, apiKey);
         const completion = await client.chat.completions.create({
           model,
-          // 800 tokens dá folga pras 3-4 frases pt-BR pedidas no prompt.
-          max_tokens: 800,
+          // 2048 tokens — alinhado com Gemini/Anthropic. DeepSeek
+          // reasoner também usa thinking tokens, então budget alto
+          // serve pra todos.
+          max_tokens: 2048,
           temperature: 0.7,
           messages: [{ role: 'user', content: prompt }],
         });
