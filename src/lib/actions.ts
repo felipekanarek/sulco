@@ -1161,6 +1161,8 @@ export async function suggestSetTracks(
   // Parse JSON defensivo
   const parseResult = parseAISuggestionsResponse(aiResult.text);
   if (!parseResult.ok) {
+    // Log completo pra debugar formato real da resposta em prod.
+    console.error('[suggestSetTracks] parse falhou. Resposta crua:', aiResult.text);
     return {
       ok: false,
       error: 'IA retornou resposta em formato inesperado — tente novamente.',

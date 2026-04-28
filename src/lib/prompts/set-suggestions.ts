@@ -125,49 +125,84 @@ export function buildSetSuggestionsPrompt(input: SetSuggestionsPromptInput): str
    parseAISuggestionsResponse — extração defensiva de JSON
    ============================================================ */
 
-const aiSuggestionsSchema = z
-  .array(
-    z.object({
-      trackId: z.number().int().positive(),
-      justificativa: z.string().trim().min(1).max(500),
-    }),
-  )
-  .min(0)
-  .max(20);
+const aiSuggestionItemSchema = z.object({
+  trackId: z.coerce.number().int().positive(),
+  justificativa: z.string().trim().min(1).max(500),
+});
 
-export type AISuggestion = z.infer<typeof aiSuggestionsSchema>[number];
+const aiSuggestionsArraySchema = z.array(aiSuggestionItemSchema).min(0).max(20);
 
-const FENCED_RE = /```(?:json)?\s*(\[[\s\S]*?\])\s*```/i;
-const INLINE_RE = /(\[\s*\{[\s\S]*\}\s*\])/;
+// Aceita também envelopes comuns que LLMs usam:
+// { suggestions: [...] } | { sugestoes: [...] } | { tracks: [...] }
+const aiSuggestionsEnvelopeSchema = z
+  .object({
+    suggestions: aiSuggestionsArraySchema.optional(),
+    sugestoes: aiSuggestionsArraySchema.optional(),
+    sugestões: aiSuggestionsArraySchema.optional(),
+    tracks: aiSuggestionsArraySchema.optional(),
+    data: aiSuggestionsArraySchema.optional(),
+  })
+  .transform((v) =>
+    v.suggestions ?? v.sugestoes ?? v.sugestões ?? v.tracks ?? v.data ?? null,
+  );
+
+export type AISuggestion = z.infer<typeof aiSuggestionItemSchema>;
+
+// Múltiplos extractors, do mais estrito ao mais flexível.
+const EXTRACTORS: Array<{ name: string; re: RegExp }> = [
+  // ```json [ ... ] ```
+  { name: 'fenced-json', re: /```(?:json|javascript)?\s*(\[[\s\S]*?\])\s*```/i },
+  // ```json { ... } ```  (envelope)
+  { name: 'fenced-object', re: /```(?:json|javascript)?\s*(\{[\s\S]*?\})\s*```/i },
+  // [ ... ]  inline
+  { name: 'inline-array', re: /(\[\s*\{[\s\S]*?\}\s*\])/ },
+  // { ... }  inline (envelope sem fence)
+  { name: 'inline-object', re: /(\{\s*"[\s\S]*\}\s*)$/ },
+];
+
+function tryParseRaw(raw: string): unknown | null {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function validateParsed(parsed: unknown): AISuggestion[] | null {
+  // Tenta como array direto.
+  const asArray = aiSuggestionsArraySchema.safeParse(parsed);
+  if (asArray.success) return asArray.data;
+  // Tenta como envelope.
+  const asEnvelope = aiSuggestionsEnvelopeSchema.safeParse(parsed);
+  if (asEnvelope.success && asEnvelope.data) return asEnvelope.data;
+  return null;
+}
 
 export function parseAISuggestionsResponse(
   text: string,
 ): { ok: true; data: AISuggestion[] } | { ok: false; error: string } {
-  let raw: string | null = null;
-
-  const fenced = text.match(FENCED_RE);
-  if (fenced) {
-    raw = fenced[1];
-  } else {
-    const inline = text.match(INLINE_RE);
-    if (inline) raw = inline[1];
+  // Estratégia 1: tentar parse do texto inteiro (modelos disciplinados)
+  const fullParse = tryParseRaw(text.trim());
+  if (fullParse) {
+    const validated = validateParsed(fullParse);
+    if (validated) return { ok: true, data: validated };
   }
 
-  if (!raw) {
-    return { ok: false, error: 'Resposta sem bloco JSON detectável.' };
+  // Estratégia 2: extractors regex em ordem.
+  for (const { re } of EXTRACTORS) {
+    const m = text.match(re);
+    if (!m) continue;
+    const parsed = tryParseRaw(m[1] ?? m[0]);
+    if (!parsed) continue;
+    const validated = validateParsed(parsed);
+    if (validated) return { ok: true, data: validated };
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { ok: false, error: 'JSON inválido na resposta do provider.' };
-  }
+  // Falhou em tudo — log defensivo pra debug em prod.
+  console.error(
+    '[ai/parse] resposta não-parseável (primeiras 500 chars):',
+    text.slice(0, 500),
+  );
 
-  const validated = aiSuggestionsSchema.safeParse(parsed);
-  if (!validated.success) {
-    return { ok: false, error: 'Estrutura de resposta inesperada.' };
-  }
-
-  return { ok: true, data: validated.data };
+  return { ok: false, error: 'Estrutura de resposta inesperada.' };
 }
