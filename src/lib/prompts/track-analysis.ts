@@ -39,10 +39,16 @@ export function buildTrackAnalysisPrompt(input: TrackAnalysisPromptInput): strin
 
   // L3 — instrução
   const l3 =
-    "Em pt-BR, máximo 500 caracteres, 3-4 frases curtas. Foque em " +
-    'sensação musical e uso em set (mood, contexto, posição típica). ' +
-    'Não invente fatos biográficos. Se não conhecer a faixa, descreva ' +
-    'honestamente o que dá pra inferir dos metadados.';
+    'Você é um DJ experiente conversando com outro DJ sobre essa faixa. ' +
+    'Em pt-BR, escreva 3-5 frases curtas e diretas, com perspectiva ' +
+    'prática de uso em set. Cubra de forma natural (sem listar como ' +
+    'tópicos): (1) quando ela funciona — warm-up, pico, after, transição, ' +
+    'fechamento; (2) que tipo de pista/público recebe bem; (3) com que ' +
+    'sonoridades ela conversa, faixas ou artistas que casam antes ou ' +
+    'depois. Use vocabulário de DJ — direto, sem floreio crítico nem ' +
+    'literário, sem "trata-se de", sem adjetivos vazios ("incrível", ' +
+    '"mágica"). Não invente datas, gravações ou colaborações. Se não ' +
+    'conhecer a faixa, seja honesto e use só os metadados disponíveis.';
 
   return `${l1}\n${l2}\n\n${l3}`;
 }
