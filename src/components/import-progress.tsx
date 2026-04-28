@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { getImportProgress, type ImportProgress } from '@/lib/actions';
+import {
+  acknowledgeImportProgress,
+  getImportProgress,
+  type ImportProgress,
+} from '@/lib/actions';
 
 /**
  * Exibe o progresso do import inicial (FR-030). Faz polling a cada 3s
@@ -11,10 +15,15 @@ import { getImportProgress, type ImportProgress } from '@/lib/actions';
  * Layout unificado: o card de progresso tem o mesmo template em
  * running / parcial / rate_limited — só o eyebrow e o hint de rodapé
  * mudam. `ok` e `erro` têm cards próprios menores.
+ *
+ * 010 (Bug 13): em estado terminal, exibe botão "× fechar" que persiste
+ * `users.importAcknowledgedAt`. Banner some quando lastAck >= runStartedAt.
+ * Em estado running, banner não tem botão fechar.
  */
 export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
   const router = useRouter();
   const [state, setState] = useState(initial);
+  const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     if (!state.running) return;
@@ -26,9 +35,35 @@ export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
     return () => clearInterval(id);
   }, [state.running, router]);
 
+  // outcome 'idle' E sem progresso → nada a mostrar (zero-state)
+  if (state.outcome === 'idle' && state.x === 0) return null;
+
+  // 010 (Bug 13): em estado terminal já reconhecido, não renderiza.
+  const isTerminal = !state.running;
+  const isAcked =
+    state.lastAck !== null &&
+    state.runStartedAt !== null &&
+    state.lastAck.getTime() >= state.runStartedAt.getTime();
+  if (isTerminal && isAcked) return null;
+
+  function handleAck() {
+    startTransition(async () => {
+      const res = await acknowledgeImportProgress();
+      if (res.ok) {
+        // Atualização otimista: useState(initial) não re-sincroniza com a
+        // prop após router.refresh(), então setamos lastAck localmente
+        // para o gate `isAcked` virar true e o componente retornar null.
+        setState((prev) => ({ ...prev, lastAck: new Date() }));
+        router.refresh();
+      }
+    });
+  }
+
+  const showCloseButton = isTerminal;
+
   if (state.outcome === 'ok') {
     return (
-      <Card tone="ok">
+      <Card tone="ok" onClose={showCloseButton ? handleAck : undefined} pending={pending}>
         <p className="eyebrow text-ok">Import concluído</p>
         <p className="font-serif text-2xl italic mt-1">{state.x} discos importados</p>
       </Card>
@@ -37,15 +72,12 @@ export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
 
   if (state.outcome === 'erro') {
     return (
-      <Card tone="warn">
+      <Card tone="warn" onClose={showCloseButton ? handleAck : undefined} pending={pending}>
         <p className="eyebrow text-warn">Import interrompido</p>
         <p className="mt-2 text-sm">{state.errorMessage ?? 'Erro inesperado.'}</p>
       </Card>
     );
   }
-
-  // outcome 'idle' E sem progresso → nada a mostrar
-  if (state.outcome === 'idle' && state.x === 0) return null;
 
   // running / parcial / rate_limited / idle-com-records-já-importados:
   // todos usam o mesmo layout com X de Y + barra, só muda o eyebrow
@@ -68,7 +100,12 @@ export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
   const pct = state.y > 0 ? Math.min(100, Math.round((state.x / state.y) * 100)) : 0;
 
   return (
-    <Card tone="info" aria-live="polite">
+    <Card
+      tone="info"
+      onClose={showCloseButton ? handleAck : undefined}
+      pending={pending}
+      aria-live="polite"
+    >
       <p className="eyebrow">{eyebrow}</p>
       <p className="font-serif text-2xl italic mt-1">
         {state.x} <span className="text-ink-mute">de</span> {state.y || '?'} discos
@@ -96,17 +133,36 @@ export function ImportProgressCard({ initial }: { initial: ImportProgress }) {
 function Card({
   children,
   tone,
+  onClose,
+  pending,
   ...rest
 }: {
   children: React.ReactNode;
   tone: 'info' | 'ok' | 'warn';
+  onClose?: () => void;
+  pending?: boolean;
   'aria-live'?: 'polite' | 'off';
 }) {
   const border =
     tone === 'ok' ? 'border-ok/40' : tone === 'warn' ? 'border-warn/40' : 'border-line';
+  const closePadding = onClose ? 'pr-14' : '';
   return (
-    <section {...rest} className={`border ${border} bg-paper-raised px-6 py-5 mb-8`}>
+    <section
+      {...rest}
+      className={`relative border ${border} bg-paper-raised px-6 py-5 mb-8 ${closePadding}`}
+    >
       {children}
+      {onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={pending}
+          aria-label="Fechar banner de import"
+          className="absolute top-2 right-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-ink-mute hover:text-ink disabled:opacity-50 disabled:cursor-wait text-xl leading-none"
+        >
+          ×
+        </button>
+      ) : null}
     </section>
   );
 }

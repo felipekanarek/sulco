@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **009-responsividade-mobile-first**
+Current active feature: **010-fix-import-banner-acknowledge**
 
 Authoritative planning artifacts (read these before making changes
-to layout responsivo, header mobile, drawer/bottom sheet, ou qualquer
-ajuste de UI cross-cutting):
+ao banner de progresso de import na home, ao retorno de
+`getImportProgress` ou ao schema de `users`):
 
-- Plan: [specs/009-responsividade-mobile-first/plan.md](specs/009-responsividade-mobile-first/plan.md)
-- Spec: [specs/009-responsividade-mobile-first/spec.md](specs/009-responsividade-mobile-first/spec.md)
-- Data model: [specs/009-responsividade-mobile-first/data-model.md](specs/009-responsividade-mobile-first/data-model.md)
-- Contracts: [specs/009-responsividade-mobile-first/contracts/](specs/009-responsividade-mobile-first/contracts/)
-- Research: [specs/009-responsividade-mobile-first/research.md](specs/009-responsividade-mobile-first/research.md)
-- Quickstart: [specs/009-responsividade-mobile-first/quickstart.md](specs/009-responsividade-mobile-first/quickstart.md)
+- Plan: [specs/010-fix-import-banner-acknowledge/plan.md](specs/010-fix-import-banner-acknowledge/plan.md)
+- Spec: [specs/010-fix-import-banner-acknowledge/spec.md](specs/010-fix-import-banner-acknowledge/spec.md)
+- Data model: [specs/010-fix-import-banner-acknowledge/data-model.md](specs/010-fix-import-banner-acknowledge/data-model.md)
+- Contracts: [specs/010-fix-import-banner-acknowledge/contracts/](specs/010-fix-import-banner-acknowledge/contracts/)
+- Research: [specs/010-fix-import-banner-acknowledge/research.md](specs/010-fix-import-banner-acknowledge/research.md)
+- Quickstart: [specs/010-fix-import-banner-acknowledge/quickstart.md](specs/010-fix-import-banner-acknowledge/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -283,30 +283,25 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 007 fix-sync-snapshot-fallback (Bug 11 + 12)
 - 008 preview-audio-deezer-spotify-youtube (3 botões inline em
   `/disco/[id]` e `/sets/[id]/montar`)
+- 009 responsividade-mobile-first (todas as rotas autenticadas
+  funcionam em viewport ≤640px sem scroll horizontal)
 
-Key points of 009:
-- **Zero schema delta**, zero novas Server Actions. Feature é
-  puramente front-end de apresentação.
-- **Princípio I respeitado por construção**: refator visual não
-  toca actions/queries que escrevem AUTHOR.
-- **Estratégia mobile-first**: Tailwind v3 com defaults = mobile,
-  prefixos `md:`/`lg:` adicionam comportamento desktop. Convenção
-  inversa do código atual — exige cuidado pra não quebrar desktop.
-- **Componentes novos** (3-4 client components):
-  - `<MobileDrawer>` — primitiva genérica (lateral OU bottom)
-  - `<MobileNav>` + `<MobileNavTrigger>` — drawer da nav (esquerda)
-  - `<FilterBottomSheet>` + `<FilterActiveChips>` — filtros mobile
-- **Refactor existente** (5-6 componentes): `track-curation-row`,
-  `candidate-row`, `montar-filters`, `filter-bar`, `record-grid-card`,
-  Header em `layout.tsx`, `/disco/[id]/page.tsx`,
-  `/sets/[id]/montar/page.tsx`.
-- **Decisões UX (do /speckit.clarify)**:
-  - Nav mobile = drawer lateral esquerdo (~75% largura)
-  - `/disco/[id]` mobile = banner full-width como hero (~200-240px)
-  - Filtros mobile = bottom sheet (~80vh, sticky "Aplicar")
-- **Tap targets ≥44×44px** universalmente em mobile.
-- **PWA fora de escopo** (Inc 2b futuro: manifest + service worker
-  + install + offline).
-- Sem dependência externa nova; constituição respeitada (sem shadcn,
-  sem Zustand, sem libs de UI).
+Key points of 010 (Bug 13):
+- **Schema delta aditivo de 1 coluna**: `users.import_acknowledged_at`
+  (timestamp nullable). Sem backfill, sem migração de dados.
+- **1 Server Action nova**: `acknowledgeImportProgress` em
+  `src/lib/actions.ts`. Sem input, lê `requireCurrentUser`, escreve
+  timestamp, `revalidatePath('/')`.
+- **`getImportProgress` ganha 2 campos** no retorno: `runStartedAt`
+  e `lastAck`. Comportamento existente preservado.
+- **`<ImportProgressCard>` decide visibilidade no client** com 3
+  condições simples: zero-state preservado, terminal-acked oculta,
+  running sem botão fechar, terminal não-acked mostra botão.
+- **Princípio I respeitado**: `import_acknowledged_at` é zona SYS
+  (não AUTHOR); só o próprio DJ escreve via clique.
+- **Pattern reusado**: `users.importAcknowledgedAt` espelha
+  `records.archivedAcknowledgedAt` — single-timestamp, comparado
+  contra `startedAt` do último run.
+- **Sem nova dependência**, sem libs externas. `useTransition` +
+  `router.refresh()` no client.
 <!-- SPECKIT END -->
