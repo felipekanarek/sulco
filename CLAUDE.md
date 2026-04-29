@@ -262,18 +262,19 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **016-edit-set-fields** (BACKLOG: Inc 15)
+Current active feature: **017-acknowledge-all-archived** (BACKLOG: Inc 11)
 
 Authoritative planning artifacts (read these before making changes
-ao botão "✏️ Editar set" em `/sets/[id]/montar`, ao
-`<EditSetModal>` (novo client component), ou ao form de edição de
-campos do set):
+ao botão "Reconhecer tudo" no header da seção "Discos arquivados"
+em `/status`, à Server Action `acknowledgeAllArchived` em
+`src/lib/actions.ts`, ou ao componente client
+`<AcknowledgeAllArchivedButton>`):
 
-- Plan: [specs/016-edit-set-fields/plan.md](specs/016-edit-set-fields/plan.md)
-- Spec: [specs/016-edit-set-fields/spec.md](specs/016-edit-set-fields/spec.md)
-- Contracts: [specs/016-edit-set-fields/contracts/](specs/016-edit-set-fields/contracts/)
-- Research: [specs/016-edit-set-fields/research.md](specs/016-edit-set-fields/research.md)
-- Quickstart: [specs/016-edit-set-fields/quickstart.md](specs/016-edit-set-fields/quickstart.md)
+- Plan: [specs/017-acknowledge-all-archived/plan.md](specs/017-acknowledge-all-archived/plan.md)
+- Spec: [specs/017-acknowledge-all-archived/spec.md](specs/017-acknowledge-all-archived/spec.md)
+- Contracts: [specs/017-acknowledge-all-archived/contracts/](specs/017-acknowledge-all-archived/contracts/)
+- Research: [specs/017-acknowledge-all-archived/research.md](specs/017-acknowledge-all-archived/research.md)
+- Quickstart: [specs/017-acknowledge-all-archived/quickstart.md](specs/017-acknowledge-all-archived/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -299,6 +300,41 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 015 ai-suggestions-inline (Inc 16 — UI rework sugestões IA inline
   na lista de candidatos; <MontarCandidates> wrapper com dedup;
   zero schema delta)
+- 016 edit-set-fields (Inc 15 — botão "✏️ Editar set" abre
+  `<EditSetModal>` fullscreen-on-mobile; reusa `updateSet` existente;
+  bump constitucional 1.2.0 — Princípio V Mobile-Native por Padrão)
+
+Key points of 017 (Inc 11 — Botão "Reconhecer tudo" no banner de archived):
+- **Zero schema delta**. Reusa coluna `records.archivedAcknowledgedAt`
+  já existente.
+- **1 Server Action nova**: `acknowledgeAllArchived()` (sem input —
+  derivar `userId` da sessão via `requireCurrentUser()`). Bulk UPDATE
+  single-statement com `WHERE userId = ? AND archived = 1 AND
+  archivedAcknowledgedAt IS NULL`. Atomicidade garantida pelo SQLite.
+- **Retorno consistente**: `{ ok: true, count }` ou
+  `{ ok: false, error }` (mesmo shape de `updateSet`).
+- **1 client component novo**: `<AcknowledgeAllArchivedButton>` com
+  `useTransition` + `window.confirm("Marcar todos os N como
+  reconhecidos?")` antes de chamar a action. `disabled` com label
+  "Reconhecendo…" enquanto `isPending` (FR-009).
+- **Threshold de visibilidade**: botão só renderiza quando
+  `archivedPending.length >= 2`. Com 1 pendente, botão individual
+  basta (FR-002).
+- **Posicionamento**: header da seção "Discos arquivados" em
+  [src/app/status/page.tsx](src/app/status/page.tsx), próximo ao
+  contador "N pendentes". Sem container novo.
+- **`revalidatePath('/status')` + `revalidatePath('/')`**: banner
+  global some em todas as rotas após sucesso (SC-002).
+- **Princípio V (Mobile-Native, 1.2.0) cumprido**: tap target
+  ≥44×44 px (FR-010), `window.confirm` é fullscreen nativo em
+  iOS/Android. Quickstart inclui cenário 5 mobile (375×667).
+- **Princípio I respeitado**: `archivedAcknowledgedAt` é zona SYS,
+  não AUTHOR. Sync não escreve aqui.
+- **Princípio IV respeitado**: action não deleta nada — apenas marca
+  timestamp.
+- **Multi-user isolation** garantida pelo `WHERE userId = ?` (SC-003).
+- **`acknowledgeArchivedRecord` existente intacto** (botão individual
+  em `<ArchivedRecordRow>` continua funcionando).
 
 Key points of 016 (Inc 15 — Editar briefing/set após criação):
 - **Server Action `updateSet` JÁ existe** em `src/lib/actions.ts:945`
