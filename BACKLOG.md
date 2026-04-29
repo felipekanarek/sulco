@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 15 entregue)
+**Última atualização**: 2026-04-28 (Inc 17 registrado)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,6 +48,44 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
+
+#### Incremento 17 — Análise IA + ícone de expandir nos cards de candidato
+Ajustes UX no `<CandidateRow>` (componente único usado em
+`/sets/[id]/montar` pra listagem de candidatos):
+
+**1. Exibir `tracks.ai_analysis` no expandido**
+- Campo já existe (Inc 013) e é exibido em `/disco/[id]` via
+  `<TrackCurationRow>`, mas o `<CandidateRow>` nem carrega.
+- Pequena incoerência atual: `queryCandidates` em
+  `src/lib/queries/montar.ts:127` referencia `aiAnalysis` no score
+  de curadoria mas não seleciona o campo da tabela.
+- Escopo:
+  - Adicionar `aiAnalysis: string | null` ao tipo `Candidate`
+    (montar.ts:19-46).
+  - Adicionar `aiAnalysis: tracks.aiAnalysis` no select do
+    `queryCandidates` (montar.ts:137-162).
+  - No bloco expandido do `<CandidateRow>` (candidate-row.tsx:244-309),
+    incluir seção "Análise" abaixo de comment/references mostrando
+    `aiAnalysis` quando preenchido. Apenas leitura (edição continua
+    sendo via `/disco/[id]`).
+
+**2. Trocar ícone de expandir do `▸`/`▾`**
+- Botão em `candidate-row.tsx:322-331` usa Unicode `▸` (collapsed) /
+  `▾` (expanded) — o `▸` é visualmente próximo do `▶` (play),
+  podendo confundir DJ familiarizado com botões de preview de áudio
+  (Inc 008).
+- Sugestões: `+` / `–` (textual claro), ou chevron `›` / `⌄`, ou
+  label "Detalhes" + ícone direcional. Decidir no `/speckit.specify`.
+
+Princípio I respeitado: feature é leitura visual (sem novo write).
+Princípio V (Mobile-Native): bloco expandido já é responsivo;
+verificar tap targets em mobile.
+
+Sem schema delta. Esforço: ~30-45min via speckit.
+
+Registrado a pedido em 2026-04-28 após uso real do Inc 16
+(montar set) revelar a falta da análise IA na visão de candidato
+e a confusão visual do glyph de expandir.
 
 #### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
 Quando sync detecta vários discos removidos do Discogs (caso típico:
