@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
-import { asc, and, desc, eq, sql } from 'drizzle-orm';
+import { asc, and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
@@ -1543,6 +1543,39 @@ export async function acknowledgeArchivedRecord(
   revalidatePath('/status');
   revalidatePath('/');
   return { ok: true };
+}
+
+/* ============================================================
+   acknowledgeAllArchived — Inc 11 (017)
+   Bulk acknowledge de todos os archived pendentes do user atual.
+   Single-statement UPDATE; atomicidade garantida pelo SQLite.
+   ============================================================ */
+
+export async function acknowledgeAllArchived(): Promise<
+  ActionResult<{ count: number }>
+> {
+  const user = await requireCurrentUser();
+
+  try {
+    const updated = await db
+      .update(records)
+      .set({ archivedAcknowledgedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(records.userId, user.id),
+          eq(records.archived, true),
+          isNull(records.archivedAcknowledgedAt),
+        ),
+      )
+      .returning({ id: records.id });
+
+    revalidatePath('/status');
+    revalidatePath('/');
+    return { ok: true, data: { count: updated.length } };
+  } catch (err) {
+    console.error('[acknowledgeAllArchived] erro:', err);
+    return { ok: false, error: 'Falha ao reconhecer — tente novamente.' };
+  }
 }
 
 /* ============================================================

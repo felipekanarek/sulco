@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 17 registrado)
+**Última atualização**: 2026-04-28 (Inc 11 entregue → release 017)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -86,27 +86,6 @@ Sem schema delta. Esforço: ~30-45min via speckit.
 Registrado a pedido em 2026-04-28 após uso real do Inc 16
 (montar set) revelar a falta da análise IA na visão de candidato
 e a confusão visual do glyph de expandir.
-
-#### Incremento 11 — Botão "Reconhecer tudo" no banner de archived
-Quando sync detecta vários discos removidos do Discogs (caso típico:
-DJ faz limpeza de coleção e remove 5-10 de uma vez), banner em `/sync`
-mostra cada um com botão "Reconhecer" individual. Pra >5 archived,
-clicar um por um vira fricção.
-
-Escopo:
-- Botão "Reconhecer tudo" no header da seção "Discos arquivados",
-  abaixo do contador de pendentes
-- Confirmação simples ("Marcar todos os N como reconhecidos?")
-- Server Action `acknowledgeAllArchived()` faz `UPDATE records SET
-  archived_acknowledged_at = now() WHERE user_id = ? AND archived = 1
-  AND archived_acknowledged_at IS NULL`
-- revalidatePath('/sync') no fim → banner some
-
-Sem schema delta. Esforço: ~30 min via speckit. Reusa fluxo
-existente de "Reconhecer" individual.
-
-Registrado a pedido em 2026-04-25 após sync 268 marcar 9 archived
-de uma vez (limpeza de coleção do Felipe).
 
 #### Incremento 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
 Acervo do Felipe tem 150+ estilos catalogados; quando o DJ expande os
@@ -319,6 +298,7 @@ spec/plan/data-model/contracts/quickstart.
 - **014** — Briefing com IA em /sets/montar · 2026-04-28 · `specs/014-ai-set-suggestions/` · botão "✨ Sugerir com IA" em /sets/[id]/montar; Server Action `suggestSetTracks` orquestra ownership + briefing + setTracks (L2 sem ceiling) + catálogo via `queryCandidates` estendida com `rankByCuration` (L3 ceiling 50, score = 9 campos AUTHOR não-nulos); prompt builder em src/lib/prompts/set-suggestions.ts com parse JSON defensivo (regex fenced + inline + Zod); reusa <CandidateRow> com prop opcional `aiSuggestion` (badge + justificativa); cards adicionados permanecem visíveis; sem batch (DJ adiciona uma a uma); IA propõe apenas complementos; curto-circuito quando catálogo elegível vazio; timeout 60s; briefing truncado em 2000 chars; payload reduzido (só candidates referenciados)
 - **015** — UI rework sugestões IA inline (Inc 16) · 2026-04-28 · `specs/015-ai-suggestions-inline/` · sugestões IA viram cards inline no topo da listagem de candidatos com moldura accent (border-2/60) + bg paper-raised + badge solid (bg-accent text-paper) + justificativa em destaque (text-[15px] text-ink leading-relaxed); painel reposicionado abaixo dos filtros (briefing → filtros → MontarCandidates); botão "Ignorar sugestões" reseta state client-side ≤200ms; dedup de trackIds (sugestão vs comum) garante zero duplicação visual; <MontarCandidates> client wrapper substitui <AISuggestionsPanel> (deletado); zero schema delta, zero novas Server Actions
 - **016** — Editar briefing/set após criação (Inc 15) · 2026-04-28 · `specs/016-edit-set-fields/` · botão "✏️ Editar set" no header de /sets/[id]/montar abre modal com 4 campos pré-preenchidos (name/eventDate/location/briefing); reusa updateSet existente (partial update + ownership + normalizeDate + revalidatePath nas 3 rotas); pattern espelha <DeleteAccountModal>; ESC + clique fora fecham; reset on reopen via useEffect descarta edits cancelados; edição de briefing alimenta IA imediatamente; zero schema delta, zero novas Server Actions
+- **017** — Botão "Reconhecer tudo" no banner de archived (Inc 11) · 2026-04-28 · `specs/017-acknowledge-all-archived/` · header da seção "Discos arquivados" em /status ganha botão bulk quando há ≥2 pendentes; Server Action nova `acknowledgeAllArchived()` (sem input, deriva userId da sessão) faz UPDATE single-statement com `WHERE userId = ? AND archived = 1 AND archivedAcknowledgedAt IS NULL` — atomicidade garantida pelo SQLite; client component `<AcknowledgeAllArchivedButton>` com useTransition + window.confirm("Marcar todos os N como reconhecidos?") + disabled "Reconhecendo…" durante isPending; threshold ≥2 (com 1 pendente, botão individual basta); revalidatePath('/status')+('/'); banner global some em todas as rotas; tap target min-h-[44px] (Princípio V); multi-user isolation via WHERE userId; `acknowledgeArchivedRecord` individual intacto; zero schema delta
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).

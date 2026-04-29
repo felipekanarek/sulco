@@ -4,6 +4,7 @@ import { requireCurrentUser } from '@/lib/auth';
 import { loadStatusSnapshot, type SyncRunRow } from '@/lib/queries/status';
 import { ConflictRow } from '@/components/conflict-row';
 import { ArchivedRecordRow } from '@/components/archived-record-row';
+import { AcknowledgeAllArchivedButton } from '@/components/acknowledge-all-archived-button';
 import { ManualSyncButton } from '@/components/manual-sync-button';
 import { formatForDisplay } from '@/lib/tz';
 import { db } from '@/db';
@@ -75,14 +76,21 @@ export default async function StatusPage() {
       {/* Discos arquivados pendentes */}
       {snapshot.archivedPending.length > 0 ? (
         <section className="mb-8 md:mb-12">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline pb-3 md:pb-4 border-b border-line mb-4 md:mb-6 gap-1">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline pb-3 md:pb-4 border-b border-line mb-4 md:mb-6 gap-3 sm:gap-1">
             <h2 className="font-serif italic text-[22px] md:text-[28px] font-medium tracking-tight">
               Discos arquivados
             </h2>
-            <span className="label-tech text-warn">
-              {snapshot.archivedPending.length}{' '}
-              {snapshot.archivedPending.length === 1 ? 'pendente' : 'pendentes'}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="label-tech text-warn">
+                {snapshot.archivedPending.length}{' '}
+                {snapshot.archivedPending.length === 1 ? 'pendente' : 'pendentes'}
+              </span>
+              {snapshot.archivedPending.length >= 2 ? (
+                <AcknowledgeAllArchivedButton
+                  count={snapshot.archivedPending.length}
+                />
+              ) : null}
+            </div>
           </div>
           <p className="font-serif italic text-[14px] md:text-[15px] text-ink-soft mb-4 md:max-w-[760px]">
             Estes discos saíram da sua coleção Discogs. Toda curadoria está
