@@ -30,6 +30,7 @@ export type Candidate = {
   fineGenre: string | null;
   comment: string | null;
   references: string | null;
+  aiAnalysis: string | null;
   isBomb: boolean;
   // 008 — preview de áudio
   previewUrl: string | null;
@@ -148,6 +149,7 @@ export async function queryCandidates(
       fineGenre: tracks.fineGenre,
       comment: tracks.comment,
       references: tracks.references,
+      aiAnalysis: tracks.aiAnalysis,
       isBomb: tracks.isBomb,
       previewUrl: tracks.previewUrl,
       previewUrlCachedAt: tracks.previewUrlCachedAt,

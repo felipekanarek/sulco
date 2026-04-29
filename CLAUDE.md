@@ -262,19 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **017-acknowledge-all-archived** (BACKLOG: Inc 11)
+Current active feature: **018-candidate-ai-analysis-glyph** (BACKLOG: Inc 17)
 
 Authoritative planning artifacts (read these before making changes
-ao botão "Reconhecer tudo" no header da seção "Discos arquivados"
-em `/status`, à Server Action `acknowledgeAllArchived` em
-`src/lib/actions.ts`, ou ao componente client
-`<AcknowledgeAllArchivedButton>`):
+à listagem de candidatos em `/sets/[id]/montar`, ao tipo `Candidate`
+em `src/lib/queries/montar.ts`, ou ao componente
+`<CandidateRow>` em `src/components/candidate-row.tsx`):
 
-- Plan: [specs/017-acknowledge-all-archived/plan.md](specs/017-acknowledge-all-archived/plan.md)
-- Spec: [specs/017-acknowledge-all-archived/spec.md](specs/017-acknowledge-all-archived/spec.md)
-- Contracts: [specs/017-acknowledge-all-archived/contracts/](specs/017-acknowledge-all-archived/contracts/)
-- Research: [specs/017-acknowledge-all-archived/research.md](specs/017-acknowledge-all-archived/research.md)
-- Quickstart: [specs/017-acknowledge-all-archived/quickstart.md](specs/017-acknowledge-all-archived/quickstart.md)
+- Plan: [specs/018-candidate-ai-analysis-glyph/plan.md](specs/018-candidate-ai-analysis-glyph/plan.md)
+- Spec: [specs/018-candidate-ai-analysis-glyph/spec.md](specs/018-candidate-ai-analysis-glyph/spec.md)
+- Contracts: [specs/018-candidate-ai-analysis-glyph/contracts/](specs/018-candidate-ai-analysis-glyph/contracts/)
+- Research: [specs/018-candidate-ai-analysis-glyph/research.md](specs/018-candidate-ai-analysis-glyph/research.md)
+- Quickstart: [specs/018-candidate-ai-analysis-glyph/quickstart.md](specs/018-candidate-ai-analysis-glyph/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -303,6 +302,38 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 016 edit-set-fields (Inc 15 — botão "✏️ Editar set" abre
   `<EditSetModal>` fullscreen-on-mobile; reusa `updateSet` existente;
   bump constitucional 1.2.0 — Princípio V Mobile-Native por Padrão)
+- 017 acknowledge-all-archived (Inc 11 — botão "Reconhecer tudo" no
+  header de "Discos arquivados" em /status quando há ≥2 pendentes;
+  Server Action `acknowledgeAllArchived()` bulk single-statement com
+  WHERE userId+archived+IS NULL; window.confirm + useTransition; zero
+  schema delta; reusa records.archivedAcknowledgedAt)
+
+Key points of 018 (Inc 17 — Análise IA + glyph de expandir nos candidatos):
+- **Zero schema delta**. Reusa coluna `tracks.aiAnalysis` (Inc 13).
+- **Zero novas Server Actions**. Refator localizado em 2 arquivos
+  ([src/lib/queries/montar.ts](src/lib/queries/montar.ts) +
+  [src/components/candidate-row.tsx](src/components/candidate-row.tsx)).
+- **Parte 1 — exibir análise IA**: tipo `Candidate` ganha
+  `aiAnalysis: string | null`; `queryCandidates` adiciona o campo
+  ao SELECT (corrige incoerência atual em que `rankByCuration`
+  referencia o campo no score mas a query não carrega). No
+  expandido do `<CandidateRow>` (col-1 do grid 2-col), seção
+  "Análise" renderiza apenas quando `aiAnalysis.trim().length > 0`,
+  abaixo de "Comentário". Sem placeholder, sem CTA, **read-only**
+  (edição segue exclusiva em `/disco/[id]` via Inc 13).
+- **Parte 2 — trocar glyph de expand**: `▾`/`▸` substituídos por
+  `−` (U+2212) / `+` (U+002B). ASCII universal, zero ambiguidade
+  com `▶` dos botões de preview (Inc 008). ARIA preservado
+  (`aria-expanded`, `aria-controls`, `aria-label`).
+- **Visual da seção "Análise"**: `label-tech text-ink-mute` no título
+  + `font-serif italic text-[13px] text-ink whitespace-pre-line` no
+  corpo; **sem aspas** (diferenciando de "Comentário" que tem voz
+  humana literal). Coerente com `<TrackCurationRow>` em /disco/[id].
+- **Princípio V cumprido**: tap target do toggle preserva
+  `w-11 h-11 md:w-8 md:h-8` (44×44 mobile, 32×32 desktop — status
+  quo Inc 009). Quickstart inclui cenários mobile + acessibilidade.
+- **Princípio I respeitado**: feature é puramente leitura de campo
+  AUTHOR híbrido. Sem novo write.
 
 Key points of 017 (Inc 11 — Botão "Reconhecer tudo" no banner de archived):
 - **Zero schema delta**. Reusa coluna `records.archivedAcknowledgedAt`

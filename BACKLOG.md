@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-28 (Inc 11 entregue → release 017)
+**Última atualização**: 2026-04-28 (Inc 17 entregue → release 018)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,44 +48,6 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
-
-#### Incremento 17 — Análise IA + ícone de expandir nos cards de candidato
-Ajustes UX no `<CandidateRow>` (componente único usado em
-`/sets/[id]/montar` pra listagem de candidatos):
-
-**1. Exibir `tracks.ai_analysis` no expandido**
-- Campo já existe (Inc 013) e é exibido em `/disco/[id]` via
-  `<TrackCurationRow>`, mas o `<CandidateRow>` nem carrega.
-- Pequena incoerência atual: `queryCandidates` em
-  `src/lib/queries/montar.ts:127` referencia `aiAnalysis` no score
-  de curadoria mas não seleciona o campo da tabela.
-- Escopo:
-  - Adicionar `aiAnalysis: string | null` ao tipo `Candidate`
-    (montar.ts:19-46).
-  - Adicionar `aiAnalysis: tracks.aiAnalysis` no select do
-    `queryCandidates` (montar.ts:137-162).
-  - No bloco expandido do `<CandidateRow>` (candidate-row.tsx:244-309),
-    incluir seção "Análise" abaixo de comment/references mostrando
-    `aiAnalysis` quando preenchido. Apenas leitura (edição continua
-    sendo via `/disco/[id]`).
-
-**2. Trocar ícone de expandir do `▸`/`▾`**
-- Botão em `candidate-row.tsx:322-331` usa Unicode `▸` (collapsed) /
-  `▾` (expanded) — o `▸` é visualmente próximo do `▶` (play),
-  podendo confundir DJ familiarizado com botões de preview de áudio
-  (Inc 008).
-- Sugestões: `+` / `–` (textual claro), ou chevron `›` / `⌄`, ou
-  label "Detalhes" + ícone direcional. Decidir no `/speckit.specify`.
-
-Princípio I respeitado: feature é leitura visual (sem novo write).
-Princípio V (Mobile-Native): bloco expandido já é responsivo;
-verificar tap targets em mobile.
-
-Sem schema delta. Esforço: ~30-45min via speckit.
-
-Registrado a pedido em 2026-04-28 após uso real do Inc 16
-(montar set) revelar a falta da análise IA na visão de candidato
-e a confusão visual do glyph de expandir.
 
 #### Incremento 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
 Acervo do Felipe tem 150+ estilos catalogados; quando o DJ expande os
@@ -299,6 +261,7 @@ spec/plan/data-model/contracts/quickstart.
 - **015** — UI rework sugestões IA inline (Inc 16) · 2026-04-28 · `specs/015-ai-suggestions-inline/` · sugestões IA viram cards inline no topo da listagem de candidatos com moldura accent (border-2/60) + bg paper-raised + badge solid (bg-accent text-paper) + justificativa em destaque (text-[15px] text-ink leading-relaxed); painel reposicionado abaixo dos filtros (briefing → filtros → MontarCandidates); botão "Ignorar sugestões" reseta state client-side ≤200ms; dedup de trackIds (sugestão vs comum) garante zero duplicação visual; <MontarCandidates> client wrapper substitui <AISuggestionsPanel> (deletado); zero schema delta, zero novas Server Actions
 - **016** — Editar briefing/set após criação (Inc 15) · 2026-04-28 · `specs/016-edit-set-fields/` · botão "✏️ Editar set" no header de /sets/[id]/montar abre modal com 4 campos pré-preenchidos (name/eventDate/location/briefing); reusa updateSet existente (partial update + ownership + normalizeDate + revalidatePath nas 3 rotas); pattern espelha <DeleteAccountModal>; ESC + clique fora fecham; reset on reopen via useEffect descarta edits cancelados; edição de briefing alimenta IA imediatamente; zero schema delta, zero novas Server Actions
 - **017** — Botão "Reconhecer tudo" no banner de archived (Inc 11) · 2026-04-28 · `specs/017-acknowledge-all-archived/` · header da seção "Discos arquivados" em /status ganha botão bulk quando há ≥2 pendentes; Server Action nova `acknowledgeAllArchived()` (sem input, deriva userId da sessão) faz UPDATE single-statement com `WHERE userId = ? AND archived = 1 AND archivedAcknowledgedAt IS NULL` — atomicidade garantida pelo SQLite; client component `<AcknowledgeAllArchivedButton>` com useTransition + window.confirm("Marcar todos os N como reconhecidos?") + disabled "Reconhecendo…" durante isPending; threshold ≥2 (com 1 pendente, botão individual basta); revalidatePath('/status')+('/'); banner global some em todas as rotas; tap target min-h-[44px] (Princípio V); multi-user isolation via WHERE userId; `acknowledgeArchivedRecord` individual intacto; zero schema delta
+- **018** — Análise IA + glyph de expandir nos cards de candidato (Inc 17) · 2026-04-28 · `specs/018-candidate-ai-analysis-glyph/` · 2 ajustes UX no `<CandidateRow>` em /sets/[id]/montar: (1) tipo `Candidate` ganha `aiAnalysis: string | null` e `queryCandidates` adiciona o campo ao SELECT (corrige incoerência onde score `rankByCuration` referenciava o campo sem carregá-lo); seção "Análise" renderiza no col-1 do expandido abaixo de comment/references quando `aiAnalysis.trim().length > 0`, read-only (label-tech ink-mute + serif italic 13px text-ink whitespace-pre-line, sem aspas — coerente com `<TrackCurationRow>` em /disco/[id]); (2) glyph de toggle do botão expand muda de `▾`/`▸` para `−` (U+2212) / `+` (U+002B) — ASCII universal, zero ambiguidade com `▶` dos botões de preview Inc 008, ARIA preservado; zero schema delta, zero novas Server Actions, refator localizado em 2 arquivos
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
