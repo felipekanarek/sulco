@@ -271,10 +271,18 @@ export function CandidateRow({
                 </div>
               ) : null}
               {candidate.comment ? (
-                <div>
+                <div className="mb-3">
                   <p className="label-tech text-ink-mute mb-0.5">Comentário</p>
                   <p className="font-serif italic text-[13px] text-ink whitespace-pre-line">
                     “{candidate.comment}”
+                  </p>
+                </div>
+              ) : null}
+              {candidate.aiAnalysis && candidate.aiAnalysis.trim().length > 0 ? (
+                <div>
+                  <p className="label-tech text-ink-mute mb-0.5">Análise</p>
+                  <p className="font-serif italic text-[13px] text-ink whitespace-pre-line">
+                    {candidate.aiAnalysis}
                   </p>
                 </div>
               ) : null}
@@ -327,7 +335,7 @@ export function CandidateRow({
             aria-label={expanded ? 'Recolher detalhes' : 'Expandir detalhes'}
             className="w-11 h-11 md:w-8 md:h-8 rounded-sm border border-line hover:border-ink active:border-ink text-ink-soft hover:text-ink font-mono text-[14px] transition-colors"
           >
-            {expanded ? '▾' : '▸'}
+            {expanded ? '−' : '+'}
           </button>
           {inSet ? (
             <span
