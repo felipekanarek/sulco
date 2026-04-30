@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
 import { matchesNormalizedText } from '@/lib/text';
+import { cacheUser } from '@/lib/cache';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
@@ -106,7 +107,7 @@ export function buildCollectionFilters(q: {
   return conds;
 }
 
-export async function queryCollection(q: CollectionQuery): Promise<CollectionRow[]> {
+async function queryCollectionRaw(q: CollectionQuery): Promise<CollectionRow[]> {
   const conds: SQL[] = [eq(records.userId, q.userId), eq(records.archived, false)];
 
   if (q.status !== 'all') {
@@ -191,7 +192,17 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
   });
 }
 
-export async function collectionCounts(userId: number): Promise<CollectionCounts> {
+// Inc 23 (022): wrapper cacheUser absorve filtros via cache key
+// composto. Tag por user invalida todas as variantes em writes.
+export const queryCollection = (q: CollectionQuery): Promise<CollectionRow[]> => {
+  const cachedFn = cacheUser(
+    (_userId: number, query: CollectionQuery) => queryCollectionRaw(query),
+    'queryCollection',
+  );
+  return cachedFn(q.userId, q);
+};
+
+async function collectionCountsRaw(userId: number): Promise<CollectionCounts> {
   const rows = await db
     .select({
       total: sql<number>`COUNT(*)`,
@@ -211,8 +222,11 @@ export async function collectionCounts(userId: number): Promise<CollectionCounts
   };
 }
 
+// Inc 23 (022): cache wrapper.
+export const collectionCounts = cacheUser(collectionCountsRaw, 'collectionCounts');
+
 /** Retorna a soma global de faixas com `selected=true` do usuário. */
-export async function countSelectedTracks(userId: number): Promise<number> {
+async function countSelectedTracksRaw(userId: number): Promise<number> {
   const rows = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(tracks)
@@ -226,6 +240,9 @@ export async function countSelectedTracks(userId: number): Promise<number> {
     );
   return Number(rows[0]?.c ?? 0);
 }
+
+// Inc 23 (022): cache wrapper.
+export const countSelectedTracks = cacheUser(countSelectedTracksRaw, 'countSelectedTracks');
 
 export type FacetCount = { value: string; count: number };
 
@@ -252,13 +269,17 @@ async function countFacet(
     );
 }
 
-export async function listUserGenres(userId: number): Promise<FacetCount[]> {
+async function listUserGenresRaw(userId: number): Promise<FacetCount[]> {
   return countFacet(userId, records.genres);
 }
 
-export async function listUserStyles(userId: number): Promise<FacetCount[]> {
+async function listUserStylesRaw(userId: number): Promise<FacetCount[]> {
   return countFacet(userId, records.styles);
 }
+
+// Inc 23 (022): cache wrappers.
+export const listUserGenres = cacheUser(listUserGenresRaw, 'listUserGenres');
+export const listUserStyles = cacheUser(listUserStylesRaw, 'listUserStyles');
 
 /**
  * Lista distinct de prateleiras (`shelfLocation`) em uso pelo user.
@@ -266,7 +287,7 @@ export async function listUserStyles(userId: number): Promise<FacetCount[]> {
  * Filtra null e strings vazias/whitespace-only — uma garantia
  * defensiva para casos legados que possam existir.
  */
-export async function listUserShelves(userId: number): Promise<string[]> {
+async function listUserShelvesRaw(userId: number): Promise<string[]> {
   const rows = await db
     .selectDistinct({ shelf: records.shelfLocation })
     .from(records)
@@ -277,3 +298,6 @@ export async function listUserShelves(userId: number): Promise<string[]> {
     .map((r) => r.shelf)
     .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
 }
+
+// Inc 23 (022): cache wrapper.
+export const listUserShelves = cacheUser(listUserShelvesRaw, 'listUserShelves');

@@ -99,6 +99,13 @@ export const records = sqliteTable(
     userDiscogsUnique: uniqueIndex('records_user_discogs_unique').on(t.userId, t.discogsId),
     userStatusIdx: index('records_user_status_idx').on(t.userId, t.status),
     userArchivedIdx: index('records_user_archived_idx').on(t.userId, t.archived),
+    // Inc 23 (022): composite cobre `WHERE userId = ? AND archived = ? AND status = ?`
+    // do queryCollection (filtro combinado mais comum).
+    userArchivedStatusIdx: index('records_user_archived_status_idx').on(
+      t.userId,
+      t.archived,
+      t.status,
+    ),
   }),
 );
 
@@ -153,6 +160,9 @@ export const tracks = sqliteTable(
       t.audioFeaturesSource,
       t.audioFeaturesSyncedAt,
     ),
+    // Inc 23 (022): cobre lookup de bombs em queryCollection
+    // (`WHERE recordId IN (...) AND isBomb = true`).
+    recordIsBombIdx: index('tracks_record_is_bomb_idx').on(t.recordId, t.isBomb),
   }),
 );
 

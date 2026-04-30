@@ -164,7 +164,12 @@ export async function queryCandidates(
     .from(tracks)
     .innerJoin(records, eq(records.id, tracks.recordId))
     .where(and(...conds))
-    .orderBy(...orderBy);
+    .orderBy(...orderBy)
+    // Inc 23 (022): LIMIT 1000 SQL antes do JS text filter
+    // (revert parcial do Inc 21 — evita unbounded reads que
+    // estouraram cota Turso). Filtros não-text já reduzem
+    // drasticamente; raríssimo passar de 1000 elegíveis.
+    .limit(1000);
 
   // Inc 18 (021): aplicar text filter accent-insensitive em JS.
   const textFiltered =

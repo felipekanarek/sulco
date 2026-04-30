@@ -9,6 +9,7 @@ import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { buildCollectionFilters } from '@/lib/queries/collection';
 import { matchesNormalizedText } from '@/lib/text';
+import { cacheUser, revalidateUserCache } from '@/lib/cache';
 import { encryptSecret } from '@/lib/crypto';
 import { enrichTrackComment, getAdapter } from '@/lib/ai';
 import { isModelSupported, MODELS_BY_PROVIDER } from '@/lib/ai/models';
@@ -324,6 +325,7 @@ export async function acknowledgeImportProgress(): Promise<ActionResult> {
     .where(eq(users.id, user.id));
 
   revalidatePath('/');
+  revalidateUserCache(user.id);
   return { ok: true };
 }
 
@@ -502,6 +504,7 @@ export async function analyzeTrackWithAI(
     .where(eq(tracks.id, trackId));
 
   revalidatePath(`/disco/${row.recordId}`);
+  revalidateUserCache(user.id);
   return { ok: true, data: { text } };
 }
 
@@ -553,6 +556,7 @@ export async function updateTrackAiAnalysis(
     .where(eq(tracks.id, trackId));
 
   revalidatePath(`/disco/${recordId}`);
+  revalidateUserCache(user.id);
   return { ok: true };
 }
 
@@ -589,6 +593,7 @@ export async function updateRecordStatus(input: {
   revalidatePath('/');
   revalidatePath('/curadoria');
   revalidatePath(`/disco/${parsed.data.recordId}`);
+  revalidateUserCache(user.id);
   return { ok: true };
 }
 
@@ -699,6 +704,7 @@ export async function updateTrackCuration(
   revalidatePath(`/disco/${parsed.data.recordId}`);
   revalidatePath('/curadoria');
   revalidatePath('/');
+  revalidateUserCache(user.id);
   return { ok: true };
 }
 
@@ -707,10 +713,10 @@ export async function updateTrackCuration(
    Retorna termos ordenados (uso do DJ por frequência + sementes alfa).
    ============================================================ */
 
-export async function listUserVocabulary(
+async function listUserVocabularyRaw(
+  userId: number,
   kind: 'moods' | 'contexts',
 ): Promise<string[]> {
-  const user = await requireCurrentUser();
   const column = kind === 'moods' ? tracksTable.moods : tracksTable.contexts;
   // Agrega todos os termos usados pelo DJ com contagem
   const rows = await db
@@ -721,12 +727,23 @@ export async function listUserVocabulary(
     .from(tracksTable)
     .innerJoin(records, eq(tracksTable.recordId, records.id))
     .innerJoin(sql`json_each(${column})`, sql`1=1`)
-    .where(eq(records.userId, user.id))
+    .where(eq(records.userId, userId))
     .groupBy(sql`value`);
 
   const userTerms = rows.map((r) => ({ term: r.term, count: Number(r.count) }));
   const seeds = kind === 'moods' ? DEFAULT_MOOD_SEEDS : DEFAULT_CONTEXT_SEEDS;
   return buildSuggestionList(userTerms, seeds);
+}
+
+// Inc 23 (022): cache wrapper. Wrapper público mantém assinatura
+// (resolve user dentro) — callers não mudam.
+const listUserVocabularyCached = cacheUser(listUserVocabularyRaw, 'listUserVocabulary');
+
+export async function listUserVocabulary(
+  kind: 'moods' | 'contexts',
+): Promise<string[]> {
+  const user = await requireCurrentUser();
+  return listUserVocabularyCached(user.id, kind);
 }
 
 /* ============================================================
@@ -767,6 +784,7 @@ export async function updateRecordAuthorFields(
   revalidatePath(`/disco/${parsed.data.recordId}`);
   revalidatePath('/curadoria');
   revalidatePath('/');
+  revalidateUserCache(user.id);
   return { ok: true };
 }
 
@@ -814,6 +832,7 @@ export async function enrichRecordOnDemand(
   try {
     const summary = await enrichRecord(user.id, parsed.data.recordId);
     revalidatePath(`/disco/${parsed.data.recordId}`);
+    revalidateUserCache(user.id);
     return {
       ok: true,
       data: {
@@ -869,15 +888,31 @@ export async function pickRandomUnratedRecord(
     eq(records.status, 'unrated'),
   ];
 
-  // Filtros refinos opcionais (text/genres/styles/bomba) com semântica
-  // idêntica à da listagem (FR-004 do 011).
-  // Inc 18 (021): text sai do SQL → JS post-filter accent-insensitive,
-  // random também passa pra JS pra preservar uniformidade sobre o
-  // conjunto filtrado.
+  // Filtros refinos opcionais (text/genres/styles/bomba).
+  // Inc 23 (022): fast path SQL quando text vazio (1 row read).
+  // Slow path JS post-filter (Inc 18) preservado quando há text.
+  const textTerm = parsed.data?.text?.trim() ?? '';
+  const hasText = textTerm.length > 0;
+
   if (parsed.data) {
     conds.push(...buildCollectionFilters({ ...parsed.data, omitText: true }));
   }
 
+  // FAST PATH (Inc 23): sem text, random direto no SQL — 1 row read.
+  if (!hasText) {
+    const row = await db
+      .select({ id: records.id })
+      .from(records)
+      .where(and(...conds))
+      .orderBy(sql`RANDOM()`)
+      .limit(1);
+    if (row.length === 0) {
+      return { ok: true, data: { recordId: null } };
+    }
+    return { ok: true, data: { recordId: row[0].id } };
+  }
+
+  // SLOW PATH (Inc 18): com text, JS post-filter accent-insensitive.
   const candidates = await db
     .select({
       id: records.id,
@@ -892,13 +927,9 @@ export async function pickRandomUnratedRecord(
     return { ok: true, data: { recordId: null } };
   }
 
-  const textTerm = parsed.data?.text?.trim() ?? '';
-  const filtered =
-    textTerm.length > 0
-      ? candidates.filter((c) =>
-          matchesNormalizedText([c.artist, c.title, c.label], textTerm),
-        )
-      : candidates;
+  const filtered = candidates.filter((c) =>
+    matchesNormalizedText([c.artist, c.title, c.label], textTerm),
+  );
 
   if (filtered.length === 0) {
     return { ok: true, data: { recordId: null } };
@@ -952,6 +983,7 @@ export async function createSet(
     .returning({ id: setsTable.id });
 
   revalidatePath('/sets');
+  revalidateUserCache(user.id);
   return { ok: true, data: { setId: inserted[0].id } };
 }
 
@@ -1563,6 +1595,7 @@ export async function acknowledgeArchivedRecord(
 
   revalidatePath('/status');
   revalidatePath('/');
+  revalidateUserCache(user.id);
   return { ok: true };
 }
 
@@ -1592,6 +1625,7 @@ export async function acknowledgeAllArchived(): Promise<
 
     revalidatePath('/status');
     revalidatePath('/');
+    revalidateUserCache(user.id);
     return { ok: true, data: { count: updated.length } };
   } catch (err) {
     console.error('[acknowledgeAllArchived] erro:', err);

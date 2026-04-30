@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-30 (Inc 18 entregue → release 021)
+**Última atualização**: 2026-04-30 (Inc 23 entregue → release 022)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,6 +48,69 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
+
+#### Incremento 22 — Paginação na home
+Hoje `queryCollection` em `src/lib/queries/collection.ts` carrega
+**TODOS** os records do user (~2500) sem paginação, mais a
+agregação de tracks (~10k row reads) e lookup de bombs (~500).
+Total: **~12.5k row reads por visita à home**.
+
+Custo real: estourou cota Turso em 2026-04-30 (free tier). O
+hotfix imediato adiciona cache (`unstable_cache`) que mitiga
+visitas repetidas, mas o **worst case** (cache miss / DJ
+abrindo após write) continua sendo 12.5k reads.
+
+Paginação reduz cada cache miss de **12.5k → ~250 reads**
+(50 records × ~4 tracks médio em aggregation). Combinado com
+cache: **>98% redução** no worst case.
+
+Escopo:
+- **Page size**: 50 ou 100 records (decidir no speckit).
+- **UX**: decidir entre:
+  1. **Page numbers clássico** (`?page=2`, `?page=3`, com
+     anterior/próxima) — mais previsível, menor surprise factor.
+  2. **Infinite scroll** via IntersectionObserver — mais fluido
+     mobile, mas perde scroll position ao navegar; requer
+     virtualização eventual.
+  3. **Load more button** — meio-termo; explícito e cumulativo.
+  Recomendação inicial: page numbers (option 1) — alinha com
+  estética editorial; mobile usa o mesmo controle.
+- **Match counts dos filtros** (`<FilterBar>` mostra "12 ativos
+  · 47 unrated"): manter contagem **global** (não paginada) via
+  `collectionCounts` separado — sem regressão.
+- **Filtro `unrated` da home** + botão 🎲 (Inc 11): random
+  continua sobre todo o conjunto elegível (não paginado), via
+  `pickRandomUnratedRecord` separado.
+- **`queryCollection` ganha** `{ page: number, pageSize: number }`
+  — `LIMIT pageSize OFFSET (page - 1) * pageSize`.
+- Componente `<Paginator>` novo (manual, sem libs — constituição
+  proíbe shadcn).
+- Princípio V (Mobile-Native): paginator com tap target ≥44 px
+  em mobile.
+
+Decisões pendentes pra `/speckit.clarify` (algumas):
+- Page numbers vs infinite scroll vs load more (UX).
+- Page size (50 vs 100 vs ajustável pelo DJ).
+- Comportamento ao mudar filtro: reset pra page 1 ou tentar
+  manter? (Reset é o esperado.)
+- Persistir page no URL via `?page=N`: provavelmente sim — link
+  shareable e back button funciona naturalmente.
+
+Princípios:
+- **Princípio I**: leitura, sem zona AUTHOR tocada.
+- **Princípio II**: `queryCollection` continua RSC; pagination
+  via searchParam URL → re-render server.
+- **Princípio V**: paginator responsive, tap targets adequados.
+
+Sem schema delta. Sem novas Server Actions. Refator localizado
+em `queryCollection` + `<FilterBar>` + `/page.tsx` + componente
+`<Paginator>` novo.
+
+Estimativa: 2-3h via speckit.
+
+Registrado a pedido em 2026-04-30 após estouro de cota Turso —
+identificada paginação como segundo maior ganho (~98% redução
+no worst case quando combinada com cache).
 
 #### Incremento 20 — Edição em massa de discos (multi-select)
 Hoje toda mudança de campo (status, shelf, notes) é feita
@@ -319,6 +382,7 @@ spec/plan/data-model/contracts/quickstart.
 - **019** — Editar status do disco direto na grid (Inc 19) · 2026-04-29 · `specs/019-edit-status-on-grid/` · botões inline `Ativar`/`Descartar`/`Reativar` em cada item da grid `/` (ambas views — `<RecordRow>` list + `<RecordGridCard>` grid) com optimistic UI ≤100ms via `useTransition` + `useState<optimistic>`; rollback visual em erro com mensagem inline auto-dismiss 5s (Clarification Q2 — toast-like, sem botão fechar); pattern Inbox-zero (Clarification Q1) — card some naturalmente após `revalidatePath('/')` quando filtro corrente exclui novo status; reusa Server Action `updateRecordStatus` existente (Zod + ownership + revalidatePath nas 3 rotas) sem mudança; botões condicionais por status (`unrated` → Ativar+Descartar; `active` → Descartar; `discarded` → Reativar) com `aria-label` descritivo + tap target `min-h-[44px] md:min-h-[32px]` (Princípio V mobile + densidade desktop); discos `archived` ficam fora (filtrados pela query); 1 client component novo `<RecordStatusActions>` compartilhado entre as duas views via prop `className`; zero schema delta, zero novas Server Actions
 - **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit). Bug 15 hotfix incluído (commit `0615c24`): MobileDrawer vazava em desktop por portal — fix com `matchMedia` + render condicional.
 - **021** — Busca insensitive a acentos (Inc 18) · 2026-04-30 · `specs/021-accent-insensitive-search/` · busca textual em `/` (home) e `/sets/[id]/montar` agora normaliza diacríticos antes de comparar — digitar `joao` acha `João Gilberto`, `acucar` acha `Açúcar`, `sergio` acha `Sérgio`, bidirecional (FR-003); novo helper puro `normalizeText(s)` em `src/lib/text.ts` (`lowercase + NFD + replace(/\p{M}/gu, '')`) + helper auxiliar `matchesNormalizedText(haystacks, query)` para DRY; cobertura universal Unicode (não só pt-BR — `naive`/`naïve`, `cafe`/`café`, `garcon`/`garçon`); JS-side post-query (SQLite/Turso não tem `unaccent` nativo): `buildCollectionFilters` ganha flag opcional `omitText` (default false); `queryCollection` carrega rows com filtros não-text via SQL e aplica `matchesNormalizedText` em `[artist, title, label]` antes da agregação de tracks; `queryCandidates` remove LIKE textual SQL + move `.limit()` pra JS (`slice(0, opts.limit ?? 300)`) APÓS filtro JS pra preservar candidatos válidos; `pickRandomUnratedRecord` (Inc 11) re-estrutura: SELECT amplo sem text → JS post-filter → `Math.random()` JS sobre filtrados (preserva uniformidade); filtros multi-select de tag (genres, styles, moods, contexts) permanecem exact match (vocabulário canônico — Decisão 8 do research) — `fineGenre` (texto livre) entra no text filter geral; zero schema delta, zero novas Server Actions; refator localizado em 4 arquivos. Princípios I/II/III/V todos OK.
+- **022** — Otimização de leituras Turso (Inc 23) · 2026-04-30 · `specs/022-turso-reads-optimization/` · pacote consolidado em 3 frentes pra mitigar estouro de cota Turso. **Frente A — revert Inc 21**: `queryCandidates` re-aplica `LIMIT 1000` SQL antes do JS text filter (preserva Inc 18); `pickRandomUnratedRecord` ganha fast path `RANDOM() LIMIT 1` quando text vazio (1 read vs ~2500), slow path JS post-filter Inc 18 mantido. **Frente B — cache via `unstable_cache`**: novo helper `src/lib/cache.ts` com `cacheUser(fn, name)` + `revalidateUserCache(userId)`; tag por user `user:${userId}` invalida globalmente; TTL 300s (Clarification Q2) como guard-rail; 8 queries cacheadas (`queryCollection` com cache key composto absorvendo filtros — Clarification Q1; `collectionCounts`, `countSelectedTracks`, `listUserGenres`, `listUserStyles`, `listUserShelves`, `listUserVocabulary`, `loadStatusSnapshot`); Server Actions de write críticas chamam `revalidateUserCache(user.id)` no fim (`updateRecordStatus`, `updateRecordAuthorFields`, `updateTrackCuration`, `analyzeTrackWithAI`, `updateTrackAiAnalysis`, `acknowledgeArchivedRecord`, `acknowledgeAllArchived`, `acknowledgeImportProgress`, `enrichRecordOnDemand`, `createSet`, `runIncrementalSync`); restantes confiam no TTL fallback. **Frente C — 2 índices**: `records(user_id, archived, status)` composite + `tracks(record_id, is_bomb)` composite; aplicado em dev local; aplicação em prod via `turso db shell sulco-prod` PENDENTE (Felipe roda manualmente quando Turso renovar amanhã — `CREATE INDEX IF NOT EXISTS` é idempotente, código deployado funciona sem). UI inalterada — backend puro. Princípios I (leitura), II (RSC + cache server), III (só índices), IV (nada deletado), V (ganho cross-device) todos OK.
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).

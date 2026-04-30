@@ -262,18 +262,22 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **021-accent-insensitive-search** (BACKLOG: Inc 18)
+Current active feature: **022-turso-reads-optimization** (BACKLOG: Inc 23)
 
 Authoritative planning artifacts (read these before making changes
-ao novo helper `normalizeText` em `src/lib/text.ts`, às queries
-`queryCollection`/`queryCandidates`, ou à Server Action
-`pickRandomUnratedRecord`):
+ao novo helper `cacheUser`/`revalidateUserCache` em `src/lib/cache.ts`,
+às queries cacheadas (`queryCollection`, `collectionCounts`,
+`listUserGenres`, `listUserStyles`, `listUserShelves`,
+`listUserVocabulary`, `getImportProgress`, `loadStatusSnapshot`),
+aos índices novos `records(user_id, archived, status)` +
+`tracks(record_id, is_bomb)`, ou ao revert parcial Inc 21 em
+`queryCandidates` e `pickRandomUnratedRecord`):
 
-- Plan: [specs/021-accent-insensitive-search/plan.md](specs/021-accent-insensitive-search/plan.md)
-- Spec: [specs/021-accent-insensitive-search/spec.md](specs/021-accent-insensitive-search/spec.md)
-- Contracts: [specs/021-accent-insensitive-search/contracts/](specs/021-accent-insensitive-search/contracts/)
-- Research: [specs/021-accent-insensitive-search/research.md](specs/021-accent-insensitive-search/research.md)
-- Quickstart: [specs/021-accent-insensitive-search/quickstart.md](specs/021-accent-insensitive-search/quickstart.md)
+- Plan: [specs/022-turso-reads-optimization/plan.md](specs/022-turso-reads-optimization/plan.md)
+- Spec: [specs/022-turso-reads-optimization/spec.md](specs/022-turso-reads-optimization/spec.md)
+- Contracts: [specs/022-turso-reads-optimization/contracts/](specs/022-turso-reads-optimization/contracts/)
+- Research: [specs/022-turso-reads-optimization/research.md](specs/022-turso-reads-optimization/research.md)
+- Quickstart: [specs/022-turso-reads-optimization/quickstart.md](specs/022-turso-reads-optimization/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -327,6 +331,50 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   ARIA combobox completo + keyboard nav; Bug 15 hotfix —
   matchMedia detecta viewport pra evitar drawer vazando em desktop;
   reusa `updateRecordAuthorFields`; zero schema delta)
+- 021 accent-insensitive-search (Inc 18 — busca textual em / e
+  /sets/[id]/montar normaliza diacríticos; helper `normalizeText`
+  em src/lib/text.ts; `buildCollectionFilters` ganha flag opcional
+  `omitText`; queries fazem post-filter JS via `matchesNormalizedText`;
+  `pickRandomUnratedRecord` re-estruturado com JS random; bidirecional;
+  cobertura universal Unicode; zero schema delta)
+
+Key points of 022 (Inc 23 — Otimização de leituras Turso / cota estourada):
+- **3 frentes em 1 release**: revert parcial Inc 21 + cache layer
+  + 2 índices.
+- **Frente A — revert Inc 21**: `queryCandidates` re-aplica
+  `LIMIT 1000` SQL antes do JS text filter (Decisão 7 do
+  research). `pickRandomUnratedRecord` ganha **fast path** SQL
+  `RANDOM() LIMIT 1` quando text vazio (1 read vs ~2500);
+  slow path JS post-filter Inc 18 preservado quando text presente.
+- **Frente B — cache via `unstable_cache` Next 15**: novo helper
+  [src/lib/cache.ts](src/lib/cache.ts) com `cacheUser(fn, name)`
+  + `revalidateUserCache(userId)`. Pattern: cache key composto
+  (nome + userId + args serializados deterministicamente), tag
+  `user:${userId}` (Decisão 3 — invalidação grossa por user),
+  TTL 300s (Clarification Q2 — guard-rail contra bug de
+  invalidação esquecida).
+- **8 queries cacheadas** (Clarification Q1 incluiu
+  `queryCollection`): `queryCollection`, `collectionCounts`,
+  `listUserGenres`, `listUserStyles`, `listUserShelves`,
+  `listUserVocabulary`, `getImportProgress`, `loadStatusSnapshot`.
+- **`queryCandidates` NÃO cacheada**: filtros muito variados →
+  fragmentação alta. LIMIT 1000 já reduz drasticamente.
+- **Server Actions de write** (updateRecordStatus, updateRecord-
+  AuthorFields, updateTrackCuration, acknowledge*, addTrackToSet,
+  etc.) chamam `revalidateUserCache(user.id)` no fim, em
+  ADIÇÃO ao `revalidatePath` existente.
+- **Frente C — 2 índices composite**:
+  `records(user_id, archived, status)` cobre filtro combinado em
+  `queryCollection`; `tracks(record_id, is_bomb)` cobre lookup de
+  bombs. Aplicados via Turso shell em prod com
+  `CREATE INDEX IF NOT EXISTS` (online, sem downtime).
+- **Sem mudanças observáveis na UI** — backend puro.
+- **Vercel Hobby compatível**: Data Cache per-region é OK pra
+  user solo BR; cold start = miss ocasional aceitável; cache size
+  ~100KB total bem dentro do limite Hobby.
+- **Princípios I (leitura), II (cache server-side), III (só
+  índices), IV (nada deletado), V (ganho universal cross-device)**
+  todos OK.
 
 Key points of 021 (Inc 18 — Busca insensitive a acentos):
 - **Zero schema delta**. Sem novas Server Actions.
