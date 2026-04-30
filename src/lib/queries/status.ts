@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns, tracks, users } from '@/db/schema';
 import { killZombieSyncRuns } from '@/lib/discogs/zombie';
+import { cacheUser } from '@/lib/cache';
 
 export type SyncRunRow = {
   id: number;
@@ -52,7 +53,7 @@ export type StatusSnapshot = {
  * - `badgeActive`: true se houver qualquer syncRun com outcome!='ok' OR
  *    archived pendente OR conflito criado APÓS lastStatusVisitAt (FR-041)
  */
-export async function loadStatusSnapshot(userId: number): Promise<StatusSnapshot> {
+async function loadStatusSnapshotRaw(userId: number): Promise<StatusSnapshot> {
   // Bug 8 fix: limpa runs zumbis (running >65s sem progresso) ANTES de
   // ler o snapshot. Assim `hasRunningSync` reflete o estado real e o
   // ManualSyncButton/SyncBadge não trava em "em execução" depois que
@@ -156,6 +157,9 @@ export async function loadStatusSnapshot(userId: number): Promise<StatusSnapshot
     hasRunningSync,
   };
 }
+
+// Inc 23 (022): cache wrapper.
+export const loadStatusSnapshot = cacheUser(loadStatusSnapshotRaw, 'loadStatusSnapshot');
 
 /** Versão minimalista só para calcular se o badge deve aparecer no header. */
 export async function computeBadgeActive(userId: number): Promise<boolean> {
