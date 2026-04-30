@@ -43,6 +43,18 @@ export function ShelfPicker({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [activeIdx, setActiveIdx] = useState<number>(-1);
+  // Detecção de viewport mobile via matchMedia. Necessário porque
+  // <MobileDrawer> renderiza via portal pra document.body — o
+  // `md:hidden` do wrapper não alcança o portal e a lista vazaria
+  // em desktop (bug visto pós-deploy 020). Default `false` em SSR.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   // Reset optimistic quando o RSC re-renderiza com novo prop `current`.
   useEffect(() => {
@@ -254,36 +266,38 @@ export function ShelfPicker({
 
   return (
     <div className={className}>
-      {/* Desktop popover (md+) */}
-      <div className="hidden md:block relative">
-        {trigger}
-        {open ? (
-          <>
-            {/* backdrop invisível para fechar ao clicar fora */}
-            <div
-              className="fixed inset-0 z-20"
-              onClick={() => setOpen(false)}
-              aria-hidden="true"
-            />
-            <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-paper border border-line shadow-md max-w-[400px]">
-              {listPanel}
-            </div>
-          </>
-        ) : null}
-      </div>
-
-      {/* Mobile bottom sheet (<md) */}
-      <div className="md:hidden">
-        {trigger}
-        <MobileDrawer
-          open={open}
-          onClose={() => setOpen(false)}
-          side="bottom"
-          ariaLabel="Selecionar prateleira"
-        >
-          {listPanel}
-        </MobileDrawer>
-      </div>
+      {isMobile ? (
+        // Mobile: bottom sheet via portal
+        <>
+          {trigger}
+          <MobileDrawer
+            open={open}
+            onClose={() => setOpen(false)}
+            side="bottom"
+            ariaLabel="Selecionar prateleira"
+          >
+            {listPanel}
+          </MobileDrawer>
+        </>
+      ) : (
+        // Desktop: popover absoluto inline
+        <div className="relative">
+          {trigger}
+          {open ? (
+            <>
+              {/* backdrop invisível para fechar ao clicar fora */}
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => setOpen(false)}
+                aria-hidden="true"
+              />
+              <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-paper border border-line shadow-md max-w-[400px]">
+                {listPanel}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
