@@ -2,6 +2,7 @@ import 'server-only';
 import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, setTracks, tracks } from '@/db/schema';
+import { matchesNormalizedText } from '@/lib/text';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 
@@ -104,12 +105,10 @@ export async function queryCandidates(
   if (filters.bomba === 'only') conds.push(eq(tracks.isBomb, true));
   else if (filters.bomba === 'none') conds.push(eq(tracks.isBomb, false));
 
-  if (filters.text && filters.text.trim().length > 0) {
-    const pattern = `%${filters.text.toLowerCase().trim()}%`;
-    conds.push(
-      sql`(lower(${tracks.title}) LIKE ${pattern} OR lower(${records.artist}) LIKE ${pattern} OR lower(${records.title}) LIKE ${pattern} OR lower(COALESCE(${tracks.fineGenre},'')) LIKE ${pattern})`,
-    );
-  }
+  // Inc 18 (021): text filter sai do SQL → JS post-query
+  // accent-insensitive (`matchesNormalizedText`). Também move o
+  // `limit` SQL pra JS pra não cortar candidatos válidos antes do
+  // text filter (Decisão 6 do research).
 
   if (opts.excludeTrackIds && opts.excludeTrackIds.length > 0) {
     conds.push(sql`${tracks.id} NOT IN ${opts.excludeTrackIds}`);
@@ -165,10 +164,24 @@ export async function queryCandidates(
     .from(tracks)
     .innerJoin(records, eq(records.id, tracks.recordId))
     .where(and(...conds))
-    .orderBy(...orderBy)
-    .limit(opts.limit ?? 300);
+    .orderBy(...orderBy);
 
-  return rows.map((r) => ({
+  // Inc 18 (021): aplicar text filter accent-insensitive em JS.
+  const textFiltered =
+    filters.text && filters.text.trim().length > 0
+      ? rows.filter((r) =>
+          matchesNormalizedText(
+            [r.title, r.artist, r.recordTitle, r.fineGenre],
+            filters.text!,
+          ),
+        )
+      : rows;
+
+  // Inc 18: limit aplica APÓS text filter pra preservar candidatos
+  // válidos (Decisão 6 do research).
+  const limited = textFiltered.slice(0, opts.limit ?? 300);
+
+  return limited.map((r) => ({
     ...r,
     moods: (r.moods ?? []) as string[],
     contexts: (r.contexts ?? []) as string[],

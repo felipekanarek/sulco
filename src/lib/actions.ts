@@ -8,6 +8,7 @@ import { db } from '@/db';
 import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { buildCollectionFilters } from '@/lib/queries/collection';
+import { matchesNormalizedText } from '@/lib/text';
 import { encryptSecret } from '@/lib/crypto';
 import { enrichTrackComment, getAdapter } from '@/lib/ai';
 import { isModelSupported, MODELS_BY_PROVIDER } from '@/lib/ai/models';
@@ -870,21 +871,41 @@ export async function pickRandomUnratedRecord(
 
   // Filtros refinos opcionais (text/genres/styles/bomba) com semântica
   // idêntica à da listagem (FR-004 do 011).
+  // Inc 18 (021): text sai do SQL → JS post-filter accent-insensitive,
+  // random também passa pra JS pra preservar uniformidade sobre o
+  // conjunto filtrado.
   if (parsed.data) {
-    conds.push(...buildCollectionFilters(parsed.data));
+    conds.push(...buildCollectionFilters({ ...parsed.data, omitText: true }));
   }
 
-  const row = await db
-    .select({ id: records.id })
+  const candidates = await db
+    .select({
+      id: records.id,
+      artist: records.artist,
+      title: records.title,
+      label: records.label,
+    })
     .from(records)
-    .where(and(...conds))
-    .orderBy(sql`RANDOM()`)
-    .limit(1);
+    .where(and(...conds));
 
-  if (row.length === 0) {
+  if (candidates.length === 0) {
     return { ok: true, data: { recordId: null } };
   }
-  return { ok: true, data: { recordId: row[0].id } };
+
+  const textTerm = parsed.data?.text?.trim() ?? '';
+  const filtered =
+    textTerm.length > 0
+      ? candidates.filter((c) =>
+          matchesNormalizedText([c.artist, c.title, c.label], textTerm),
+        )
+      : candidates;
+
+  if (filtered.length === 0) {
+    return { ok: true, data: { recordId: null } };
+  }
+
+  const picked = filtered[Math.floor(Math.random() * filtered.length)];
+  return { ok: true, data: { recordId: picked.id } };
 }
 
 /* ============================================================
