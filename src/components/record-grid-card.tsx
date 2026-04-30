@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { CollectionRow } from '@/lib/queries/collection';
 import { CoverPlaceholder } from './cover-placeholder';
 import { BombaBadge, BombaInline } from './bomba-badge';
+import { RecordStatusActions } from './record-status-actions';
 
 /**
  * Card de grade (visualização por capa). Compacto e visual,
@@ -87,6 +88,12 @@ export function RecordGridCard({ record }: { record: CollectionRow }) {
           {record.hasBomb ? <BombaBadge size="sm" /> : null}
           {record.shelfLocation ? <span>· {record.shelfLocation}</span> : null}
         </p>
+        <RecordStatusActions
+          recordId={record.id}
+          status={record.status}
+          recordLabel={`${record.artist} — ${record.title}`}
+          className="mt-2"
+        />
       </div>
     </article>
   );

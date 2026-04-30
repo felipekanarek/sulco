@@ -7,6 +7,7 @@ import type { CollectionRow } from '@/lib/queries/collection';
 import { CoverPlaceholder } from './cover-placeholder';
 import { BombaBadge, BombaInline } from './bomba-badge';
 import { ReimportButton } from './reimport-button';
+import { RecordStatusActions } from './record-status-actions';
 
 type RecordRowProps = {
   record: CollectionRow;
@@ -113,14 +114,24 @@ export function RecordRow({ record }: RecordRowProps) {
           </p>
         </div>
 
-        <div className="flex flex-row items-center justify-between gap-2 md:flex-col md:items-end md:justify-start mt-1 md:mt-0">
-          <StatusBadge status={record.status} />
-          <Link
-            href={`/disco/${record.id}`}
-            className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 min-h-[44px] flex items-center justify-center border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
-          >
-            Curadoria →
-          </Link>
+        <div className="flex flex-col items-stretch md:items-end gap-2 mt-1 md:mt-0">
+          <div className="flex flex-row items-center justify-between gap-2 md:flex-col md:items-end md:gap-2">
+            <StatusBadge status={record.status} />
+            <Link
+              href={`/disco/${record.id}`}
+              className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 min-h-[44px] flex items-center justify-center border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
+            >
+              Curadoria →
+            </Link>
+          </div>
+          {/* `queryCollection` já filtra `archived = false`; CollectionRow
+              só inclui não-arquivados (Decisão 8 do research). */}
+          <RecordStatusActions
+            recordId={record.id}
+            status={record.status}
+            recordLabel={`${record.artist} — ${record.title}`}
+            className="md:justify-end"
+          />
         </div>
       </div>
     </li>
