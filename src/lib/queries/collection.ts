@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, desc, eq, exists, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
@@ -239,4 +239,22 @@ export async function listUserGenres(userId: number): Promise<FacetCount[]> {
 
 export async function listUserStyles(userId: number): Promise<FacetCount[]> {
   return countFacet(userId, records.styles);
+}
+
+/**
+ * Lista distinct de prateleiras (`shelfLocation`) em uso pelo user.
+ * Ordenadas alfabeticamente case-insensitive (Inc 21 / Decisão 2).
+ * Filtra null e strings vazias/whitespace-only — uma garantia
+ * defensiva para casos legados que possam existir.
+ */
+export async function listUserShelves(userId: number): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ shelf: records.shelfLocation })
+    .from(records)
+    .where(and(eq(records.userId, userId), isNotNull(records.shelfLocation)))
+    .orderBy(sql`lower(${records.shelfLocation})`);
+
+  return rows
+    .map((r) => r.shelf)
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
 }

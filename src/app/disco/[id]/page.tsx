@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { listUserVocabulary } from '@/lib/actions';
 import { getUserAIConfigStatus } from '@/lib/ai';
+import { listUserShelves } from '@/lib/queries/collection';
 import { loadDisc } from '@/lib/queries/curadoria';
 import { CoverPlaceholder } from '@/components/cover-placeholder';
 import { EnrichRecordButton } from '@/components/enrich-record-button';
@@ -37,11 +38,13 @@ export default async function RecordDetailPage({
     .limit(1);
   const record = full[0]!;
 
-  const [moodSuggestions, contextSuggestions, aiStatus] = await Promise.all([
-    listUserVocabulary('moods'),
-    listUserVocabulary('contexts'),
-    getUserAIConfigStatus(user.id),
-  ]);
+  const [moodSuggestions, contextSuggestions, aiStatus, userShelves] =
+    await Promise.all([
+      listUserVocabulary('moods'),
+      listUserVocabulary('contexts'),
+      getUserAIConfigStatus(user.id),
+      listUserShelves(user.id),
+    ]);
   const aiConfigured = aiStatus.configured;
 
   // Agrupar faixas por lado (letra inicial da posição)
@@ -114,6 +117,7 @@ export default async function RecordDetailPage({
             status={record.status}
             shelfLocation={record.shelfLocation}
             notes={record.notes}
+            userShelves={userShelves}
           />
 
           <div className="mt-4 pt-4 border-t border-line-soft space-y-3">
