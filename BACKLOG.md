@@ -266,6 +266,7 @@ no Discogs.
 
 ### Histórico (fechados)
 
+- **Bug 15** — Shelf picker (Inc 21) renderizava popover desktop **e** bottom sheet mobile ao mesmo tempo em viewport desktop (lista duplicada visível: uma flutuando dentro do card, outra fixa no rodapé fullscreen) — ✅ fix direto sem speckit (autorizado pelo mantenedor pós-deploy 020). Causa raiz: `<MobileDrawer>` cria portal em `document.body` e o `md:hidden` do wrapper externo não alcança conteúdo portaled (Tailwind responsive não cobre portais). Fix: detecção JS de viewport via `window.matchMedia('(max-width: 767px)')` + `useEffect` no `<ShelfPicker>`, com state `isMobile`; renderização condicional de **apenas uma** das variantes (popover absoluto OU MobileDrawer). SSR-safe (default `isMobile=false`, hidrata como desktop). Commit `0615c24`.
 - **Bug 14** — Bloco "Análise" não ocupava 100% da largura no mobile —
   ✅ fix direto sem speckit (commit a seguir, autorizado pelo
   mantenedor pra ser CSS-only). `md:col-span-2` Tailwind responsive
