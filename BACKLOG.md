@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-29 (Inc 21 entregue → release 020)
+**Última atualização**: 2026-04-30 (Inc 18 entregue → release 021)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -101,51 +101,6 @@ Estimativa: 1 dia via speckit. Sem schema delta.
 
 Registrado a pedido em 2026-04-29 — fricção em editar mesmo
 campo em vários discos sequencialmente.
-
-#### Incremento 18 — Busca insensitive a acentos
-Hoje a busca textual da home (`/`) e do `/sets/[id]/montar` faz `LIKE`
-case-insensitive (`lower(...) LIKE lower(...)`) mas é sensível a
-acentos: digitar "joao" não acha "João", "acucar" não acha "açúcar",
-"alem" não acha "além".
-
-Realidade prática: nomes próprios em pt-BR têm acentos (Caetano,
-João, Mônica, Lúcio Battisti) e a maioria dos teclados mobile/laptop
-não tem fluxo natural pra digitar com acento. Felipe digitar
-"sergio mendes" e não achar "Sérgio Mendes" da própria coleção é
-fricção real.
-
-Escopo:
-- Helper `normalizeText(s: string)` que faz lowercase +
-  `String.normalize('NFD').replace(/[̀-ͯ]/g, '')` — strip
-  diacritics universal (cobre acentos pt-BR + qualquer outro idioma
-  na coleção).
-- Aplicar nas 2 queries com `text` filter:
-  - `queryCollection` em `src/lib/queries/collection.ts` (busca em
-    artist/title/genres/styles).
-  - `queryCandidates` em `src/lib/queries/montar.ts:106-111` (busca
-    em tracks.title/artist/recordTitle/fineGenre).
-- **Como aplicar no SQLite**: opção A — função SQL custom
-  registrada via libsql client (`db.run("SELECT load_extension(...)")`
-  é proibido em Turso); opção B — manter colunas físicas com
-  versão normalizada (schema delta `records.search_blob`,
-  `tracks.search_blob`, populadas no sync e on-update); opção C —
-  recuperar pattern em JS no client (lento se acervo > 5k); opção D —
-  usar `LIKE` com OR de variantes pré-conhecidas (gambiarra). Escolha
-  via `/speckit.research` — provavelmente B (manter accent-insensitive
-  determinístico no SQL e barato de manter via trigger ou populate
-  on-write).
-- Backfill no schema delta — script `scripts/_normalize-search-blob.mjs`
-  que percorre records+tracks existentes e popula `search_blob` na
-  primeira aplicação.
-
-Critério de sucesso: digitar "joao gilberto" acha "João Gilberto";
-"sergio" acha "Sérgio"; "acucar" acha "Açúcar". Zero regressão em
-buscas que já funcionavam.
-
-Estimativa: 30-45min via speckit (opção C — JS-side) ou 1-2h
-(opção B — schema delta + backfill).
-
-Registrado a pedido em 2026-04-29 após fricção repetida na busca.
 
 #### Incremento 8 — Refatoração UX dos filtros multi-facet (gênero/estilo)
 Acervo do Felipe tem 150+ estilos catalogados; quando o DJ expande os
@@ -362,7 +317,8 @@ spec/plan/data-model/contracts/quickstart.
 - **017** — Botão "Reconhecer tudo" no banner de archived (Inc 11) · 2026-04-28 · `specs/017-acknowledge-all-archived/` · header da seção "Discos arquivados" em /status ganha botão bulk quando há ≥2 pendentes; Server Action nova `acknowledgeAllArchived()` (sem input, deriva userId da sessão) faz UPDATE single-statement com `WHERE userId = ? AND archived = 1 AND archivedAcknowledgedAt IS NULL` — atomicidade garantida pelo SQLite; client component `<AcknowledgeAllArchivedButton>` com useTransition + window.confirm("Marcar todos os N como reconhecidos?") + disabled "Reconhecendo…" durante isPending; threshold ≥2 (com 1 pendente, botão individual basta); revalidatePath('/status')+('/'); banner global some em todas as rotas; tap target min-h-[44px] (Princípio V); multi-user isolation via WHERE userId; `acknowledgeArchivedRecord` individual intacto; zero schema delta
 - **018** — Análise IA + glyph de expandir nos cards de candidato (Inc 17) · 2026-04-28 · `specs/018-candidate-ai-analysis-glyph/` · 2 ajustes UX no `<CandidateRow>` em /sets/[id]/montar: (1) tipo `Candidate` ganha `aiAnalysis: string | null` e `queryCandidates` adiciona o campo ao SELECT (corrige incoerência onde score `rankByCuration` referenciava o campo sem carregá-lo); seção "Análise" renderiza no col-1 do expandido abaixo de comment/references quando `aiAnalysis.trim().length > 0`, read-only (label-tech ink-mute + serif italic 13px text-ink whitespace-pre-line, sem aspas — coerente com `<TrackCurationRow>` em /disco/[id]); (2) glyph de toggle do botão expand muda de `▾`/`▸` para `−` (U+2212) / `+` (U+002B) — ASCII universal, zero ambiguidade com `▶` dos botões de preview Inc 008, ARIA preservado; zero schema delta, zero novas Server Actions, refator localizado em 2 arquivos
 - **019** — Editar status do disco direto na grid (Inc 19) · 2026-04-29 · `specs/019-edit-status-on-grid/` · botões inline `Ativar`/`Descartar`/`Reativar` em cada item da grid `/` (ambas views — `<RecordRow>` list + `<RecordGridCard>` grid) com optimistic UI ≤100ms via `useTransition` + `useState<optimistic>`; rollback visual em erro com mensagem inline auto-dismiss 5s (Clarification Q2 — toast-like, sem botão fechar); pattern Inbox-zero (Clarification Q1) — card some naturalmente após `revalidatePath('/')` quando filtro corrente exclui novo status; reusa Server Action `updateRecordStatus` existente (Zod + ownership + revalidatePath nas 3 rotas) sem mudança; botões condicionais por status (`unrated` → Ativar+Descartar; `active` → Descartar; `discarded` → Reativar) com `aria-label` descritivo + tap target `min-h-[44px] md:min-h-[32px]` (Princípio V mobile + densidade desktop); discos `archived` ficam fora (filtrados pela query); 1 client component novo `<RecordStatusActions>` compartilhado entre as duas views via prop `className`; zero schema delta, zero novas Server Actions
-- **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit)
+- **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit). Bug 15 hotfix incluído (commit `0615c24`): MobileDrawer vazava em desktop por portal — fix com `matchMedia` + render condicional.
+- **021** — Busca insensitive a acentos (Inc 18) · 2026-04-30 · `specs/021-accent-insensitive-search/` · busca textual em `/` (home) e `/sets/[id]/montar` agora normaliza diacríticos antes de comparar — digitar `joao` acha `João Gilberto`, `acucar` acha `Açúcar`, `sergio` acha `Sérgio`, bidirecional (FR-003); novo helper puro `normalizeText(s)` em `src/lib/text.ts` (`lowercase + NFD + replace(/\p{M}/gu, '')`) + helper auxiliar `matchesNormalizedText(haystacks, query)` para DRY; cobertura universal Unicode (não só pt-BR — `naive`/`naïve`, `cafe`/`café`, `garcon`/`garçon`); JS-side post-query (SQLite/Turso não tem `unaccent` nativo): `buildCollectionFilters` ganha flag opcional `omitText` (default false); `queryCollection` carrega rows com filtros não-text via SQL e aplica `matchesNormalizedText` em `[artist, title, label]` antes da agregação de tracks; `queryCandidates` remove LIKE textual SQL + move `.limit()` pra JS (`slice(0, opts.limit ?? 300)`) APÓS filtro JS pra preservar candidatos válidos; `pickRandomUnratedRecord` (Inc 11) re-estrutura: SELECT amplo sem text → JS post-filter → `Math.random()` JS sobre filtrados (preserva uniformidade); filtros multi-select de tag (genres, styles, moods, contexts) permanecem exact match (vocabulário canônico — Decisão 8 do research) — `fineGenre` (texto livre) entra no text filter geral; zero schema delta, zero novas Server Actions; refator localizado em 4 arquivos. Princípios I/II/III/V todos OK.
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).

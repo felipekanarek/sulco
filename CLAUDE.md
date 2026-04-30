@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **020-shelf-picker-autoadd** (BACKLOG: Inc 21)
+Current active feature: **021-accent-insensitive-search** (BACKLOG: Inc 18)
 
 Authoritative planning artifacts (read these before making changes
-ao novo `<ShelfPicker>` em `src/components/shelf-picker.tsx`, ao
-helper `listUserShelves` em `src/lib/queries/collection.ts`, ou
-ao campo Prateleira em `<RecordControls>` (/disco/[id])):
+ao novo helper `normalizeText` em `src/lib/text.ts`, às queries
+`queryCollection`/`queryCandidates`, ou à Server Action
+`pickRandomUnratedRecord`):
 
-- Plan: [specs/020-shelf-picker-autoadd/plan.md](specs/020-shelf-picker-autoadd/plan.md)
-- Spec: [specs/020-shelf-picker-autoadd/spec.md](specs/020-shelf-picker-autoadd/spec.md)
-- Contracts: [specs/020-shelf-picker-autoadd/contracts/](specs/020-shelf-picker-autoadd/contracts/)
-- Research: [specs/020-shelf-picker-autoadd/research.md](specs/020-shelf-picker-autoadd/research.md)
-- Quickstart: [specs/020-shelf-picker-autoadd/quickstart.md](specs/020-shelf-picker-autoadd/quickstart.md)
+- Plan: [specs/021-accent-insensitive-search/plan.md](specs/021-accent-insensitive-search/plan.md)
+- Spec: [specs/021-accent-insensitive-search/spec.md](specs/021-accent-insensitive-search/spec.md)
+- Contracts: [specs/021-accent-insensitive-search/contracts/](specs/021-accent-insensitive-search/contracts/)
+- Research: [specs/021-accent-insensitive-search/research.md](specs/021-accent-insensitive-search/research.md)
+- Quickstart: [specs/021-accent-insensitive-search/quickstart.md](specs/021-accent-insensitive-search/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -319,6 +319,60 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   `updateRecordStatus`; tap target min-h-[44px] mobile +
   md:min-h-[32px] desktop; `<RecordStatusActions>` compartilhado;
   zero schema delta)
+- 020 shelf-picker-autoadd (Inc 21 — `<ShelfPicker>` combobox
+  substitui input livre da Prateleira em /disco/[id]; helper
+  `listUserShelves` lista DISTINCT alfabético; auto-add on-the-fly
+  + "— Sem prateleira —" + busca incremental case-insensitive;
+  desktop popover absoluto / mobile bottom sheet via MobileDrawer;
+  ARIA combobox completo + keyboard nav; Bug 15 hotfix —
+  matchMedia detecta viewport pra evitar drawer vazando em desktop;
+  reusa `updateRecordAuthorFields`; zero schema delta)
+
+Key points of 021 (Inc 18 — Busca insensitive a acentos):
+- **Zero schema delta**. Sem novas Server Actions.
+- **Helper puro novo**: `normalizeText(s)` em
+  [src/lib/text.ts](src/lib/text.ts) — `lowercase + NFD +
+  replace(/\p{M}/gu, '')`. Cobre todos os diacríticos Unicode
+  (não só pt-BR). Auxiliar `matchesNormalizedText(haystacks,
+  query)` pra DRY nos callsites.
+- **JS-side post-query** (não schema delta): SQLite/Turso não
+  têm `unaccent` nativo, e schema delta seria custoso pra
+  manter (sync writes). Para escala atual (~2500 records / ~10k
+  tracks por user) o filter em memória é trivial (≤500ms total
+  conforme SC-002).
+- **3 callsites adaptados**:
+  - `buildCollectionFilters` em
+    [src/lib/queries/collection.ts](src/lib/queries/collection.ts)
+    ganha flag opcional `omitText` (default false; preserva
+    callers existentes).
+  - `queryCollection` chama com `omitText: true` e aplica
+    `matchesNormalizedText([artist, title, label], q.text)` no
+    resultado, antes da agregação de tracks (economiza JOIN
+    pra rows descartadas).
+  - `queryCandidates` em
+    [src/lib/queries/montar.ts](src/lib/queries/montar.ts)
+    remove o LIKE textual SQL; aplica filtro JS sobre
+    `[title, artist, recordTitle, fineGenre]`. **Limit move pra
+    JS** (`slice(0, opts.limit ?? 300)`) pra não cortar
+    candidatos válidos antes do text filter.
+  - `pickRandomUnratedRecord` em
+    [src/lib/actions.ts](src/lib/actions.ts) (Inc 11) re-estrutura:
+    SQL filtra non-text → JS post-filter por text → JS
+    `Math.random()` sobre filtrado. Mantém aleatoriedade
+    uniforme.
+- **Bidirecional**: termo digitado E valor no DB são
+  normalizados antes de comparar (FR-003). Paridade verificável.
+- **Filtros multi-select de tag** (genres, styles, moods,
+  contexts) **continuam igualdade exata** — vocabulário canônico
+  por design (Decisão 8 do research). DJ não digita esses como
+  texto livre. `fineGenre` (texto livre) entra no text filter
+  geral.
+- **Princípio I respeitado**: feature é puramente leitura.
+- **Princípio III respeitado**: zero schema delta. Schema
+  continua single source.
+- **Princípio V (Mobile-Native)**: ganho maior em mobile —
+  teclado virtual sem fluxo natural pra acento; quickstart
+  cenário 5.
 
 Key points of 020 (Inc 21 — Prateleira como select picker com auto-add):
 - **Zero schema delta**. Reusa coluna `records.shelfLocation` (text

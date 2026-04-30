@@ -3,6 +3,7 @@ import { and, desc, eq, exists, inArray, isNotNull, sql, type SQL } from 'drizzl
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
+import { matchesNormalizedText } from '@/lib/text';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
@@ -57,10 +58,16 @@ export function buildCollectionFilters(q: {
   genres: string[];
   styles: string[];
   bomba: BombaFilter;
+  /**
+   * Quando true, ignora o filtro `text` no SQL — caller deve
+   * aplicar `matchesNormalizedText` em JS pós-query (Inc 18 /
+   * 021). Default false preserva callers existentes.
+   */
+  omitText?: boolean;
 }): SQL[] {
   const conds: SQL[] = [];
 
-  if (q.text.length > 0) {
+  if (!q.omitText && q.text.length > 0) {
     const pattern = `%${q.text.toLowerCase()}%`;
     conds.push(
       sql`(lower(${records.artist}) LIKE ${pattern} OR lower(${records.title}) LIKE ${pattern} OR lower(COALESCE(${records.label},'')) LIKE ${pattern})`,
@@ -106,9 +113,11 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
     conds.push(eq(records.status, q.status));
   }
 
-  conds.push(...buildCollectionFilters(q));
+  // Inc 18 (021): text filter sai do SQL e vai pra JS pós-query
+  // pra ser accent-insensitive. Demais filtros continuam SQL.
+  conds.push(...buildCollectionFilters({ ...q, omitText: true }));
 
-  const rows = await db
+  const rowsRaw = await db
     .select({
       id: records.id,
       artist: records.artist,
@@ -126,6 +135,16 @@ export async function queryCollection(q: CollectionQuery): Promise<CollectionRow
     .from(records)
     .where(and(...conds))
     .orderBy(desc(records.importedAt));
+
+  // Inc 18: aplicar text filter accent-insensitive antes da
+  // agregação de tracks (economiza JOIN/aggregation pra rows
+  // descartadas).
+  const rows =
+    q.text.trim().length > 0
+      ? rowsRaw.filter((r) =>
+          matchesNormalizedText([r.artist, r.title, r.label], q.text),
+        )
+      : rowsRaw;
 
   if (rows.length === 0) return [];
 
