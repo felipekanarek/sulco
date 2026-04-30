@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **018-candidate-ai-analysis-glyph** (BACKLOG: Inc 17)
+Current active feature: **019-edit-status-on-grid** (BACKLOG: Inc 19)
 
 Authoritative planning artifacts (read these before making changes
-à listagem de candidatos em `/sets/[id]/montar`, ao tipo `Candidate`
-em `src/lib/queries/montar.ts`, ou ao componente
-`<CandidateRow>` em `src/components/candidate-row.tsx`):
+aos cards da grid em `/` (`<RecordRow>` e `<RecordGridCard>`), ao
+novo `<RecordStatusActions>` em `src/components/`, ou à
+integração com a Server Action `updateRecordStatus`):
 
-- Plan: [specs/018-candidate-ai-analysis-glyph/plan.md](specs/018-candidate-ai-analysis-glyph/plan.md)
-- Spec: [specs/018-candidate-ai-analysis-glyph/spec.md](specs/018-candidate-ai-analysis-glyph/spec.md)
-- Contracts: [specs/018-candidate-ai-analysis-glyph/contracts/](specs/018-candidate-ai-analysis-glyph/contracts/)
-- Research: [specs/018-candidate-ai-analysis-glyph/research.md](specs/018-candidate-ai-analysis-glyph/research.md)
-- Quickstart: [specs/018-candidate-ai-analysis-glyph/quickstart.md](specs/018-candidate-ai-analysis-glyph/quickstart.md)
+- Plan: [specs/019-edit-status-on-grid/plan.md](specs/019-edit-status-on-grid/plan.md)
+- Spec: [specs/019-edit-status-on-grid/spec.md](specs/019-edit-status-on-grid/spec.md)
+- Contracts: [specs/019-edit-status-on-grid/contracts/](specs/019-edit-status-on-grid/contracts/)
+- Research: [specs/019-edit-status-on-grid/research.md](specs/019-edit-status-on-grid/research.md)
+- Quickstart: [specs/019-edit-status-on-grid/quickstart.md](specs/019-edit-status-on-grid/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -307,6 +307,47 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   Server Action `acknowledgeAllArchived()` bulk single-statement com
   WHERE userId+archived+IS NULL; window.confirm + useTransition; zero
   schema delta; reusa records.archivedAcknowledgedAt)
+- 018 candidate-ai-analysis-glyph (Inc 17 — `tracks.aiAnalysis` exibido
+  no expandido do `<CandidateRow>` em /sets/[id]/montar (read-only);
+  glyph de toggle troca de `▾`/`▸` para `−`/`+` ASCII; corrige
+  incoerência onde `rankByCuration` referenciava o campo sem
+  carregá-lo; zero schema delta, zero novas Server Actions)
+
+Key points of 019 (Inc 19 — Editar status do disco direto na grid):
+- **Zero schema delta**. Reusa coluna `records.status` existente.
+- **Zero novas Server Actions**. Reusa `updateRecordStatus`
+  existente em [src/lib/actions.ts:568](src/lib/actions.ts) (Zod +
+  ownership via `requireCurrentUser` + revalidatePath em `/`,
+  `/curadoria`, `/disco/${id}`).
+- **1 client component novo**: `<RecordStatusActions>` em
+  [src/components/record-status-actions.tsx](src/components/record-status-actions.tsx).
+  Props: `{ recordId, status, recordLabel, className? }`.
+  `useTransition` + `useState<optimistic>` + `useState<error>` com
+  auto-dismiss 5s. Botões condicionais por status: `unrated` →
+  Ativar+Descartar; `active` → Descartar; `discarded` → Reativar.
+- **Optimistic UI** ≤100ms (SC-002): badge muda imediato via
+  `displayStatus = optimistic ?? props.status`; rollback em erro
+  (`setOptimistic(null)`); revalidação RSC sincroniza após sucesso.
+- **Inbox-zero pattern** (Clarification Q1): card some
+  naturalmente após `revalidatePath('/')` quando filtro corrente
+  exclui o status novo (~1s pós-clique). Sem código novo —
+  reuso do pipeline existente.
+- **Erro com auto-dismiss 5s** (Clarification Q2): timer
+  `useEffect` + setTimeout; some também ao disparar nova ação
+  em qualquer card. Sem botão fechar manual.
+- **Sem confirmação** (Princípio IV: status reversível).
+- **Layout responsivo**: `min-h-[44px] md:min-h-[32px]` (Princípio
+  V tap target mobile + densidade desktop preservada).
+- **Integrado em ambas as views**: `<RecordRow>` (list) e
+  `<RecordGridCard>` (grid). Componente compartilhado, layout
+  absorvido por `className` do pai.
+- **Discos `archived=true` ficam fora**: fluxo separado em
+  `/status` (Inc 11/017). Component só renderizado pra discos
+  não-arquivados.
+- **Princípio I respeitado**: `status` é AUTHOR; escrita só via
+  clique do DJ.
+- **Princípio V respeitado**: tap target mobile + cenário 9, 10
+  do quickstart.
 
 Key points of 018 (Inc 17 — Análise IA + glyph de expandir nos candidatos):
 - **Zero schema delta**. Reusa coluna `tracks.aiAnalysis` (Inc 13).
