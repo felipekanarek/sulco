@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { updateRecordAuthorFields, updateRecordStatus } from '@/lib/actions';
+import { ShelfPicker } from './shelf-picker';
 
 type Status = 'unrated' | 'active' | 'discarded';
 
@@ -10,14 +11,15 @@ export function RecordControls({
   status,
   shelfLocation,
   notes,
+  userShelves,
 }: {
   recordId: number;
   status: Status;
   shelfLocation: string | null;
   notes: string | null;
+  userShelves: string[];
 }) {
   const [localStatus, setLocalStatus] = useState<Status>(status);
-  const [localShelf, setLocalShelf] = useState(shelfLocation ?? '');
   const [localNotes, setLocalNotes] = useState(notes ?? '');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -31,18 +33,6 @@ export function RecordControls({
         setLocalStatus(status);
         setError(res.error);
       }
-    });
-  }
-
-  function commitShelf() {
-    const v = localShelf.trim();
-    if (v === (shelfLocation ?? '')) return;
-    startTransition(async () => {
-      const res = await updateRecordAuthorFields({
-        recordId,
-        shelfLocation: v || null,
-      });
-      if (!res.ok) setError(res.error);
     });
   }
 
@@ -84,19 +74,15 @@ export function RecordControls({
         })}
       </div>
 
-      {/* Shelf location */}
+      {/* Shelf location — Inc 21: picker com auto-add */}
       <div>
         <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute mb-1 block">
           Prateleira
         </label>
-        <input
-          type="text"
-          value={localShelf}
-          onChange={(e) => setLocalShelf(e.target.value)}
-          onBlur={commitShelf}
-          placeholder="ex: E3-P2"
-          maxLength={50}
-          className="w-full font-mono text-sm bg-transparent border-0 border-b border-line pb-1 outline-none focus:border-accent"
+        <ShelfPicker
+          recordId={recordId}
+          current={shelfLocation}
+          userShelves={userShelves}
         />
       </div>
 

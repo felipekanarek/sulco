@@ -262,18 +262,18 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **019-edit-status-on-grid** (BACKLOG: Inc 19)
+Current active feature: **020-shelf-picker-autoadd** (BACKLOG: Inc 21)
 
 Authoritative planning artifacts (read these before making changes
-aos cards da grid em `/` (`<RecordRow>` e `<RecordGridCard>`), ao
-novo `<RecordStatusActions>` em `src/components/`, ou à
-integração com a Server Action `updateRecordStatus`):
+ao novo `<ShelfPicker>` em `src/components/shelf-picker.tsx`, ao
+helper `listUserShelves` em `src/lib/queries/collection.ts`, ou
+ao campo Prateleira em `<RecordControls>` (/disco/[id])):
 
-- Plan: [specs/019-edit-status-on-grid/plan.md](specs/019-edit-status-on-grid/plan.md)
-- Spec: [specs/019-edit-status-on-grid/spec.md](specs/019-edit-status-on-grid/spec.md)
-- Contracts: [specs/019-edit-status-on-grid/contracts/](specs/019-edit-status-on-grid/contracts/)
-- Research: [specs/019-edit-status-on-grid/research.md](specs/019-edit-status-on-grid/research.md)
-- Quickstart: [specs/019-edit-status-on-grid/quickstart.md](specs/019-edit-status-on-grid/quickstart.md)
+- Plan: [specs/020-shelf-picker-autoadd/plan.md](specs/020-shelf-picker-autoadd/plan.md)
+- Spec: [specs/020-shelf-picker-autoadd/spec.md](specs/020-shelf-picker-autoadd/spec.md)
+- Contracts: [specs/020-shelf-picker-autoadd/contracts/](specs/020-shelf-picker-autoadd/contracts/)
+- Research: [specs/020-shelf-picker-autoadd/research.md](specs/020-shelf-picker-autoadd/research.md)
+- Quickstart: [specs/020-shelf-picker-autoadd/quickstart.md](specs/020-shelf-picker-autoadd/quickstart.md)
 
 Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
 - 001 sulco-piloto · 002 multi-conta · 003 faixas-ricas-montar
@@ -312,6 +312,55 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   glyph de toggle troca de `▾`/`▸` para `−`/`+` ASCII; corrige
   incoerência onde `rankByCuration` referenciava o campo sem
   carregá-lo; zero schema delta, zero novas Server Actions)
+- 019 edit-status-on-grid (Inc 19 — botões inline `Ativar`/`Descartar`/
+  `Reativar` em cada item da grid `/` (ambas views) com optimistic
+  UI ≤100ms via useTransition + useState<optimistic>; rollback em
+  erro com auto-dismiss 5s; Inbox-zero pattern; reusa
+  `updateRecordStatus`; tap target min-h-[44px] mobile +
+  md:min-h-[32px] desktop; `<RecordStatusActions>` compartilhado;
+  zero schema delta)
+
+Key points of 020 (Inc 21 — Prateleira como select picker com auto-add):
+- **Zero schema delta**. Reusa coluna `records.shelfLocation` (text
+  max 50, nullable) já existente.
+- **Zero novas Server Actions de escrita**. Reusa
+  `updateRecordAuthorFields` existente em
+  [src/lib/actions.ts:737](src/lib/actions.ts) (Zod
+  `max(50).nullable()` + ownership + revalidatePath em
+  `/disco/${id}`, `/curadoria`, `/`).
+- **1 helper query novo (server-only)**: `listUserShelves(userId)`
+  em [src/lib/queries/collection.ts](src/lib/queries/collection.ts)
+  — `selectDistinct shelfLocation WHERE userId = ? AND
+  shelfLocation IS NOT NULL ORDER BY lower(shelfLocation)`.
+- **1 client component novo**: `<ShelfPicker>` em
+  [src/components/shelf-picker.tsx](src/components/shelf-picker.tsx).
+  Props: `{ recordId, current, userShelves, className? }`.
+  Combobox com input de busca + lista filtrada + opção
+  "+ Adicionar 'X' como nova prateleira" + "— Sem prateleira —".
+- **Desktop**: popover absoluto `md:max-w-[400px]` + `max-h-[300px]`
+  scroll. **Mobile**: bottom sheet via `<MobileDrawer side="bottom">`
+  (primitiva Inc 009, com portal + ESC + body scroll lock + safe
+  area inset). Mesma `<ListPanel>` em ambos.
+- **Casing preservado** (Decisão 1): `trim()` apenas, sem
+  UPPERCASE forçado. Filtragem case-insensitive na busca; match
+  exato pra suprimir "+ Adicionar" é case-sensitive (FR-005).
+- **Ordenação alfabética case-insensitive** (não LRU — Decisão 2).
+- **Save-on-click** (Decisão 4): clique no item compromete; fechar
+  o picker sem clicar mantém valor anterior. Otimismo via
+  `useState<optimistic>` + `useTransition`; rollback em erro com
+  auto-dismiss 5s (mesma UX Inc 19).
+- **ARIA combobox** completo (Decisão 6): `role="combobox"` no
+  input, `role="listbox"` na lista, `aria-activedescendant` pra
+  navegação por teclado (↑/↓/Enter/Escape).
+- **Princípio I respeitado**: `shelfLocation` continua AUTHOR;
+  feature toca apenas a UI de escrita.
+- **Princípio V respeitado**: bottom sheet fullscreen-friendly em
+  mobile; tap targets ≥44 px (`min-h-[44px] md:min-h-[36px]`).
+- **`<RecordControls>` ajustado**: substitui o `<input
+  type="text">` da seção Prateleira (linhas 87-101) por
+  `<ShelfPicker>`; ganha prop `userShelves: string[]`.
+- **`/disco/[id]/page.tsx` ajustado**: chama `listUserShelves(user.id)`
+  no RSC e passa pra `<RecordControls>`.
 
 Key points of 019 (Inc 19 — Editar status do disco direto na grid):
 - **Zero schema delta**. Reusa coluna `records.status` existente.

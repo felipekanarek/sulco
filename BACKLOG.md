@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-04-29 (Inc 19 entregue → release 019)
+**Última atualização**: 2026-04-29 (Inc 21 entregue → release 020)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -48,56 +48,6 @@ Estimativa: 1-2 dias via speckit. Schema delta de 2 colunas
 adicional (mesmo padrão 008).
 
 Registrado a pedido em 2026-04-26 após validação manual do 008.
-
-#### Incremento 21 — Prateleira como select picker (com auto-add)
-Hoje `records.shelfLocation` é texto livre digitado em
-`/disco/[id]`. Problemas reais:
-- Inconsistência: digitar "E1-P2" e "e1-p2" e "E1 P2" cria 3
-  prateleiras "diferentes" pra mesma posição física.
-- Velocidade: DJ que sabe que tem ~30 prateleiras digitando
-  o mesmo padrão centenas de vezes é trabalho repetitivo.
-- Erro de digitação: typos viram entradas órfãs, atrapalham
-  busca/filtro futuro por prateleira.
-
-Escopo:
-- Substituir input de texto livre por **combobox** (select
-  picker editável) que:
-  - Lista prateleiras já existentes da coleção do user (DISTINCT
-    `records.shelfLocation` WHERE `userId = ?` AND `shelfLocation
-    IS NOT NULL`).
-  - Permite digitar pra filtrar a lista.
-  - Permite **criar nova prateleira on-the-fly** quando o termo
-    digitado não existe — sem ir pra tela de admin separada.
-    "+ Adicionar 'E5-P3' como nova prateleira" como item da
-    lista quando não há match.
-- Sem schema delta — `shelfLocation` continua sendo string
-  livre no DB, apenas a UI vira controlado.
-- Variante mobile: bottom sheet com input de busca + lista
-  rolável (Princípio V — pattern já usado em
-  `<FilterBottomSheet>` do Inc 009).
-
-Decisões pendentes pra `/speckit.specify`:
-- Capitalização: normalizar pra UPPERCASE no submit (`e1-p2` →
-  `E1-P2`)? Provavelmente sim — evita inconsistência
-  retroativa.
-- Edição em massa: nesta feature ou no Inc 20? Inc 21 é
-  pré-requisito UX do Inc 20 (sem picker, multi-select
-  não acelera nada — usuário ainda digita).
-- Limpar prateleiras órfãs (zero discos): mostrar na lista ou
-  ocultar? Provavelmente ocultar e oferecer "limpar lista"
-  numa rota admin futura.
-- Constituição proíbe shadcn → implementação manual de combobox
-  (já validado no Inc 8 do roadmap, mesmo padrão Linear/Notion).
-
-Princípio I respeitado: `shelfLocation` continua AUTHOR;
-mudança é de UI, não de zona.
-Princípio V: bottom sheet em mobile, popover em desktop;
-tap targets ≥44 mobile.
-
-Estimativa: 2-3h via speckit. Sem schema delta.
-
-Registrado a pedido em 2026-04-29 — fricção em editar
-prateleira repetidamente como texto livre.
 
 #### Incremento 20 — Edição em massa de discos (multi-select)
 Hoje toda mudança de campo (status, shelf, notes) é feita
@@ -411,6 +361,7 @@ spec/plan/data-model/contracts/quickstart.
 - **017** — Botão "Reconhecer tudo" no banner de archived (Inc 11) · 2026-04-28 · `specs/017-acknowledge-all-archived/` · header da seção "Discos arquivados" em /status ganha botão bulk quando há ≥2 pendentes; Server Action nova `acknowledgeAllArchived()` (sem input, deriva userId da sessão) faz UPDATE single-statement com `WHERE userId = ? AND archived = 1 AND archivedAcknowledgedAt IS NULL` — atomicidade garantida pelo SQLite; client component `<AcknowledgeAllArchivedButton>` com useTransition + window.confirm("Marcar todos os N como reconhecidos?") + disabled "Reconhecendo…" durante isPending; threshold ≥2 (com 1 pendente, botão individual basta); revalidatePath('/status')+('/'); banner global some em todas as rotas; tap target min-h-[44px] (Princípio V); multi-user isolation via WHERE userId; `acknowledgeArchivedRecord` individual intacto; zero schema delta
 - **018** — Análise IA + glyph de expandir nos cards de candidato (Inc 17) · 2026-04-28 · `specs/018-candidate-ai-analysis-glyph/` · 2 ajustes UX no `<CandidateRow>` em /sets/[id]/montar: (1) tipo `Candidate` ganha `aiAnalysis: string | null` e `queryCandidates` adiciona o campo ao SELECT (corrige incoerência onde score `rankByCuration` referenciava o campo sem carregá-lo); seção "Análise" renderiza no col-1 do expandido abaixo de comment/references quando `aiAnalysis.trim().length > 0`, read-only (label-tech ink-mute + serif italic 13px text-ink whitespace-pre-line, sem aspas — coerente com `<TrackCurationRow>` em /disco/[id]); (2) glyph de toggle do botão expand muda de `▾`/`▸` para `−` (U+2212) / `+` (U+002B) — ASCII universal, zero ambiguidade com `▶` dos botões de preview Inc 008, ARIA preservado; zero schema delta, zero novas Server Actions, refator localizado em 2 arquivos
 - **019** — Editar status do disco direto na grid (Inc 19) · 2026-04-29 · `specs/019-edit-status-on-grid/` · botões inline `Ativar`/`Descartar`/`Reativar` em cada item da grid `/` (ambas views — `<RecordRow>` list + `<RecordGridCard>` grid) com optimistic UI ≤100ms via `useTransition` + `useState<optimistic>`; rollback visual em erro com mensagem inline auto-dismiss 5s (Clarification Q2 — toast-like, sem botão fechar); pattern Inbox-zero (Clarification Q1) — card some naturalmente após `revalidatePath('/')` quando filtro corrente exclui novo status; reusa Server Action `updateRecordStatus` existente (Zod + ownership + revalidatePath nas 3 rotas) sem mudança; botões condicionais por status (`unrated` → Ativar+Descartar; `active` → Descartar; `discarded` → Reativar) com `aria-label` descritivo + tap target `min-h-[44px] md:min-h-[32px]` (Princípio V mobile + densidade desktop); discos `archived` ficam fora (filtrados pela query); 1 client component novo `<RecordStatusActions>` compartilhado entre as duas views via prop `className`; zero schema delta, zero novas Server Actions
+- **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit)
 
 Status detalhado de cada release vive nas specs próprias (commit
 references nos commits acima cobrem o histórico de fixes pós-release).
