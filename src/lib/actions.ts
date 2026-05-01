@@ -8,6 +8,7 @@ import { db } from '@/db';
 import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { buildCollectionFilters } from '@/lib/queries/collection';
+import { getUserFacets, recomputeFacets } from '@/lib/queries/user-facets';
 import { matchesNormalizedText } from '@/lib/text';
 import { cacheUser, revalidateUserCache } from '@/lib/cache';
 import { encryptSecret } from '@/lib/crypto';
@@ -220,10 +221,9 @@ async function getImportProgressReadRaw(userId: number): Promise<ImportProgress>
     .orderBy(desc(syncRuns.startedAt))
     .limit(1);
 
-  const [{ count: recordCount = 0 } = { count: 0 }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(records)
-    .where(eq(records.userId, userId));
+  // Inc 24: derivado de user_facets em vez de COUNT(*) em records.
+  const facets = await getUserFacets(userId);
+  const recordCount = facets.recordsTotal;
 
   const [{ ack: lastAck = null } = { ack: null }] = await db
     .select({ ack: users.importAcknowledgedAt })
@@ -619,6 +619,13 @@ export async function updateRecordStatus(input: {
     return { ok: false, error: 'Disco não encontrado.' };
   }
 
+  // Inc 24: recompute síncrono — afeta records_active/unrated/discarded.
+  try {
+    await recomputeFacets(user.id);
+  } catch (err) {
+    console.error('[recomputeFacets] erro pós-write (updateRecordStatus):', err);
+  }
+
   revalidatePath('/');
   revalidatePath('/curadoria');
   revalidatePath(`/disco/${parsed.data.recordId}`);
@@ -632,7 +639,7 @@ export async function updateRecordStatus(input: {
    ============================================================ */
 
 import { tracks as tracksTable } from '@/db/schema';
-import { normalizeVocabTerm, buildSuggestionList, DEFAULT_MOOD_SEEDS, DEFAULT_CONTEXT_SEEDS } from '@/lib/vocabulary';
+import { normalizeVocabTerm, DEFAULT_MOOD_SEEDS, DEFAULT_CONTEXT_SEEDS } from '@/lib/vocabulary';
 
 const CAMELOT_REGEX = /^(?:[1-9]|1[0-2])[AB]$/;
 
@@ -730,6 +737,13 @@ export async function updateTrackCuration(
     .set(payload)
     .where(eq(tracksTable.id, parsed.data.trackId));
 
+  // Inc 24: recompute síncrono — afeta tracks_selected_total + moods/contexts.
+  try {
+    await recomputeFacets(user.id);
+  } catch (err) {
+    console.error('[recomputeFacets] erro pós-write (updateTrackCuration):', err);
+  }
+
   revalidatePath(`/disco/${parsed.data.recordId}`);
   revalidatePath('/curadoria');
   revalidatePath('/');
@@ -742,37 +756,24 @@ export async function updateTrackCuration(
    Retorna termos ordenados (uso do DJ por frequência + sementes alfa).
    ============================================================ */
 
-async function listUserVocabularyRaw(
-  userId: number,
-  kind: 'moods' | 'contexts',
-): Promise<string[]> {
-  const column = kind === 'moods' ? tracksTable.moods : tracksTable.contexts;
-  // Agrega todos os termos usados pelo DJ com contagem
-  const rows = await db
-    .select({
-      term: sql<string>`value`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(tracksTable)
-    .innerJoin(records, eq(tracksTable.recordId, records.id))
-    .innerJoin(sql`json_each(${column})`, sql`1=1`)
-    .where(eq(records.userId, userId))
-    .groupBy(sql`value`);
-
-  const userTerms = rows.map((r) => ({ term: r.term, count: Number(r.count) }));
-  const seeds = kind === 'moods' ? DEFAULT_MOOD_SEEDS : DEFAULT_CONTEXT_SEEDS;
-  return buildSuggestionList(userTerms, seeds);
-}
-
-// Inc 23 (022): cache wrapper. Wrapper público mantém assinatura
-// (resolve user dentro) — callers não mudam.
-const listUserVocabularyCached = cacheUser(listUserVocabularyRaw, 'listUserVocabulary');
-
+// Inc 24: derivado de user_facets.moods/contexts (1 SELECT da row).
+// Termos do user já vêm ordenados por frequência (aggregateVocabulary
+// no helper). Aqui só mergeamos com sementes ainda não usadas.
 export async function listUserVocabulary(
   kind: 'moods' | 'contexts',
 ): Promise<string[]> {
   const user = await requireCurrentUser();
-  return listUserVocabularyCached(user.id, kind);
+  const facets = await getUserFacets(user.id);
+  const userOrdered = (kind === 'moods' ? facets.moods : facets.contexts)
+    .map(normalizeVocabTerm)
+    .filter((t) => t.length > 0);
+  const userSet = new Set(userOrdered);
+  const seeds = kind === 'moods' ? DEFAULT_MOOD_SEEDS : DEFAULT_CONTEXT_SEEDS;
+  const seedsRemaining = seeds
+    .map(normalizeVocabTerm)
+    .filter((s) => !userSet.has(s))
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return [...userOrdered, ...seedsRemaining];
 }
 
 /* ============================================================
@@ -808,6 +809,13 @@ export async function updateRecordAuthorFields(
 
   if (updated.length === 0) {
     return { ok: false, error: 'Disco não encontrado.' };
+  }
+
+  // Inc 24: recompute síncrono — afeta shelves_json se shelfLocation mudou.
+  try {
+    await recomputeFacets(user.id);
+  } catch (err) {
+    console.error('[recomputeFacets] erro pós-write (updateRecordAuthorFields):', err);
   }
 
   revalidatePath(`/disco/${parsed.data.recordId}`);
@@ -1622,6 +1630,14 @@ export async function acknowledgeArchivedRecord(
 
   if (updated.length === 0) return { ok: false, error: 'Disco não encontrado.' };
 
+  // Inc 24: recompute síncrono (defensivo — ack não muda archived
+  // mas mantém row atualizada).
+  try {
+    await recomputeFacets(user.id);
+  } catch (err) {
+    console.error('[recomputeFacets] erro pós-write (acknowledgeArchivedRecord):', err);
+  }
+
   revalidatePath('/status');
   revalidatePath('/');
   revalidateUserCache(user.id);
@@ -1651,6 +1667,14 @@ export async function acknowledgeAllArchived(): Promise<
         ),
       )
       .returning({ id: records.id });
+
+    // Inc 24: recompute síncrono (defensivo — ack não muda archived,
+    // mas mantém row atualizada).
+    try {
+      await recomputeFacets(user.id);
+    } catch (err) {
+      console.error('[recomputeFacets] erro pós-write (acknowledgeAllArchived):', err);
+    }
 
     revalidatePath('/status');
     revalidatePath('/');

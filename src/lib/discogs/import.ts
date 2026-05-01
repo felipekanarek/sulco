@@ -11,6 +11,7 @@ import {
 import { applyDiscogsUpdate } from './apply-update';
 import { markCredentialInvalid } from './index';
 import { killZombieSyncRuns } from './zombie';
+import { recomputeFacets } from '@/lib/queries/user-facets';
 
 export type SyncOutcome =
   | { outcome: 'ok'; newCount: number; removedCount: number; conflictCount: number }
@@ -153,6 +154,14 @@ export async function runInitialImport(
         conflictCount,
       })
       .where(eq(syncRuns.id, runId));
+
+    // Inc 24: recompute síncrono — import inicial popula a coleção
+    // toda. Backfill aqui evita que a row de facets fique zerada.
+    try {
+      await recomputeFacets(userId);
+    } catch (err) {
+      console.error('[recomputeFacets] erro pós-import (runInitialImport):', err);
+    }
 
     return { outcome: 'ok', newCount, removedCount: 0, conflictCount };
   } catch (err) {

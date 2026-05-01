@@ -241,6 +241,33 @@ export const syncRuns = sqliteTable(
 );
 
 /* ============================================================
+   USER FACETS — denormalização (Inc 24)
+   Cache materializado de agregações pesadas. 1 row por user.
+   Atualizado por `recomputeFacets(userId)` (síncrono) no fim de
+   Server Actions de write críticas.
+   ============================================================ */
+export const userFacets = sqliteTable('user_facets', {
+  userId: integer('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // Listas como JSON
+  genresJson: text('genres_json').notNull().default('[]'),
+  stylesJson: text('styles_json').notNull().default('[]'),
+  moodsJson: text('moods_json').notNull().default('[]'),
+  contextsJson: text('contexts_json').notNull().default('[]'),
+  shelvesJson: text('shelves_json').notNull().default('[]'),
+  // Contadores
+  recordsTotal: integer('records_total').notNull().default(0),
+  recordsActive: integer('records_active').notNull().default(0),
+  recordsUnrated: integer('records_unrated').notNull().default(0),
+  recordsDiscarded: integer('records_discarded').notNull().default(0),
+  tracksSelectedTotal: integer('tracks_selected_total').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+/* ============================================================
    PLAYLIST — bloco reutilizável de faixas
    (FR-053a: NUNCA aparece na UI do piloto; tabelas mantidas para evitar
    migration destrutiva, mas não são lidas nem escritas)

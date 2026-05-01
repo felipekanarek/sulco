@@ -1,10 +1,11 @@
 import 'server-only';
-import { and, desc, eq, exists, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
 import { matchesNormalizedText } from '@/lib/text';
 import { cacheUser } from '@/lib/cache';
+import { getUserFacets } from '@/lib/queries/user-facets';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
@@ -227,102 +228,41 @@ export const queryCollection = (q: CollectionQuery): Promise<CollectionRow[]> =>
   return cachedFn(q.userId, q);
 };
 
-async function collectionCountsRaw(userId: number): Promise<CollectionCounts> {
-  const rows = await db
-    .select({
-      total: sql<number>`COUNT(*)`,
-      ativos: sql<number>`SUM(CASE WHEN ${records.status} = 'active' THEN 1 ELSE 0 END)`,
-      naoAvaliados: sql<number>`SUM(CASE WHEN ${records.status} = 'unrated' THEN 1 ELSE 0 END)`,
-      descartados: sql<number>`SUM(CASE WHEN ${records.status} = 'discarded' THEN 1 ELSE 0 END)`,
-    })
-    .from(records)
-    .where(and(eq(records.userId, userId), eq(records.archived, false)));
-
-  const r = rows[0];
+// Inc 24: derivado de user_facets (1 SELECT) em vez de COUNT-by-status.
+export async function collectionCounts(userId: number): Promise<CollectionCounts> {
+  const f = await getUserFacets(userId);
   return {
-    total: Number(r?.total ?? 0),
-    ativos: Number(r?.ativos ?? 0),
-    naoAvaliados: Number(r?.naoAvaliados ?? 0),
-    descartados: Number(r?.descartados ?? 0),
+    total: f.recordsTotal,
+    ativos: f.recordsActive,
+    naoAvaliados: f.recordsUnrated,
+    descartados: f.recordsDiscarded,
   };
 }
 
-// Inc 23 (022): cache wrapper.
-export const collectionCounts = cacheUser(collectionCountsRaw, 'collectionCounts');
-
-/** Retorna a soma global de faixas com `selected=true` do usuário. */
-async function countSelectedTracksRaw(userId: number): Promise<number> {
-  const rows = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(tracks)
-    .innerJoin(records, eq(tracks.recordId, records.id))
-    .where(
-      and(
-        eq(records.userId, userId),
-        eq(records.archived, false),
-        eq(tracks.selected, true),
-      ),
-    );
-  return Number(rows[0]?.c ?? 0);
+// Inc 24: derivado de user_facets.tracksSelectedTotal.
+export async function countSelectedTracks(userId: number): Promise<number> {
+  const f = await getUserFacets(userId);
+  return f.tracksSelectedTotal;
 }
-
-// Inc 23 (022): cache wrapper.
-export const countSelectedTracks = cacheUser(countSelectedTracksRaw, 'countSelectedTracks');
 
 export type FacetCount = { value: string; count: number };
 
-async function countFacet(
-  userId: number,
-  column: typeof records.genres | typeof records.styles,
-): Promise<FacetCount[]> {
-  const rows = await db
-    .select({
-      value: sql<string>`value`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(records)
-    .innerJoin(sql`json_each(${column})`, sql`1=1`)
-    .where(and(eq(records.userId, userId), eq(records.archived, false)))
-    .groupBy(sql`value`);
-
-  return rows
-    .filter((r) => typeof r.value === 'string' && r.value.length > 0)
-    .map((r) => ({ value: r.value, count: Number(r.count) }))
-    .sort(
-      (a, b) =>
-        b.count - a.count || a.value.localeCompare(b.value, 'pt-BR'),
-    );
+// Inc 24: derivado de user_facets.genresJson/stylesJson (1 SELECT total).
+export async function listUserGenres(userId: number): Promise<FacetCount[]> {
+  const f = await getUserFacets(userId);
+  return f.genres;
 }
 
-async function listUserGenresRaw(userId: number): Promise<FacetCount[]> {
-  return countFacet(userId, records.genres);
+export async function listUserStyles(userId: number): Promise<FacetCount[]> {
+  const f = await getUserFacets(userId);
+  return f.styles;
 }
-
-async function listUserStylesRaw(userId: number): Promise<FacetCount[]> {
-  return countFacet(userId, records.styles);
-}
-
-// Inc 23 (022): cache wrappers.
-export const listUserGenres = cacheUser(listUserGenresRaw, 'listUserGenres');
-export const listUserStyles = cacheUser(listUserStylesRaw, 'listUserStyles');
 
 /**
  * Lista distinct de prateleiras (`shelfLocation`) em uso pelo user.
- * Ordenadas alfabeticamente case-insensitive (Inc 21 / Decisão 2).
- * Filtra null e strings vazias/whitespace-only — uma garantia
- * defensiva para casos legados que possam existir.
+ * Inc 24: derivado de user_facets.shelvesJson.
  */
-async function listUserShelvesRaw(userId: number): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ shelf: records.shelfLocation })
-    .from(records)
-    .where(and(eq(records.userId, userId), isNotNull(records.shelfLocation)))
-    .orderBy(sql`lower(${records.shelfLocation})`);
-
-  return rows
-    .map((r) => r.shelf)
-    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+export async function listUserShelves(userId: number): Promise<string[]> {
+  const f = await getUserFacets(userId);
+  return f.shelves;
 }
-
-// Inc 23 (022): cache wrapper.
-export const listUserShelves = cacheUser(listUserShelvesRaw, 'listUserShelves');
