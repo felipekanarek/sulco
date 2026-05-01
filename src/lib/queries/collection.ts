@@ -16,7 +16,13 @@ export type CollectionQuery = {
   genres: string[]; // AND entre termos (FR-006)
   styles: string[]; // AND entre estilos (FR-006)
   bomba: BombaFilter; // tri-estado (FR-006)
+  // Inc 22 (paginação): default page=1, pageSize=50 quando omitido
+  page?: number;
+  pageSize?: number;
 };
+
+/** Default de paginação na listagem da home (Inc 22). */
+export const DEFAULT_PAGE_SIZE = 50;
 
 export type CollectionRow = Pick<
   RecordRow,
@@ -108,6 +114,11 @@ export function buildCollectionFilters(q: {
 }
 
 async function queryCollectionRaw(q: CollectionQuery): Promise<CollectionRow[]> {
+  const page = Math.max(1, q.page ?? 1);
+  const pageSize = Math.max(1, q.pageSize ?? DEFAULT_PAGE_SIZE);
+  const offset = (page - 1) * pageSize;
+  const hasTextFilter = q.text.trim().length > 0;
+
   const conds: SQL[] = [eq(records.userId, q.userId), eq(records.archived, false)];
 
   if (q.status !== 'all') {
@@ -118,34 +129,48 @@ async function queryCollectionRaw(q: CollectionQuery): Promise<CollectionRow[]> 
   // pra ser accent-insensitive. Demais filtros continuam SQL.
   conds.push(...buildCollectionFilters({ ...q, omitText: true }));
 
-  const rowsRaw = await db
-    .select({
-      id: records.id,
-      artist: records.artist,
-      title: records.title,
-      year: records.year,
-      label: records.label,
-      country: records.country,
-      format: records.format,
-      coverUrl: records.coverUrl,
-      genres: records.genres,
-      styles: records.styles,
-      status: records.status,
-      shelfLocation: records.shelfLocation,
-    })
-    .from(records)
-    .where(and(...conds))
-    .orderBy(desc(records.importedAt));
+  // Inc 22: paginação SQL quando SEM text filter (caso comum, máximo
+  // ganho). Com text filter, carrega tudo + filtra JS + pagina JS
+  // pra preservar matches accent-insensitive (Inc 18).
+  const baseSelect = {
+    id: records.id,
+    artist: records.artist,
+    title: records.title,
+    year: records.year,
+    label: records.label,
+    country: records.country,
+    format: records.format,
+    coverUrl: records.coverUrl,
+    genres: records.genres,
+    styles: records.styles,
+    status: records.status,
+    shelfLocation: records.shelfLocation,
+  };
 
-  // Inc 18: aplicar text filter accent-insensitive antes da
-  // agregação de tracks (economiza JOIN/aggregation pra rows
-  // descartadas).
-  const rows =
-    q.text.trim().length > 0
-      ? rowsRaw.filter((r) =>
-          matchesNormalizedText([r.artist, r.title, r.label], q.text),
-        )
-      : rowsRaw;
+  const rowsRaw = hasTextFilter
+    ? await db
+        .select(baseSelect)
+        .from(records)
+        .where(and(...conds))
+        .orderBy(desc(records.importedAt))
+    : await db
+        .select(baseSelect)
+        .from(records)
+        .where(and(...conds))
+        .orderBy(desc(records.importedAt))
+        .limit(pageSize)
+        .offset(offset);
+
+  // Inc 18: text filter JS sobre o resultado SQL.
+  const filtered = hasTextFilter
+    ? rowsRaw.filter((r) =>
+        matchesNormalizedText([r.artist, r.title, r.label], q.text),
+      )
+    : rowsRaw;
+
+  // Inc 22: paginação JS aplica APENAS quando há text filter (SQL
+  // já trouxe a página correta no caso sem text).
+  const rows = hasTextFilter ? filtered.slice(offset, offset + pageSize) : filtered;
 
   if (rows.length === 0) return [];
 

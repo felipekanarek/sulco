@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { getImportProgress } from '@/lib/actions';
@@ -29,6 +30,7 @@ type SearchParams = Promise<{
   view?: string;
   genre?: string | string[];
   style?: string | string[];
+  page?: string;
 }>;
 
 export default async function CollectionPage({
@@ -46,11 +48,13 @@ export default async function CollectionPage({
   const view = parseView(sp.view);
   const genres = parseMultiList(sp.genre);
   const styles = parseMultiList(sp.style);
+  // Inc 22 (paginação): page=1 default; pageSize fixo 50.
+  const page = Math.max(1, Number(sp.page) || 1);
 
   const [progress, rows, availableGenres, availableStyles, counts, selectedTotal] =
     await Promise.all([
       getImportProgress(),
-      queryCollection({ userId: user.id, status, text, genres, styles, bomba }),
+      queryCollection({ userId: user.id, status, text, genres, styles, bomba, page }),
       listUserGenres(user.id),
       listUserStyles(user.id),
       collectionCounts(user.id),
@@ -130,11 +134,94 @@ export default async function CollectionPage({
         </ol>
       )}
 
-      <div className="flex justify-between items-center pt-6 mt-4">
+      <div className="flex justify-between items-center pt-6 mt-4 gap-4 flex-wrap">
         <p className="label-tech">
-          {rows.length.toLocaleString('pt-BR')} de {counts.total.toLocaleString('pt-BR')}
+          Página {page} · mostrando {rows.length.toLocaleString('pt-BR')} de {counts.total.toLocaleString('pt-BR')}
         </p>
+        <Paginator
+          page={page}
+          hasNext={rows.length === PAGE_SIZE}
+          searchParams={sp}
+        />
       </div>
+    </div>
+  );
+}
+
+const PAGE_SIZE = 50;
+
+type PaginatorSearchParams = {
+  status?: string;
+  q?: string;
+  bomba?: string;
+  view?: string;
+  genre?: string | string[];
+  style?: string | string[];
+  page?: string;
+};
+
+function Paginator({
+  page,
+  hasNext,
+  searchParams,
+}: {
+  page: number;
+  hasNext: boolean;
+  searchParams: PaginatorSearchParams;
+}) {
+  const buildHref = (target: number): string => {
+    const params = new URLSearchParams();
+    if (searchParams.status) params.set('status', searchParams.status);
+    if (searchParams.q) params.set('q', searchParams.q);
+    if (searchParams.bomba) params.set('bomba', searchParams.bomba);
+    if (searchParams.view) params.set('view', searchParams.view);
+    if (searchParams.genre) {
+      const list = Array.isArray(searchParams.genre)
+        ? searchParams.genre
+        : [searchParams.genre];
+      list.forEach((g) => params.append('genre', g));
+    }
+    if (searchParams.style) {
+      const list = Array.isArray(searchParams.style)
+        ? searchParams.style
+        : [searchParams.style];
+      list.forEach((s) => params.append('style', s));
+    }
+    if (target > 1) params.set('page', String(target));
+    const qs = params.toString();
+    return qs ? `/?${qs}` : '/';
+  };
+
+  const hasPrev = page > 1;
+  const btnClass =
+    'font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-2 min-h-[44px] border border-line text-ink-soft hover:border-ink hover:text-ink rounded-sm transition-colors';
+  const btnDisabledClass =
+    'font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-2 min-h-[44px] border border-line text-ink-mute opacity-40 rounded-sm cursor-not-allowed';
+
+  return (
+    <div className="flex items-center gap-2">
+      {hasPrev ? (
+        <Link
+          href={buildHref(page - 1)}
+          prefetch={false}
+          className={btnClass}
+        >
+          ← Anterior
+        </Link>
+      ) : (
+        <span className={btnDisabledClass}>← Anterior</span>
+      )}
+      {hasNext ? (
+        <Link
+          href={buildHref(page + 1)}
+          prefetch={false}
+          className={btnClass}
+        >
+          Próxima →
+        </Link>
+      ) : (
+        <span className={btnDisabledClass}>Próxima →</span>
+      )}
     </div>
   );
 }
