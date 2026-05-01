@@ -80,6 +80,7 @@ function Header() {
             {/* Link "Conta" só desktop (mobile vai pelo drawer) */}
             <Link
               href="/conta"
+              prefetch={false}
               className="hidden md:inline hover:text-ink transition-colors"
             >
               Conta
@@ -105,9 +106,13 @@ function Header() {
 }
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  // Inc 23 follow-up: prefetch=false em todos NavLinks pra evitar
+  // que o Next pré-renderize todas as rotas autenticadas no
+  // viewport (cada prefetch = render RSC = SQL queries).
   return (
     <Link
       href={href}
+      prefetch={false}
       className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-mute hover:text-ink transition-colors pb-1 border-b border-transparent"
     >
       {children}

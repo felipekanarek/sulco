@@ -83,6 +83,7 @@ function NavItem({
   return (
     <Link
       href={href}
+      prefetch={false}
       onClick={onClick}
       className="font-serif italic text-[22px] px-5 py-4 min-h-[56px] border-b border-line-soft text-ink hover:bg-paper-raised hover:text-accent transition-colors flex items-center"
     >

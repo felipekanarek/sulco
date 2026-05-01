@@ -18,6 +18,7 @@ export function RecordGridCard({ record }: { record: CollectionRow }) {
     <article className="group flex flex-col">
       <Link
         href={`/disco/${record.id}`}
+        prefetch={false}
         className="relative block aspect-square overflow-hidden bg-paper-raised border border-line hover:border-ink-mute transition-colors"
         aria-label={`Abrir ${record.artist} — ${record.title}`}
       >
@@ -50,7 +51,7 @@ export function RecordGridCard({ record }: { record: CollectionRow }) {
         <p className="label-tech truncate" title={record.artist}>
           {record.artist}
         </p>
-        <Link href={`/disco/${record.id}`}>
+        <Link href={`/disco/${record.id}`} prefetch={false}>
           <h3
             className="font-serif italic text-[17px] leading-tight line-clamp-2 hover:text-accent transition-colors"
             title={record.title}

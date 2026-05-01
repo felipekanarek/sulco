@@ -29,6 +29,7 @@ export function RecordRow({ record }: RecordRowProps) {
     <li className="grid grid-cols-[64px_1fr] md:grid-cols-[72px_1fr_1fr_auto] gap-3 md:gap-6 items-start md:items-center py-4 md:py-6 border-b border-line-soft hover:bg-paper-raised transition-colors">
       <Link
         href={`/disco/${record.id}`}
+        prefetch={false}
         className="relative w-16 h-16 md:w-[72px] md:h-[72px] block cover overflow-hidden"
         aria-label={`Abrir ${record.artist} — ${record.title}`}
       >
@@ -78,6 +79,7 @@ export function RecordRow({ record }: RecordRowProps) {
           <h3 className="font-serif italic text-[19px] md:text-[22px] font-medium tracking-tight leading-tight mb-1 md:mb-2 line-clamp-2 md:truncate">
             <Link
               href={`/disco/${record.id}`}
+              prefetch={false}
               className="hover:text-accent transition-colors"
             >
               {record.title}
@@ -119,6 +121,7 @@ export function RecordRow({ record }: RecordRowProps) {
             <StatusBadge status={record.status} />
             <Link
               href={`/disco/${record.id}`}
+              prefetch={false}
               className="font-mono text-[11px] uppercase tracking-[0.1em] px-4 py-2 min-h-[44px] flex items-center justify-center border border-ink text-ink hover:bg-ink hover:text-paper transition-colors rounded-sm"
             >
               Curadoria →
