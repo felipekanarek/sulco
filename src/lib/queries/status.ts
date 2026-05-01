@@ -3,7 +3,6 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, syncRuns, tracks, users } from '@/db/schema';
 import { killZombieSyncRuns } from '@/lib/discogs/zombie';
-import { cacheUser } from '@/lib/cache';
 
 export type SyncRunRow = {
   id: number;
@@ -53,7 +52,7 @@ export type StatusSnapshot = {
  * - `badgeActive`: true se houver qualquer syncRun com outcome!='ok' OR
  *    archived pendente OR conflito criado APÓS lastStatusVisitAt (FR-041)
  */
-async function loadStatusSnapshotRaw(userId: number): Promise<StatusSnapshot> {
+export async function loadStatusSnapshot(userId: number): Promise<StatusSnapshot> {
   // Bug 8 fix: limpa runs zumbis (running >65s sem progresso) ANTES de
   // ler o snapshot. Assim `hasRunningSync` reflete o estado real e o
   // ManualSyncButton/SyncBadge não trava em "em execução" depois que
@@ -158,8 +157,11 @@ async function loadStatusSnapshotRaw(userId: number): Promise<StatusSnapshot> {
   };
 }
 
-// Inc 23 (022): cache wrapper.
-export const loadStatusSnapshot = cacheUser(loadStatusSnapshotRaw, 'loadStatusSnapshot');
+// Inc 23 follow-up (022 / Bug 16): cache REVERTIDO — `StatusSnapshot`
+// contém múltiplos `Date | null` (runs, archivedPending, trackConflicts,
+// lastStatusVisitAt) e `unstable_cache` serializa via JSON, causando
+// `TypeError: getTime is not a function` no consumidor após desserialização.
+// `/status` é rota fria (acesso pontual), aceita-se reads diretos.
 
 /** Versão minimalista só para calcular se o badge deve aparecer no header. */
 export async function computeBadgeActive(userId: number): Promise<boolean> {

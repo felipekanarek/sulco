@@ -246,7 +246,16 @@ export async function getImportProgress(): Promise<ImportProgress> {
   // Mantido FORA do cache (write side-effect).
   await killZombieSyncRuns(user.id, 'initial_import');
 
-  return getImportProgressRead(user.id);
+  const cached = await getImportProgressRead(user.id);
+
+  // unstable_cache serializa via JSON → Date vira string. Re-hidrata
+  // antes de devolver pra evitar `TypeError: lastAck.getTime is not
+  // a function` no consumidor (<ImportProgressCard>).
+  return {
+    ...cached,
+    runStartedAt: cached.runStartedAt ? new Date(cached.runStartedAt) : null,
+    lastAck: cached.lastAck ? new Date(cached.lastAck) : null,
+  };
 }
 
 type LatestRow = {
