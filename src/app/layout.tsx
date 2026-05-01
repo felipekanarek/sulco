@@ -12,7 +12,6 @@ import { ptBR } from '@clerk/localizations';
 import { DiscogsCredentialBanner } from '@/components/discogs-credential-banner';
 import { ArchivedRecordsBanner } from '@/components/archived-records-banner';
 import { SyncBadge } from '@/components/sync-badge';
-import { ImportPoller } from '@/components/import-poller';
 import { PreviewPlayerProvider } from '@/components/preview-player-context';
 import { MobileNavTrigger } from '@/components/mobile-nav';
 
@@ -37,8 +36,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* Banners globais (FR-045, FR-036) — RSC lê DB a cada request */}
             <DiscogsCredentialBanner />
             <ArchivedRecordsBanner />
-            {/* Poller silencioso — mantém import progredindo em qualquer rota */}
-            <ImportPoller />
+            {/* Inc 23 follow-up (022 / Bug 16): <ImportPoller> global removido —
+                rodava setInterval 10s em todas as rotas autenticadas chamando
+                getImportProgress, mesmo após import completo. Causava ~86k
+                row reads/dia desnecessários (aba aberta). <ImportProgressCard>
+                na home tem polling próprio de 3s só durante import ativo,
+                o que basta. */}
             <main className="min-h-[calc(100vh-140px)] py-10">{children}</main>
             <footer className="border-t border-line py-6">
               <div className="max-w-[1240px] mx-auto px-8">

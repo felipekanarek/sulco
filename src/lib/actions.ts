@@ -203,13 +203,10 @@ export type ImportProgress = {
   lastAck: Date | null;
 };
 
-export async function getImportProgress(): Promise<ImportProgress> {
-  const user = await requireCurrentUser();
-
-  // Em serverless, o worker do import morre a cada ~60s (maxDuration Hobby).
-  // Mata zumbis antes de ler estado — assim o UI sempre mostra algo coerente.
-  await killZombieSyncRuns(user.id, 'initial_import');
-
+// Inc 23 follow-up (022 / Bug 16): parte de leitura cacheada com
+// TTL curto (10s) — `<ImportProgressCard>` faz polling 3s; cache
+// reduz ~70% dos reads do polling preservando UX (stale máx 10s).
+async function getImportProgressReadRaw(userId: number): Promise<ImportProgress> {
   const latest = await db
     .select({
       outcome: syncRuns.outcome,
@@ -219,23 +216,54 @@ export async function getImportProgress(): Promise<ImportProgress> {
       startedAt: syncRuns.startedAt,
     })
     .from(syncRuns)
-    .where(and(eq(syncRuns.userId, user.id), eq(syncRuns.kind, 'initial_import')))
+    .where(and(eq(syncRuns.userId, userId), eq(syncRuns.kind, 'initial_import')))
     .orderBy(desc(syncRuns.startedAt))
     .limit(1);
 
   const [{ count: recordCount = 0 } = { count: 0 }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(records)
-    .where(eq(records.userId, user.id));
+    .where(eq(records.userId, userId));
 
-  // 010 (Bug 13): lastAck do user para comparação client-side.
   const [{ ack: lastAck = null } = { ack: null }] = await db
     .select({ ack: users.importAcknowledgedAt })
     .from(users)
-    .where(eq(users.id, user.id))
+    .where(eq(users.id, userId))
     .limit(1);
 
-  const x = Number(recordCount);
+  return computeImportProgress(userId, latest, Number(recordCount), lastAck);
+}
+
+const getImportProgressRead = cacheUser(getImportProgressReadRaw, 'getImportProgress', {
+  revalidate: 10,
+});
+
+export async function getImportProgress(): Promise<ImportProgress> {
+  const user = await requireCurrentUser();
+
+  // Em serverless, o worker do import morre a cada ~60s (maxDuration Hobby).
+  // Mata zumbis antes de ler estado — assim o UI sempre mostra algo coerente.
+  // Mantido FORA do cache (write side-effect).
+  await killZombieSyncRuns(user.id, 'initial_import');
+
+  return getImportProgressRead(user.id);
+}
+
+type LatestRow = {
+  outcome: 'running' | 'ok' | 'erro' | 'rate_limited' | 'parcial';
+  snapshotJson: string | null;
+  errorMessage: string | null;
+  newCount: number;
+  startedAt: Date | null;
+};
+
+function computeImportProgress(
+  userId: number,
+  latest: LatestRow[],
+  recordCount: number,
+  lastAck: Date | null,
+): ImportProgress {
+  const x = recordCount;
 
   if (latest.length === 0) {
     return {
@@ -283,7 +311,7 @@ export async function getImportProgress(): Promise<ImportProgress> {
   if (needsResume) {
     after(async () => {
       try {
-        await runInitialImport(user.id);
+        await runInitialImport(userId);
       } catch (err) {
         console.error('[sulco] resume runInitialImport falhou:', err);
       }
