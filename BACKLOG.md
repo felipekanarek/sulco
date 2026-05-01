@@ -12,6 +12,108 @@ Convenção:
 
 ### 🟢 Próximos (semanas)
 
+#### Incremento 25 — Otimização contínua de leituras Turso (pacote pós-Inc 24)
+
+Auditoria sistemática de queries (sessão 2026-05-01, pós-deploy
+Inc 24) identificou que mesmo com facets denormalizados, 1 load
+de `/` ainda faz ~22 queries / ~69k row reads. Causa raiz: agregações
+de tracks por record em `queryCollection` não foram denormalizadas, e
+há duplicações em RSCs do layout. Pacote em 2 fases.
+
+**Fase A — Quick wins (~30-45min, ganho moderado ~20%)**
+
+A1. **Dedup `getUserFacets()` via `react.cache()`**
+- Hoje: chamado 4× em paralelo (`listUserGenres`, `listUserStyles`,
+  `collectionCounts`, `countSelectedTracks`) → 4 SELECTs no mesmo render
+- Wrap em `cache()` (Next 15 RSC) — 1 SELECT por render
+- Arquivo: [src/lib/queries/user-facets.ts](src/lib/queries/user-facets.ts)
+- Ganho: -3 reads/load × ~150 loads/dia ≈ -450 reads/dia
+
+A2. **TTL 30s em `computeBadgeActive`**
+- Hoje: 3 EXISTS curtos rodam em TODA rota autenticada (header layout)
+- Map in-memory com timestamp (lessor-evil em Hobby — fresh cada Lambda
+  mas dedupa hits dentro da mesma instância)
+- Arquivo: [src/lib/queries/status.ts](src/lib/queries/status.ts) +
+  [src/components/sync-badge.tsx](src/components/sync-badge.tsx)
+- Ganho: -1 a -3 reads × ~200 reqs/dia ≈ -300 reads/dia
+
+A3. **`recomputeFacets` em `unstable_after()` (Next 15)**
+- Hoje: síncrono no fim de 6+ Server Actions de write (~40k reads cada)
+- Move pra background via `import { unstable_after as after } from 'next/server'`
+- Mutation retorna instant (UX), recompute roda fora do request
+- Não reduz contagem total mas elimina latência + risco de timeout em
+  Vercel Hobby maxDuration 60s
+- Arquivos: [src/lib/actions.ts](src/lib/actions.ts) (5 callsites),
+  [src/lib/discogs/sync.ts](src/lib/discogs/sync.ts),
+  [src/lib/discogs/import.ts](src/lib/discogs/import.ts)
+- Ganho: latência -50% em writes, mesmas reads no agregado
+
+A4. **LIMIT 1000 em `listCuradoriaIds`**
+- Hoje: full scan da coleção em `/curadoria` (Felipe: 2588 records)
+- Add `.limit(1000)` + lazy load no UI quando atingir limite
+- Arquivo: [src/lib/queries/curadoria.ts](src/lib/queries/curadoria.ts)
+- Ganho: -1.5k reads × ~5 loads/dia ≈ -7.5k reads/dia
+
+**Fase B — Big win: denormalizar agregações de tracks em `records` (~1-2h)**
+
+B1. **Schema delta — 3 colunas em `records`**
+```
+tracksTotal     INTEGER NOT NULL DEFAULT 0
+tracksSelected  INTEGER NOT NULL DEFAULT 0
+hasBombs        INTEGER NOT NULL DEFAULT 0  -- boolean
+```
+
+B2. **Hook centralizado `recomputeRecordCounts(recordId)`**
+- 1 UPDATE em `records` setando os 3 campos via subqueries SELECT COUNT
+- Custo: ~5-10 reads (1 record + ~5 tracks médios)
+- Chamado em:
+  - `updateTrackCuration` (após UPDATE da track) — afeta selected/isBomb
+  - `applyDiscogsUpdate` (após INSERT/DELETE de tracks) — afeta total
+  - `archiveRecord` não chama (archived é flag separada, counts ainda válidos)
+
+B3. **`queryCollectionRaw` simplificado**
+- Remove subquery `trackAggRows` (50 records × ~10 tracks = ~500 reads)
+- Remove subquery `bombRows` (~50 reads)
+- Lê direto de `records.tracksTotal/Selected/hasBombs` (já no SELECT base)
+- Resultado: 3 queries → 1 query por load
+
+B4. **Backfill — `scripts/_backfill-record-counts.mjs`**
+- Mesmo padrão Inc 24: roda 1× via env de prod
+- Para cada record, agrega tracks e UPDATE
+- Custo do backfill: ~10k reads (rodado uma vez)
+
+B5. **Validação opcional via `recomputeFacets`**
+- `recomputeFacets` (que continua existindo pra genres/styles/etc) ganha
+  flag `validateRecordCounts` que compara denormalizado vs computed
+  e loga divergência sem bloquear
+- Defesa em profundidade contra drift
+
+**Ganho estimado fase B**: ~25k reads/dia → ~2.5k reads/dia em loads de
+`/` (10× ganho na query mais quente).
+
+**Total estimado pacote A+B**: ~30k reads/dia economizados → home load
+cai pra ~5-10k reads (vs 69k atuais).
+
+**Princípios:**
+- I (Soberania): novos campos `tracksTotal/Selected/hasBombs` são zona
+  SYS (cache materializado), não AUTHOR. Sync nunca altera diretamente
+  (vai via hook após mutation de tracks).
+- II (Server-First): hooks rodam em Server Actions, RSCs leem direto
+  de `records`.
+- III (Schema verdade): 1 schema delta de 3 colunas. Migration via
+  Turso shell (mesmo padrão Inc 010/012/013/022/023).
+- IV (Preservar): nada deletado, apenas adições.
+- V (Mobile): zero mudança visual.
+
+**Pré-requisito speckit**: este BACKLOG entry é input de
+`/speckit.specify` quando for atacar. Não há decisões pendentes —
+escopo claro, dados quantificados, riscos identificados (drift via
+hook esquecido).
+
+**Janela de execução**: priorizar quando cota Turso voltar a apertar OU
+preventivamente antes de mais usuários. Não-urgente se Inc 24 sozinho
+manter consumo sustentável.
+
 #### Incremento 12 — YouTube embed inline no preview de áudio
 Hoje (008) o botão **↗ YouTube** abre busca em nova aba — DJ ainda
 sai do Sulco e escolhe vídeo manualmente. Evolução natural: trazer o
