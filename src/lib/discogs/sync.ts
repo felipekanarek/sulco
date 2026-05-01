@@ -13,6 +13,7 @@ import { applyDiscogsUpdate } from './apply-update';
 import { archiveRecord } from './archive';
 import { markCredentialInvalid } from './index';
 import { revalidateUserCache } from '@/lib/cache';
+import { recomputeFacets } from '@/lib/queries/user-facets';
 import type { SyncOutcome } from './import';
 
 const PER_PAGE = 100;
@@ -156,6 +157,13 @@ async function runIncrementalSync(userId: number, kind: SyncKind): Promise<SyncO
     // Inc 23 (022): invalidar cache do user após sync — novos
     // records/archives/conflicts afetam todas as queries cacheadas.
     revalidateUserCache(userId);
+
+    // Inc 24: recompute síncrono — sync pode adicionar/arquivar records.
+    try {
+      await recomputeFacets(userId);
+    } catch (err) {
+      console.error('[recomputeFacets] erro pós-sync (runIncrementalSync):', err);
+    }
 
     return { outcome: 'ok', newCount, removedCount, conflictCount };
   } catch (err) {

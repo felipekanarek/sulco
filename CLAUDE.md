@@ -262,7 +262,23 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **022-turso-reads-optimization** (BACKLOG: Inc 23)
+Current active feature: **023-user-facets-denormalization** (BACKLOG: Inc 24)
+
+Authoritative planning artifacts (read these before making changes
+ao novo helper `getUserFacets`/`recomputeFacets` em
+`src/lib/queries/user-facets.ts`, à tabela `user_facets` no schema,
+ou aos consumidores cobertos):
+
+- Plan: [specs/023-user-facets-denormalization/plan.md](specs/023-user-facets-denormalization/plan.md)
+- Spec: [specs/023-user-facets-denormalization/spec.md](specs/023-user-facets-denormalization/spec.md)
+- Data Model: [specs/023-user-facets-denormalization/data-model.md](specs/023-user-facets-denormalization/data-model.md)
+- Contracts: [specs/023-user-facets-denormalization/contracts/](specs/023-user-facets-denormalization/contracts/)
+- Research: [specs/023-user-facets-denormalization/research.md](specs/023-user-facets-denormalization/research.md)
+- Quickstart: [specs/023-user-facets-denormalization/quickstart.md](specs/023-user-facets-denormalization/quickstart.md)
+
+Prior active (now legacy):
+
+**022-turso-reads-optimization** (Inc 23 / BACKLOG)
 
 Authoritative planning artifacts (read these before making changes
 ao novo helper `cacheUser`/`revalidateUserCache` em `src/lib/cache.ts`,
