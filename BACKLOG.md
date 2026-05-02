@@ -12,6 +12,131 @@ Convenção:
 
 ### 🟢 Próximos (semanas)
 
+#### Incremento 33 — Tabela `user_vocab` dedicada (genres/styles/moods/contexts/shelves)
+
+Mantenedor identificou (sessão 2026-05-02 pós-Inc 28) que cada
+edição de moods/contexts em uma track dispara
+`recomputeVocabularyOnly` que escaneia ~10k tracks pra
+re-aggregar conjunto distinto. Idem `shelfLocation` →
+`recomputeShelvesOnly` (~2.5k records). Em curadoria com
+edições de vocab, custa ~10-20k rows por edição.
+
+Padrão arquitetural unificado: **substituir as 5 colunas JSON em
+`user_facets` (`genresJson`, `stylesJson`, `moodsJson`,
+`contextsJson`, `shelvesJson`) por uma tabela `user_vocab` com
+counters por termo**.
+
+**Schema novo**:
+```sql
+CREATE TABLE user_vocab (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK(kind IN ('genres','styles','moods','contexts','shelves')),
+  term TEXT NOT NULL,
+  ref_count INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  PRIMARY KEY (user_id, kind, term)
+);
+CREATE INDEX user_vocab_user_kind_idx ON user_vocab(user_id, kind);
+```
+
+5 kinds em 1 schema unificado. Index cobre listagem por (user, kind).
+
+**Custo por operação**:
+
+| Operação | Hoje | Pós-Inc 33 |
+|---|---|---|
+| Listagem chips (qualquer kind) | 1 SELECT user_facets cached | 1 SELECT user_vocab WHERE user/kind (~15 rows index) |
+| Edit `tracks.moods` (1 add, 1 remove) | ~10k rows scan | 2 UPSERTs (~5 rows) |
+| Edit `records.shelfLocation` | ~2.5k rows scan | 2 UPSERTs |
+| Sync adiciona track (5 moods) | recompute completo (~60k) | 5 UPSERTs |
+| Archive record (5 moods + 2 genres + 1 shelf) | recompute completo | ~8 UPSERTs/DECREMENTs |
+
+**Frentes**:
+
+1. Schema delta: tabela `user_vocab` + index. Migration prod via Turso shell.
+2. Helper `listVocab(userId, kind)` em `src/lib/queries/user-vocab.ts` (cached via `react.cache`). Retorna `{term, count}[]` ordenado por count desc.
+3. Helper `applyVocabDelta(userId, kind, added: string[], removed: string[])`: 1 UPSERT por add, 1 UPDATE por remove (DELETE se ref_count chega a 0). Idempotente.
+4. Hooks em writes:
+   - `updateTrackCuration` (moods/contexts mudou) → diff + applyVocabDelta
+   - `updateRecordAuthorFields` (shelfLocation mudou) → diff + applyVocabDelta
+   - `applyDiscogsUpdate` (sync) → diff genres/styles do record + diff moods/contexts de tracks
+   - `archiveRecord` → decrement TODAS entries do disco
+5. Refator callers: `listUserGenres`, `listUserStyles`, `listUserShelves`, `listSelectedVocab`, `listUserVocabulary` → todos passam a ler de `user_vocab` via wrapper.
+6. `recomputeFacets` ganha lógica de re-popular `user_vocab` do zero (cron drift correction). `recomputeVocabularyOnly`/`recomputeShelvesOnly`/`aggregateFacet` viram redundantes (deletar).
+7. Backfill via script `_backfill-user-vocab.mjs` (mesmo padrão Inc 24).
+
+**Princípios**:
+- I (Soberania): `user_vocab` é zona SYS materializada. Edição via DJ continua escrevendo em `tracks.moods/contexts` etc.
+- II (Server-First): RSC + Server Actions.
+- III (Schema verdade): 1 tabela nova. Migration prod.
+- IV (Preservar): drift residual corrigido pelo cron. `recomputeFacets` continua como fallback.
+- V (Mobile-Native): edições mais rápidas em rede 3G.
+
+**Esforço**: ~5-6h via speckit. Mais pesado que Inc 27 mas resolve definitivamente o gargalo de vocabulário em todas as telas.
+
+**Drop das colunas `*Json` em `user_facets`**: fica para Inc 34 (cleanup separado, ~30min). Reduz risco do Inc 33.
+
+#### Incremento 32 — Search text materializado em records (paginação SQL com busca)
+
+Diagnóstico em prod (sessão 2026-05-02 pós-Inc 28) revelou que o
+home `/` carrega ~2588 rows (coleção inteira) quando há text
+filter ativo na URL (`?q=...`). Causa: Inc 18 (busca insensitive
+a acentos) deliberadamente desabilitou paginação SQL com text
+filter porque SQLite/Turso não tem `unaccent` nativo — filtro
+roda em JS pós-query, exigindo carregar tudo. Trade-off pesa:
+8 loads de `/` × 2588 rows = ~21k rows lidas só nos loads da
+home com busca.
+
+Solução: **coluna pre-normalizada `records.searchText` + index
++ LIKE SQL**.
+
+**Schema delta**: 1 coluna nova em `records`:
+```sql
+ALTER TABLE records ADD COLUMN search_text TEXT NOT NULL DEFAULT '';
+CREATE INDEX records_user_search_text_idx ON records(user_id, search_text);
+```
+
+`search_text` armazena versão normalizada (`lowercase + NFD +
+remove diacritics`) de `artist + ' ' + title + ' ' +
+(label ?? '')`.
+
+**Hooks**:
+- `applyDiscogsUpdate` (sync): computa `search_text` ao
+  insert/update.
+- `runInitialImport`: idem para cada record novo.
+
+**Refator** em `buildCollectionFilters`:
+- text path passa a usar `LIKE '%' + normalizeText(q.text) +
+  '%'` em SQL contra `records.searchText`.
+- Remove `omitText: true` flag e o post-query `matchesNormalizedText`.
+- SQL com LIMIT/OFFSET volta a funcionar pra paginação.
+
+**Backfill**: script `_backfill-search-text.mjs` populando
+`search_text` pra todos os records existentes (1× via env prod).
+
+**Ganho**:
+- Load `/` com text filter: 2588 → ~50 rows lidas (-98%).
+- Cobertura completa de busca insensitive a acentos preservada
+  (a coluna já é normalizada, LIKE casa diretamente).
+- Outras telas com `buildCollectionFilters` (e.g.
+  `pickRandomUnratedRecord` em /011) também ganham.
+
+**Princípios**:
+- I (Soberania): `search_text` é zona SYS derivada de campos
+  Discogs (artist/title/label) — não toca AUTHOR.
+- II (Server-First): SQL volta a fazer todo trabalho. JS
+  pós-filter some.
+- III (Schema verdade): 1 coluna nova + 1 index. Migration via
+  Turso shell.
+- IV (Preservar): código antigo pode ser removido após validação
+  (Inc 21 fica obsoleto na parte de SQL — `normalizeText` em
+  text.ts continua útil pra UI).
+- V (Mobile-Native): buscas mais rápidas em rede 3G (paginação
+  SQL = 50 rows vs 2588 antes).
+
+**Esforço**: ~2h via speckit (schema delta + migration + hooks +
+refator filtro + backfill).
+
 #### Incremento 30 — Excluir set
 
 Hoje DJ não consegue excluir um set criado — operação ausente do
