@@ -262,21 +262,28 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **024-ux-cuts-dedup** (BACKLOG: Inc 26)
+Current active feature: **025-incremental-recompute** (BACKLOG: Inc 27)
 
 Authoritative planning artifacts (read these before making changes
-ao layout global, header, banners, queries `requireCurrentUser`/
-`getUserFacets`/`computeBadgeActive`/`killZombieSyncRuns`, ou rota
-`/curadoria`):
+aos novos helpers de delta em `src/lib/queries/user-facets.ts`
+(`applyRecordStatusDelta`, `applyTrackSelectedDelta`,
+`recomputeShelvesOnly`, `recomputeVocabularyOnly`,
+`applyDeltaForWrite`), Server Actions de write em `src/lib/actions.ts`,
+campo `aiProvider`/`aiModel` em `CurrentUser` (auth.ts), ou cron
+diário em `/api/cron/sync-daily/route.ts`):
 
-- Plan: [specs/024-ux-cuts-dedup/plan.md](specs/024-ux-cuts-dedup/plan.md)
-- Spec: [specs/024-ux-cuts-dedup/spec.md](specs/024-ux-cuts-dedup/spec.md)
-- Research: [specs/024-ux-cuts-dedup/research.md](specs/024-ux-cuts-dedup/research.md)
-- Data Model: [specs/024-ux-cuts-dedup/data-model.md](specs/024-ux-cuts-dedup/data-model.md)
-- Contracts: [specs/024-ux-cuts-dedup/contracts/](specs/024-ux-cuts-dedup/contracts/)
-- Quickstart: [specs/024-ux-cuts-dedup/quickstart.md](specs/024-ux-cuts-dedup/quickstart.md)
+- Plan: [specs/025-incremental-recompute/plan.md](specs/025-incremental-recompute/plan.md)
+- Spec: [specs/025-incremental-recompute/spec.md](specs/025-incremental-recompute/spec.md)
+- Research: [specs/025-incremental-recompute/research.md](specs/025-incremental-recompute/research.md)
+- Data Model: [specs/025-incremental-recompute/data-model.md](specs/025-incremental-recompute/data-model.md)
+- Contracts: [specs/025-incremental-recompute/contracts/](specs/025-incremental-recompute/contracts/)
+- Quickstart: [specs/025-incremental-recompute/quickstart.md](specs/025-incremental-recompute/quickstart.md)
 
 Prior active (now legacy):
+
+**024-ux-cuts-dedup** (BACKLOG: Inc 26)
+
+Plan: [specs/024-ux-cuts-dedup/plan.md](specs/024-ux-cuts-dedup/plan.md)
 
 **023-user-facets-denormalization** (BACKLOG: Inc 24)
 

@@ -8,7 +8,12 @@ import { db } from '@/db';
 import { invites, records, syncRuns, tracks, users } from '@/db/schema';
 import { requireCurrentUser, requireOwner } from '@/lib/auth';
 import { buildCollectionFilters } from '@/lib/queries/collection';
-import { getUserFacets, recomputeFacets } from '@/lib/queries/user-facets';
+import {
+  getUserFacets,
+  applyRecordStatusDelta,
+  recomputeShelvesOnly,
+  applyDeltaForWrite,
+} from '@/lib/queries/user-facets';
 import { matchesNormalizedText } from '@/lib/text';
 import { cacheUser, revalidateUserCache } from '@/lib/cache';
 import { encryptSecret } from '@/lib/crypto';
@@ -648,6 +653,18 @@ export async function updateRecordStatus(input: {
     return { ok: false, error: 'Status inválido.' };
   }
 
+  // Inc 27: carregar status atual antes do UPDATE pra calcular delta.
+  // Combina ownership check + leitura de prev em 1 SELECT.
+  const [prev] = await db
+    .select({ status: records.status })
+    .from(records)
+    .where(and(eq(records.id, parsed.data.recordId), eq(records.userId, user.id)))
+    .limit(1);
+
+  if (!prev) {
+    return { ok: false, error: 'Disco não encontrado.' };
+  }
+
   const updated = await db
     .update(records)
     .set({ status: parsed.data.status, updatedAt: new Date() })
@@ -658,11 +675,14 @@ export async function updateRecordStatus(input: {
     return { ok: false, error: 'Disco não encontrado.' };
   }
 
-  // Inc 24: recompute síncrono — afeta records_active/unrated/discarded.
-  try {
-    await recomputeFacets(user.id);
-  } catch (err) {
-    console.error('[recomputeFacets] erro pós-write (updateRecordStatus):', err);
+  // Inc 27: delta direcionado em vez de recomputeFacets completo.
+  // No-op se prev.status === parsed.data.status (já tratado dentro do helper).
+  if (prev.status !== parsed.data.status) {
+    try {
+      await applyRecordStatusDelta(user.id, prev.status, parsed.data.status);
+    } catch (err) {
+      console.error('[applyDelta] erro pós-write (updateRecordStatus):', err);
+    }
   }
 
   revalidatePath('/');
@@ -715,14 +735,21 @@ export async function updateTrackCuration(
     };
   }
 
-  // Ownership check: confirmar que a track pertence a um record do user
-  const own = await db
-    .select({ id: tracksTable.id })
+  // Inc 27: combina ownership check + leitura do estado atual (selected,
+  // moods, contexts) — necessário pra detectar mudanças efetivas e
+  // calcular delta sem query extra.
+  const [prev] = await db
+    .select({
+      id: tracksTable.id,
+      selected: tracksTable.selected,
+      moods: tracksTable.moods,
+      contexts: tracksTable.contexts,
+    })
     .from(tracksTable)
     .innerJoin(records, eq(tracksTable.recordId, records.id))
     .where(and(eq(tracksTable.id, parsed.data.trackId), eq(records.userId, user.id)))
     .limit(1);
-  if (own.length === 0) {
+  if (!prev) {
     return { ok: false, error: 'Faixa não encontrada.' };
   }
 
@@ -775,11 +802,39 @@ export async function updateTrackCuration(
     .set(payload)
     .where(eq(tracksTable.id, parsed.data.trackId));
 
-  // Inc 24: recompute síncrono — afeta tracks_selected_total + moods/contexts.
+  // Inc 27: delta direcionado em vez de recomputeFacets completo.
+  // Helper local pra comparar listas por conjunto (não por ordem) —
+  // evita disparar recompute caro de moods/contexts quando DJ envia
+  // mesma lista em ordem diferente.
+  const setEquals = (a: readonly string[] | null, b: readonly string[] | null): boolean => {
+    const aa = a ?? [];
+    const bb = b ?? [];
+    if (aa.length !== bb.length) return false;
+    const sortedA = [...aa].sort();
+    const sortedB = [...bb].sort();
+    return sortedA.every((v, i) => v === sortedB[i]);
+  };
+
+  const selectedChanged =
+    parsed.data.selected !== undefined && parsed.data.selected !== prev.selected;
+  const moodsChanged =
+    parsed.data.moods !== undefined && !setEquals(prev.moods ?? [], payload.moods ?? []);
+  const contextsChanged =
+    parsed.data.contexts !== undefined && !setEquals(prev.contexts ?? [], payload.contexts ?? []);
+
+  // Edições em BPM/key/energy/comment/rating/aiAnalysis/fineGenre/
+  // references/isBomb/audioFeaturesSource resultam em todos os flags
+  // false → scope vazio → applyDeltaForWrite é no-op (zero queries).
   try {
-    await recomputeFacets(user.id);
+    await applyDeltaForWrite(user.id, {
+      trackSelected: selectedChanged
+        ? { delta: parsed.data.selected ? 1 : -1 }
+        : undefined,
+      moods: moodsChanged,
+      contexts: contextsChanged,
+    });
   } catch (err) {
-    console.error('[recomputeFacets] erro pós-write (updateTrackCuration):', err);
+    console.error('[applyDelta] erro pós-write (updateTrackCuration):', err);
   }
 
   revalidatePath(`/disco/${parsed.data.recordId}`);
@@ -832,6 +887,17 @@ export async function updateRecordAuthorFields(
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
   }
 
+  // Inc 27: combina ownership check + leitura de shelfLocation atual.
+  const [prev] = await db
+    .select({ shelfLocation: records.shelfLocation })
+    .from(records)
+    .where(and(eq(records.id, parsed.data.recordId), eq(records.userId, user.id)))
+    .limit(1);
+
+  if (!prev) {
+    return { ok: false, error: 'Disco não encontrado.' };
+  }
+
   const payload: Partial<typeof records.$inferInsert> & { updatedAt: Date } = {
     updatedAt: new Date(),
   };
@@ -848,11 +914,17 @@ export async function updateRecordAuthorFields(
     return { ok: false, error: 'Disco não encontrado.' };
   }
 
-  // Inc 24: recompute síncrono — afeta shelves_json se shelfLocation mudou.
-  try {
-    await recomputeFacets(user.id);
-  } catch (err) {
-    console.error('[recomputeFacets] erro pós-write (updateRecordAuthorFields):', err);
+  // Inc 27: delta direcionado — apenas shelves se shelfLocation mudou.
+  // Edição apenas de `notes` resulta em shelfChanged=false → zero queries.
+  const shelfChanged =
+    parsed.data.shelfLocation !== undefined &&
+    parsed.data.shelfLocation !== prev.shelfLocation;
+  if (shelfChanged) {
+    try {
+      await recomputeShelvesOnly(user.id);
+    } catch (err) {
+      console.error('[applyDelta] erro pós-write (updateRecordAuthorFields):', err);
+    }
   }
 
   revalidatePath(`/disco/${parsed.data.recordId}`);
@@ -1666,13 +1738,9 @@ export async function acknowledgeArchivedRecord(
 
   if (updated.length === 0) return { ok: false, error: 'Disco não encontrado.' };
 
-  // Inc 24: recompute síncrono (defensivo — ack não muda archived
-  // mas mantém row atualizada).
-  try {
-    await recomputeFacets(user.id);
-  } catch (err) {
-    console.error('[recomputeFacets] erro pós-write (acknowledgeArchivedRecord):', err);
-  }
+  // Inc 27: skip recompute — `archived_acknowledged_at` não é
+  // materializado em user_facets. Recompute defensivo do Inc 24
+  // foi removido (custo ~50k reads sem benefício).
 
   revalidatePath('/status');
   revalidatePath('/');
@@ -1704,13 +1772,9 @@ export async function acknowledgeAllArchived(): Promise<
       )
       .returning({ id: records.id });
 
-    // Inc 24: recompute síncrono (defensivo — ack não muda archived,
-    // mas mantém row atualizada).
-    try {
-      await recomputeFacets(user.id);
-    } catch (err) {
-      console.error('[recomputeFacets] erro pós-write (acknowledgeAllArchived):', err);
-    }
+    // Inc 27: skip recompute — `archived_acknowledged_at` não é
+    // materializado em user_facets. Recompute defensivo do Inc 24
+    // foi removido (custo ~50k reads sem benefício).
 
     revalidatePath('/status');
     revalidatePath('/');

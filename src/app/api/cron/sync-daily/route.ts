@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { runDailyAutoSync } from '@/lib/discogs/sync';
 import { killZombieSyncRuns } from '@/lib/discogs/zombie';
+import { recomputeFacets } from '@/lib/queries/user-facets';
 
 /**
  * POST /api/cron/sync-daily — FR-032, contracts/cron-endpoint.md.
@@ -84,6 +85,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Inc 27: drift correction — recompute completo de user_facets
+  // pra cada user. Os Server Actions de write usam delta updates
+  // direcionados (Inc 27); aqui corrigimos qualquer drift residual
+  // (race, edge case, edição via SQL direto). Roda 1×/dia/user;
+  // custo ~7 queries pesadas × N users = irrelevante na escala
+  // atual (Felipe solo, projetando 5-10 amigos).
+  let driftCorrected = 0;
+  for (const u of allUsers) {
+    try {
+      await recomputeFacets(u.id);
+      driftCorrected += 1;
+    } catch (err) {
+      console.error(`[cron] recomputeFacets drift correction falhou pra user ${u.id}:`, err);
+    }
+  }
+  console.log(
+    `[cron sync-daily] drift correction: ${driftCorrected}/${allUsers.length} users recomputed`,
+  );
+
   return NextResponse.json(
     {
       ran: runnable.length,
@@ -91,6 +111,7 @@ export async function POST(req: NextRequest) {
       rate_limited: rateLimitedCount,
       erro: errCount,
       zombies_swept: zombiesKilled,
+      drift_corrected: driftCorrected,
       durationMs: Date.now() - started,
     },
     { status: 200 },

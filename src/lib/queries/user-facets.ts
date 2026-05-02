@@ -6,14 +6,27 @@ import { records, tracks, userFacets } from '@/db/schema';
 
 /**
  * Inc 24 — denormalização de filtros + counts.
+ * Inc 27 — delta updates direcionados em vez de recompute completo.
  *
  * `getUserFacets(userId)` — leitura barata (1 SELECT). Usado por todas
  * as queries que antes scaneavam toda a coleção (genres/styles/moods/
  * contexts/shelves/counts). Defaults seguros se row ausente.
  *
- * `recomputeFacets(userId)` — recalcula tudo a partir das fontes
- * (records + tracks) e UPSERT na row do user. Síncrono (Clarification
- * Q1). Chamado no fim das Server Actions de write críticas.
+ * `recomputeFacets(userId)` — recalcula TUDO a partir das fontes
+ * (records + tracks) e UPSERT na row do user. ~7 queries pesadas,
+ * ~50-100k rows lidas. Continua sendo usado em:
+ *   - `runIncrementalSync` / `runInitialImport` (operações em massa)
+ *   - cron diário `/api/cron/sync-daily` (drift correction)
+ *   - backfill via script (raro)
+ * Server Actions de edição (status/curation/author) NÃO usam mais —
+ * usam delta direcionado.
+ *
+ * Helpers de delta (Inc 27):
+ *   - `applyRecordStatusDelta` — UPDATE atomic counters por status
+ *   - `applyTrackSelectedDelta` — UPDATE atomic tracksSelectedTotal
+ *   - `recomputeShelvesOnly` — recompute parcial só shelves (1 SELECT DISTINCT)
+ *   - `recomputeVocabularyOnly` — recompute parcial só moods OU contexts
+ *   - `applyDeltaForWrite` — wrapper que despacha em paralelo via scope
  */
 
 export type FacetCount = { value: string; count: number };
@@ -234,4 +247,133 @@ export async function recomputeFacets(userId: number): Promise<void> {
         updatedAt: sql`excluded.updated_at`,
       },
     });
+}
+
+/* -------- Inc 27: Delta updates direcionados -------- */
+
+type RecordStatus = 'unrated' | 'active' | 'discarded';
+
+/**
+ * Atualiza counters de records por status em user_facets quando um
+ * disco muda de status. UPDATE com expressão atômica nos 3 counters.
+ * No-op se prev === next.
+ *
+ * Custo: ~3 row reads (1 row de user_facets).
+ */
+export async function applyRecordStatusDelta(
+  userId: number,
+  prev: RecordStatus,
+  next: RecordStatus,
+): Promise<void> {
+  if (prev === next) return;
+  await db
+    .update(userFacets)
+    .set({
+      recordsActive: sql`MAX(0, ${userFacets.recordsActive} + ${next === 'active' ? 1 : 0} - ${prev === 'active' ? 1 : 0})`,
+      recordsUnrated: sql`MAX(0, ${userFacets.recordsUnrated} + ${next === 'unrated' ? 1 : 0} - ${prev === 'unrated' ? 1 : 0})`,
+      recordsDiscarded: sql`MAX(0, ${userFacets.recordsDiscarded} + ${next === 'discarded' ? 1 : 0} - ${prev === 'discarded' ? 1 : 0})`,
+      updatedAt: new Date(),
+    })
+    .where(eq(userFacets.userId, userId));
+}
+
+/**
+ * Atualiza tracksSelectedTotal em user_facets quando uma faixa é
+ * (de)selecionada. UPDATE com expressão atômica. MAX(0, ...) defensivo.
+ *
+ * Custo: ~3 row reads.
+ */
+export async function applyTrackSelectedDelta(
+  userId: number,
+  delta: -1 | 1,
+): Promise<void> {
+  await db
+    .update(userFacets)
+    .set({
+      tracksSelectedTotal: sql`MAX(0, ${userFacets.tracksSelectedTotal} + ${delta})`,
+      updatedAt: new Date(),
+    })
+    .where(eq(userFacets.userId, userId));
+}
+
+/**
+ * Recomputa APENAS shelves_json em user_facets. Usado quando
+ * shelfLocation de um disco muda. Mais simples que tentar incrementar
+ * lista (precisaria saber se outro disco ainda usa a shelf).
+ *
+ * Custo: ~2.5k row reads (proporcional a records do user) + 1 UPDATE.
+ */
+export async function recomputeShelvesOnly(userId: number): Promise<void> {
+  const shelves = await aggregateShelves(userId);
+  await db
+    .update(userFacets)
+    .set({
+      shelvesJson: JSON.stringify(shelves),
+      updatedAt: new Date(),
+    })
+    .where(eq(userFacets.userId, userId));
+}
+
+/**
+ * Recomputa APENAS o vocabulário (moods OU contexts) em user_facets.
+ * Usado quando moods/contexts de uma track mudam. Mesmo padrão do
+ * recomputeShelvesOnly — idempotente sobre o conjunto inteiro do kind.
+ *
+ * Custo: ~10k row reads (proporcional a tracks do user) + 1 UPDATE.
+ */
+export async function recomputeVocabularyOnly(
+  userId: number,
+  kind: 'moods' | 'contexts',
+): Promise<void> {
+  const column = kind === 'moods' ? tracks.moods : tracks.contexts;
+  const vocab = await aggregateVocabulary(userId, column);
+  await db
+    .update(userFacets)
+    .set({
+      ...(kind === 'moods'
+        ? { moodsJson: JSON.stringify(vocab) }
+        : { contextsJson: JSON.stringify(vocab) }),
+      updatedAt: new Date(),
+    })
+    .where(eq(userFacets.userId, userId));
+}
+
+/**
+ * Wrapper que despacha em paralelo (Promise.all) baseado no scope
+ * do que mudou. Try/catch defensivo no caller — write principal já
+ * foi committado, falha no delta só causa drift transitório (cron resolve).
+ *
+ * Scope vazio = no-op (zero queries). Útil pra Server Actions
+ * que sabem que algo não impacta facets mas querem um único call site.
+ */
+export type DeltaScope = {
+  recordStatus?: { prev: RecordStatus; next: RecordStatus };
+  trackSelected?: { delta: -1 | 1 };
+  shelves?: boolean;
+  moods?: boolean;
+  contexts?: boolean;
+};
+
+export async function applyDeltaForWrite(
+  userId: number,
+  scope: DeltaScope,
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  if (scope.recordStatus) {
+    tasks.push(applyRecordStatusDelta(userId, scope.recordStatus.prev, scope.recordStatus.next));
+  }
+  if (scope.trackSelected) {
+    tasks.push(applyTrackSelectedDelta(userId, scope.trackSelected.delta));
+  }
+  if (scope.shelves) {
+    tasks.push(recomputeShelvesOnly(userId));
+  }
+  if (scope.moods) {
+    tasks.push(recomputeVocabularyOnly(userId, 'moods'));
+  }
+  if (scope.contexts) {
+    tasks.push(recomputeVocabularyOnly(userId, 'contexts'));
+  }
+  if (tasks.length === 0) return;
+  await Promise.all(tasks);
 }

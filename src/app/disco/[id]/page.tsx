@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { listUserVocabulary } from '@/lib/actions';
-import { getUserAIConfigStatus } from '@/lib/ai';
 import { listUserShelves } from '@/lib/queries/collection';
 import { loadDisc } from '@/lib/queries/curadoria';
 import { CoverPlaceholder } from '@/components/cover-placeholder';
@@ -38,14 +37,16 @@ export default async function RecordDetailPage({
     .limit(1);
   const record = full[0]!;
 
-  const [moodSuggestions, contextSuggestions, aiStatus, userShelves] =
-    await Promise.all([
-      listUserVocabulary('moods'),
-      listUserVocabulary('contexts'),
-      getUserAIConfigStatus(user.id),
-      listUserShelves(user.id),
-    ]);
-  const aiConfigured = aiStatus.configured;
+  const [moodSuggestions, contextSuggestions, userShelves] = await Promise.all([
+    listUserVocabulary('moods'),
+    listUserVocabulary('contexts'),
+    listUserShelves(user.id),
+  ]);
+
+  // Inc 27: AI config derivado do user cached (Inc 26 + Inc 27 trouxeram
+  // aiProvider/aiModel pro objeto retornado por requireCurrentUser).
+  // Eliminou query separada `select ai_provider, ai_model from users`.
+  const aiConfigured = user.aiProvider !== null && user.aiModel !== null;
 
   // Agrupar faixas por lado (letra inicial da posição)
   const bySide = new Map<string, typeof disc.tracks>();
