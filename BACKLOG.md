@@ -12,47 +12,32 @@ Convenção:
 
 ### 🟢 Próximos (semanas)
 
-#### Incremento 25 — Otimização contínua de leituras Turso (pacote pós-Inc 24)
+#### Incremento 25 — Denormalizar agregações de tracks em records (pacote pós-Inc 26)
 
-Auditoria sistemática de queries (sessão 2026-05-01, pós-deploy
-Inc 24) identificou que mesmo com facets denormalizados, 1 load
-de `/` ainda faz ~22 queries / ~69k row reads. Causa raiz: agregações
-de tracks por record em `queryCollection` não foram denormalizadas, e
-há duplicações em RSCs do layout. Pacote em 2 fases.
+**Status atualizado pós Inc 26 (2026-05-02)**: a Fase A original foi
+parcial e totalmente absorvida pelo Inc 26. A1 (dedup `getUserFacets`
+via `react.cache()`), A2 (TTL `computeBadgeActive` — desnecessário
+porque `<SyncBadge>` foi removido), e A4 (LIMIT em `listCuradoriaIds`
+— rota `/curadoria` foi deletada) saíram. Sobra A3 (recompute em
+`unstable_after`) + Fase B inteira (denormalizar counts em `records`).
 
-**Fase A — Quick wins (~30-45min, ganho moderado ~20%)**
+Pós Inc 26, 1 load `/` faz **6 queries** (era 17). Próximo gargalo:
+das 6 queries restantes, 3 são o trio `queryCollection` records +
+trackAgg + bombs. Denormalizar counts elimina 2 dessas 3.
 
-A1. **Dedup `getUserFacets()` via `react.cache()`**
-- Hoje: chamado 4× em paralelo (`listUserGenres`, `listUserStyles`,
-  `collectionCounts`, `countSelectedTracks`) → 4 SELECTs no mesmo render
-- Wrap em `cache()` (Next 15 RSC) — 1 SELECT por render
-- Arquivo: [src/lib/queries/user-facets.ts](src/lib/queries/user-facets.ts)
-- Ganho: -3 reads/load × ~150 loads/dia ≈ -450 reads/dia
+**A3 (residual) — `recomputeFacets` em `unstable_after()` (Next 15)**
 
-A2. **TTL 30s em `computeBadgeActive`**
-- Hoje: 3 EXISTS curtos rodam em TODA rota autenticada (header layout)
-- Map in-memory com timestamp (lessor-evil em Hobby — fresh cada Lambda
-  mas dedupa hits dentro da mesma instância)
-- Arquivo: [src/lib/queries/status.ts](src/lib/queries/status.ts) +
-  [src/components/sync-badge.tsx](src/components/sync-badge.tsx)
-- Ganho: -1 a -3 reads × ~200 reqs/dia ≈ -300 reads/dia
-
-A3. **`recomputeFacets` em `unstable_after()` (Next 15)**
-- Hoje: síncrono no fim de 6+ Server Actions de write (~40k reads cada)
-- Move pra background via `import { unstable_after as after } from 'next/server'`
-- Mutation retorna instant (UX), recompute roda fora do request
+- Hoje: síncrono no fim de 6+ Server Actions de write (~40k reads cada).
+  Bloqueia resposta do clique até completar.
+- Move pra background via `import { unstable_after as after } from 'next/server'`.
+- Mutation retorna instant (UX), recompute roda fora do request.
 - Não reduz contagem total mas elimina latência + risco de timeout em
-  Vercel Hobby maxDuration 60s
+  Vercel Hobby maxDuration 60s.
 - Arquivos: [src/lib/actions.ts](src/lib/actions.ts) (5 callsites),
   [src/lib/discogs/sync.ts](src/lib/discogs/sync.ts),
-  [src/lib/discogs/import.ts](src/lib/discogs/import.ts)
-- Ganho: latência -50% em writes, mesmas reads no agregado
-
-A4. **LIMIT 1000 em `listCuradoriaIds`**
-- Hoje: full scan da coleção em `/curadoria` (Felipe: 2588 records)
-- Add `.limit(1000)` + lazy load no UI quando atingir limite
-- Arquivo: [src/lib/queries/curadoria.ts](src/lib/queries/curadoria.ts)
-- Ganho: -1.5k reads × ~5 loads/dia ≈ -7.5k reads/dia
+  [src/lib/discogs/import.ts](src/lib/discogs/import.ts).
+- Ganho: latência -50% em writes, mesmas reads no agregado.
+- Pode ser feito junto com Fase B abaixo, ou separado.
 
 **Fase B — Big win: denormalizar agregações de tracks em `records` (~1-2h)**
 
@@ -485,6 +470,7 @@ spec/plan/data-model/contracts/quickstart.
 - **019** — Editar status do disco direto na grid (Inc 19) · 2026-04-29 · `specs/019-edit-status-on-grid/` · botões inline `Ativar`/`Descartar`/`Reativar` em cada item da grid `/` (ambas views — `<RecordRow>` list + `<RecordGridCard>` grid) com optimistic UI ≤100ms via `useTransition` + `useState<optimistic>`; rollback visual em erro com mensagem inline auto-dismiss 5s (Clarification Q2 — toast-like, sem botão fechar); pattern Inbox-zero (Clarification Q1) — card some naturalmente após `revalidatePath('/')` quando filtro corrente exclui novo status; reusa Server Action `updateRecordStatus` existente (Zod + ownership + revalidatePath nas 3 rotas) sem mudança; botões condicionais por status (`unrated` → Ativar+Descartar; `active` → Descartar; `discarded` → Reativar) com `aria-label` descritivo + tap target `min-h-[44px] md:min-h-[32px]` (Princípio V mobile + densidade desktop); discos `archived` ficam fora (filtrados pela query); 1 client component novo `<RecordStatusActions>` compartilhado entre as duas views via prop `className`; zero schema delta, zero novas Server Actions
 - **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit). Bug 15 hotfix incluído (commit `0615c24`): MobileDrawer vazava em desktop por portal — fix com `matchMedia` + render condicional.
 - **021** — Busca insensitive a acentos (Inc 18) · 2026-04-30 · `specs/021-accent-insensitive-search/` · busca textual em `/` (home) e `/sets/[id]/montar` agora normaliza diacríticos antes de comparar — digitar `joao` acha `João Gilberto`, `acucar` acha `Açúcar`, `sergio` acha `Sérgio`, bidirecional (FR-003); novo helper puro `normalizeText(s)` em `src/lib/text.ts` (`lowercase + NFD + replace(/\p{M}/gu, '')`) + helper auxiliar `matchesNormalizedText(haystacks, query)` para DRY; cobertura universal Unicode (não só pt-BR — `naive`/`naïve`, `cafe`/`café`, `garcon`/`garçon`); JS-side post-query (SQLite/Turso não tem `unaccent` nativo): `buildCollectionFilters` ganha flag opcional `omitText` (default false); `queryCollection` carrega rows com filtros não-text via SQL e aplica `matchesNormalizedText` em `[artist, title, label]` antes da agregação de tracks; `queryCandidates` remove LIKE textual SQL + move `.limit()` pra JS (`slice(0, opts.limit ?? 300)`) APÓS filtro JS pra preservar candidatos válidos; `pickRandomUnratedRecord` (Inc 11) re-estrutura: SELECT amplo sem text → JS post-filter → `Math.random()` JS sobre filtrados (preserva uniformidade); filtros multi-select de tag (genres, styles, moods, contexts) permanecem exact match (vocabulário canônico — Decisão 8 do research) — `fineGenre` (texto livre) entra no text filter geral; zero schema delta, zero novas Server Actions; refator localizado em 4 arquivos. Princípios I/II/III/V todos OK.
+- **024** — Cortes UX agressivos + dedup de queries (Inc 26) · 2026-05-02 · `specs/024-ux-cuts-dedup/` · pacote pós-diagnóstico Vercel logs (instrumentação `[DB]` em `src/db/index.ts`). Reduz queries SQL por load `/` de 17 → 6 (-65%) atacando 3 vetores: (1) **dedup de RSCs paralelos** — `requireCurrentUser`/`getCurrentUser` em `src/lib/auth.ts` e `getUserFacets` em `src/lib/queries/user-facets.ts` wrappados em `cache()` do React 19 (4-5 SELECT users + 4-5 SELECT user_facets por render → 1 cada); (2) **remoção de componentes globais com baixo valor** — `<SyncBadge>` e `<ArchivedRecordsBanner>` deletados do layout (rodavam em TODA rota autenticada — info acessível via menu "Sync" → `/status`); (3) **render condicional + cron-only** — novo `getImportProgressLight()` em `actions.ts` retorna `{shouldShow: false}` em 1 SELECT mínimo no caso comum (DJ com import já reconhecido + idle), economizando ~3 queries/load; `killZombieSyncRuns` movido de `getImportProgress`/`loadStatusSnapshot` para o cron diário `/api/cron/sync-daily` (era 1 UPDATE/load — agora 1×/dia/user). **Cleanup de rota morta**: `/curadoria` deletada inteira (`src/app/curadoria/`, `curadoria-view.tsx`, `listCuradoriaIds`); helpers `loadDisc` + `compareTrackPositions` preservados em `src/lib/queries/curadoria.ts` por serem usados externamente. **Prefetch=false universal**: ~16 `<Link>` em rotas autenticadas que ainda disparavam prefetch RSC em hover ganharam `prefetch={false}`. **`CurrentUser` ganha campo `importAcknowledgedAt`** pra evitar SELECT extra no caminho condicional do home. Schema delta zero. Reversível por revert. Validado em prod via `vercel logs sulco.vercel.app --follow` — log mostra exatamente 6 linhas `[DB]` por load: 1× users + 1× user_facets + 1× sync_runs (light) + 1× records LIMIT 50 + 1× tracks aggregations + 1× tracks bombs. Princípios I/II/III/IV/V todos OK.
 - **023** — Denormalização user_facets (Inc 24) · 2026-05-01 · `specs/023-user-facets-denormalization/` · materializa todas as agregações pesadas (genres, styles, moods, contexts, shelves, counts, tracks_selected_total) em 1 row por user na nova tabela `user_facets`. Reads por load da home: ~50k → ~700 (1 SELECT da row vs 7 queries que escaneavam a coleção inteira). Helper novo `src/lib/queries/user-facets.ts` com `getUserFacets(userId)` (1 SELECT, defaults seguros se row ausente) + `recomputeFacets(userId)` (UPSERT após queries pesadas via `Promise.all` paralelo). Consumidores migrados em `collection.ts` (`listUserGenres`, `listUserStyles`, `listUserShelves`, `collectionCounts`, `countSelectedTracks`) e `actions.ts` (`listUserVocabulary`, `getImportProgress.recordCount`) preservam assinaturas externas (callers não mudam). `recomputeFacets` síncrono no fim de 6 Server Actions de write (`updateRecordStatus`, `updateRecordAuthorFields`, `updateTrackCuration`, `acknowledgeArchivedRecord`, `acknowledgeAllArchived`, `runIncrementalSync`, `runInitialImport`) com try/catch defensivo (write principal nunca rollback se recompute falhar — FR-008). Schema delta: 1 tabela `user_facets` com PK em `user_id` + 5 colunas JSON + 5 contadores INTEGER + `updated_at`. Migration aplicada via `turso db shell sulco-prod`; backfill via `scripts/_backfill-user-facets.mjs` (DATABASE_URL/TOKEN env). Princípios I (facets é zona SYS, não AUTHOR), II (queries continuam RSC), III (1 tabela nova com migration explícita), IV (write nunca apaga histórico), V (renders mais rápidos cross-device) todos OK. Sustenta uso intenso dentro dos 500M reads/mês do Turso. Cache layer Inc 23 mantido em paralelo (orthogonal — facets reduz escaneamento, cache reduz hits repetidos).
 - **022** — Otimização de leituras Turso (Inc 23) · 2026-04-30 · `specs/022-turso-reads-optimization/` · pacote consolidado em 3 frentes pra mitigar estouro de cota Turso. **Frente A — revert Inc 21**: `queryCandidates` re-aplica `LIMIT 1000` SQL antes do JS text filter (preserva Inc 18); `pickRandomUnratedRecord` ganha fast path `RANDOM() LIMIT 1` quando text vazio (1 read vs ~2500), slow path JS post-filter Inc 18 mantido. **Frente B — cache via `unstable_cache`**: novo helper `src/lib/cache.ts` com `cacheUser(fn, name)` + `revalidateUserCache(userId)`; tag por user `user:${userId}` invalida globalmente; TTL 300s (Clarification Q2) como guard-rail; 8 queries cacheadas (`queryCollection` com cache key composto absorvendo filtros — Clarification Q1; `collectionCounts`, `countSelectedTracks`, `listUserGenres`, `listUserStyles`, `listUserShelves`, `listUserVocabulary`, `loadStatusSnapshot`); Server Actions de write críticas chamam `revalidateUserCache(user.id)` no fim (`updateRecordStatus`, `updateRecordAuthorFields`, `updateTrackCuration`, `analyzeTrackWithAI`, `updateTrackAiAnalysis`, `acknowledgeArchivedRecord`, `acknowledgeAllArchived`, `acknowledgeImportProgress`, `enrichRecordOnDemand`, `createSet`, `runIncrementalSync`); restantes confiam no TTL fallback. **Frente C — 2 índices**: `records(user_id, archived, status)` composite + `tracks(record_id, is_bomb)` composite; aplicado em dev local; aplicação em prod via `turso db shell sulco-prod` PENDENTE (Felipe roda manualmente quando Turso renovar amanhã — `CREATE INDEX IF NOT EXISTS` é idempotente, código deployado funciona sem). UI inalterada — backend puro. Princípios I (leitura), II (RSC + cache server), III (só índices), IV (nada deletado), V (ganho cross-device) todos OK. Bug 16 hotfix incluído (commit a seguir): `<ImportPoller>` global removido do layout (rodava setInterval 10s indefinidamente) + `getImportProgress` parte de leitura cacheada com TTL 10s.
 

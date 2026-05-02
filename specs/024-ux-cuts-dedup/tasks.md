@@ -92,15 +92,15 @@
 
 - [X] T023 Verificar grep final: `grep -rn "SyncBadge\|ArchivedRecordsBanner\|/curadoria\|computeBadgeActive\|listCuradoriaIds" src/` — output esperado: apenas referências em comentários históricos ou specs (zero em código de produção).
 
-- [ ] T024 Commit com mensagem `feat(024): cortes UX + dedup de queries (Inc 26)`. Push em main (depois de merge da branch `024-ux-cuts-dedup`).
+- [X] T024 Commit com mensagem `feat(024): cortes UX + dedup de queries (Inc 26)`. Push em main (depois de merge da branch `024-ux-cuts-dedup`).
 
-- [ ] T025 Validar deploy automático Vercel (se ainda quebrado, deploy manual via `vercel --prod --yes` + `vercel promote`).
+- [X] T025 Validar deploy automático Vercel (se ainda quebrado, deploy manual via `vercel --prod --yes` + `vercel promote`).
 
-- [ ] T026 Smoke test pós-deploy: rodar cenários 1, 4, 5, 9 do [quickstart.md](./quickstart.md). Cola output de `vercel logs sulco.vercel.app --follow` durante load `/` em prod. **Sub-step pra SC-003 (cold start ≤600ms)**: aguardar 5+ minutos sem nenhum acesso a `sulco.vercel.app` (Lambda fria), então fazer 1 hard refresh em `/`. No Vercel dashboard → Logs → clicar no request → ler "Function Duration". Esperado: ≤600ms (vs ~1.2s pré-Inc 26).
+- [X] T026 Smoke test pós-deploy: rodar cenários 1, 4, 5, 9 do [quickstart.md](./quickstart.md). Cola output de `vercel logs sulco.vercel.app --follow` durante load `/` em prod. **Sub-step pra SC-003 (cold start ≤600ms)**: aguardar 5+ minutos sem nenhum acesso a `sulco.vercel.app` (Lambda fria), então fazer 1 hard refresh em `/`. No Vercel dashboard → Logs → clicar no request → ler "Function Duration". Esperado: ≤600ms (vs ~1.2s pré-Inc 26).
 
 - [ ] T027 Se Cenário 1 passar (queries ≤6/load), setar `DB_DEBUG=0` em Vercel env vars (Production environment) pra desligar instrumentação sem revert de código.
 
-- [ ] T028 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar `- **024** — Cortes UX agressivos + dedup de queries (Inc 26) · 2026-05-02 · specs/024-ux-cuts-dedup/ · ...` com sumário de queries economizadas e arquivos deletados. Atualizar entrada Inc 25 do BACKLOG removendo Fase A items absorvidos (A1 dedup getUserFacets feita aqui; A2 SyncBadge removido; A4 listCuradoriaIds deletado).
+- [X] T028 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar `- **024** — Cortes UX agressivos + dedup de queries (Inc 26) · 2026-05-02 · specs/024-ux-cuts-dedup/ · ...` com sumário de queries economizadas e arquivos deletados. Atualizar entrada Inc 25 do BACKLOG removendo Fase A items absorvidos (A1 dedup getUserFacets feita aqui; A2 SyncBadge removido; A4 listCuradoriaIds deletado).
 
 ## Dependencies
 
