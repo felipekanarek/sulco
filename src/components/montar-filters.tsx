@@ -8,7 +8,7 @@ import { CamelotWheel } from './camelot-wheel';
 import { ChipPicker } from './chip-picker';
 import type { MontarFilters } from '@/lib/queries/montar';
 
-const DEBOUNCE_MS = 400;
+const DEBOUNCE_MS = 500;
 
 type Props = {
   setId: number;
@@ -40,38 +40,65 @@ export function MontarFiltersForm({
   const [, startTransition] = useTransition();
   const firstRenderRef = useRef(true);
 
-  // Propaga state → URL searchParams + persiste em sets.montarFiltersJson (debounce)
+  // Inc 28 Frente A: refs pra suportar flush on unmount.
+  // Hoje cleanup só fazia clearTimeout — se DJ navegasse antes de 500ms,
+  // último estado de filtros era perdido. Agora cleanup pega `pendingRef`
+  // e dispara persist imediato fire-and-forget.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<MontarFilters | null>(null);
+
+  // Propaga state → URL searchParams + persiste em sets.montarFiltersJson (debounce 500ms)
   useEffect(() => {
     if (firstRenderRef.current) {
       firstRenderRef.current = false;
       return;
     }
-    const handle = setTimeout(() => {
+    pendingRef.current = state;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const toPersist = pendingRef.current;
+      if (!toPersist) return;
       // URL
       const next = new URLSearchParams(params);
-      setParam(next, 'bpmMin', state.bpm?.min);
-      setParam(next, 'bpmMax', state.bpm?.max);
-      setParam(next, 'energyMin', state.energy?.min);
-      setParam(next, 'energyMax', state.energy?.max);
-      setParam(next, 'ratingMin', state.rating?.min);
-      setParam(next, 'ratingMax', state.rating?.max);
-      setMultiParam(next, 'key', state.musicalKey);
-      setMultiParam(next, 'mood', state.moods);
-      setMultiParam(next, 'context', state.contexts);
-      setParam(next, 'bomba', state.bomba === 'any' ? undefined : state.bomba);
-      setParam(next, 'q', state.text);
+      setParam(next, 'bpmMin', toPersist.bpm?.min);
+      setParam(next, 'bpmMax', toPersist.bpm?.max);
+      setParam(next, 'energyMin', toPersist.energy?.min);
+      setParam(next, 'energyMax', toPersist.energy?.max);
+      setParam(next, 'ratingMin', toPersist.rating?.min);
+      setParam(next, 'ratingMax', toPersist.rating?.max);
+      setMultiParam(next, 'key', toPersist.musicalKey);
+      setMultiParam(next, 'mood', toPersist.moods);
+      setMultiParam(next, 'context', toPersist.contexts);
+      setParam(next, 'bomba', toPersist.bomba === 'any' ? undefined : toPersist.bomba);
+      setParam(next, 'q', toPersist.text);
       const qs = next.toString();
       startTransition(() => {
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
       });
       // DB (fire-and-forget; erros logados mas não bloqueiam UX)
-      saveMontarFilters({ setId, filters: state }).catch((err) =>
+      saveMontarFilters({ setId, filters: toPersist }).catch((err) =>
         console.error('[montar] saveMontarFilters falhou', err),
       );
+      pendingRef.current = null;
+      timerRef.current = null;
     }, DEBOUNCE_MS);
-    return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+
+  // Inc 28 Frente A: flush on unmount — se DJ navega antes do timer
+  // expirar, dispara o persist pendente imediato (fire-and-forget).
+  // Garante que preferência não é perdida em navegação rápida.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current && pendingRef.current) {
+        clearTimeout(timerRef.current);
+        const toFlush = pendingRef.current;
+        saveMontarFilters({ setId, filters: toFlush }).catch(() => {});
+        timerRef.current = null;
+        pendingRef.current = null;
+      }
+    };
+  }, [setId]);
 
   function clearAll() {
     setState({});

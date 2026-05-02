@@ -262,7 +262,23 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **025-incremental-recompute** (BACKLOG: Inc 27)
+Current active feature: **026-montar-set-perf** (BACKLOG: Inc 28)
+
+Authoritative planning artifacts (read these before making changes
+ao `/sets/[id]/montar/page.tsx`, `<MontarFilters>` component,
+`listSelectedVocab` em `montar.ts`, ou `addTrackToSet` em
+`actions.ts`):
+
+- Plan: [specs/026-montar-set-perf/plan.md](specs/026-montar-set-perf/plan.md)
+- Spec: [specs/026-montar-set-perf/spec.md](specs/026-montar-set-perf/spec.md)
+- Research: [specs/026-montar-set-perf/research.md](specs/026-montar-set-perf/research.md)
+- Data Model: [specs/026-montar-set-perf/data-model.md](specs/026-montar-set-perf/data-model.md)
+- Contracts: [specs/026-montar-set-perf/contracts/](specs/026-montar-set-perf/contracts/)
+- Quickstart: [specs/026-montar-set-perf/quickstart.md](specs/026-montar-set-perf/quickstart.md)
+
+Prior active (now legacy):
+
+**025-incremental-recompute** (BACKLOG: Inc 27)
 
 Authoritative planning artifacts (read these before making changes
 aos novos helpers de delta em `src/lib/queries/user-facets.ts`
