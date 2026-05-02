@@ -8,13 +8,13 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar status — feature dir `specs/025-incremental-recompute/` + spec + plan + research + data-model + contracts + quickstart já criados nesta sessão. Branch `025-incremental-recompute` ativa.
+- [X] T001 Confirmar status — feature dir `specs/025-incremental-recompute/` + spec + plan + research + data-model + contracts + quickstart já criados nesta sessão. Branch `025-incremental-recompute` ativa.
 
 ## Phase 2: Foundational (helpers + tipos antes de cada Server Action ser tocada)
 
-- [ ] T002 Estender tipo `CurrentUser` em [src/lib/auth.ts](../../src/lib/auth.ts) adicionando campos `aiProvider: 'anthropic' | 'openai' | 'gemini' | 'deepseek' | 'qwen' | null` e `aiModel: string | null`. Atualizar mapper `toCurrentUser(u)` pra incluir esses campos vindos de `u.aiProvider`/`u.aiModel`. **NÃO incluir** `aiApiKeyEncrypted` no objeto cached (princípio menor exposição). Build local pra confirmar tipo.
+- [X] T002 Estender tipo `CurrentUser` em [src/lib/auth.ts](../../src/lib/auth.ts) adicionando campos `aiProvider: 'anthropic' | 'openai' | 'gemini' | 'deepseek' | 'qwen' | null` e `aiModel: string | null`. Atualizar mapper `toCurrentUser(u)` pra incluir esses campos vindos de `u.aiProvider`/`u.aiModel`. **NÃO incluir** `aiApiKeyEncrypted` no objeto cached (princípio menor exposição). Build local pra confirmar tipo.
 
-- [ ] T003 Adicionar 4 helpers novos + 1 wrapper em [src/lib/queries/user-facets.ts](../../src/lib/queries/user-facets.ts) conforme [contracts/facets-delta-helper.md](./contracts/facets-delta-helper.md):
+- [X] T003 Adicionar 4 helpers novos + 1 wrapper em [src/lib/queries/user-facets.ts](../../src/lib/queries/user-facets.ts) conforme [contracts/facets-delta-helper.md](./contracts/facets-delta-helper.md):
   - `applyRecordStatusDelta(userId, prev, next)` — UPDATE expressão atômica nos 3 counters de status; no-op se prev===next.
   - `applyTrackSelectedDelta(userId, delta: -1|+1)` — UPDATE expressão atômica em `tracks_selected_total` com `MAX(0, ...)` defensivo.
   - `recomputeShelvesOnly(userId)` — SELECT DISTINCT shelf_location + UPDATE shelves_json.
@@ -23,7 +23,7 @@
 
   Manter `recomputeFacets(userId)` exportado como fallback (não deletar). Adicionar comentários no header do arquivo explicando padrão de uso (delta vs completo).
 
-- [ ] T004 Auditar `revalidatePath` em [src/lib/actions.ts](../../src/lib/actions.ts) e [src/lib/discogs/](../../src/lib/discogs/). Comando: `grep -rn "revalidatePath" src/lib/`. Listar paths que apontam pra rotas inexistentes (ex: `/curadoria` deletada no Inc 26 — confirmar que sumiu). Output esperado: zero paths obsoletos. Se houver, marcar pra remoção em T015.
+- [X] T004 Auditar `revalidatePath` em [src/lib/actions.ts](../../src/lib/actions.ts) e [src/lib/discogs/](../../src/lib/discogs/). Comando: `grep -rn "revalidatePath" src/lib/`. Listar paths que apontam pra rotas inexistentes (ex: `/curadoria` deletada no Inc 26 — confirmar que sumiu). Output esperado: zero paths obsoletos. Se houver, marcar pra remoção em T015.
 
 ## Phase 3: User Story 1 — Curadoria com baixo consumo de reads (P1)
 
@@ -31,7 +31,7 @@
 
 **Independent test**: cenários 1-7 do quickstart — edição de BPM gera 0 queries de delta; toggle status gera 1 UPDATE; curadoria de 30 edições gera ≤ 1k rows lidas.
 
-- [ ] T005 [US1] Refatorar `updateRecordStatus` em [src/lib/actions.ts](../../src/lib/actions.ts) (linha ~602):
+- [X] T005 [US1] Refatorar `updateRecordStatus` em [src/lib/actions.ts](../../src/lib/actions.ts) (linha ~602):
   - Antes do UPDATE, fazer SELECT do status atual: `const [prev] = await db.select({ status: records.status }).from(records).where(and(eq(records.id, parsed.data.recordId), eq(records.userId, user.id))).limit(1);`. Se `prev` ausente → retornar erro "Disco não encontrado." (já fazia).
   - UPDATE com `returning { id }` (já fazia).
   - Substituir `await recomputeFacets(user.id)` por:
@@ -46,7 +46,7 @@
     ```
   - Importar `applyRecordStatusDelta` em vez de `recomputeFacets`.
 
-- [ ] T006 [US1] Refatorar `updateTrackCuration` em [src/lib/actions.ts](../../src/lib/actions.ts) (linha ~661):
+- [X] T006 [US1] Refatorar `updateTrackCuration` em [src/lib/actions.ts](../../src/lib/actions.ts) (linha ~661):
   - Antes do UPDATE, carregar estado atual da track relevante: `const [prev] = await db.select({ selected: tracksTable.selected, moods: tracksTable.moods, contexts: tracksTable.contexts }).from(tracksTable).where(eq(tracksTable.id, parsed.data.trackId)).limit(1);`. Combina com ownership check existente (substitui ou adiciona campos).
   - Helper de comparação por conjunto (não por ordem) — evitar disparar recompute caro quando DJ envia mesma lista em ordem diferente:
     ```ts
@@ -89,7 +89,7 @@
     ```
   - Edições em BPM/key/energy/comment/rating/aiAnalysis/fineGenre/references/isBomb/audioFeaturesSource resultam em todos os flags `false`/`undefined` → scope vazio → `applyDeltaForWrite` é no-op (zero queries de delta).
 
-- [ ] T007 [US1] Refatorar `updateRecordAuthorFields` em [src/lib/actions.ts](../../src/lib/actions.ts) (linha ~789):
+- [X] T007 [US1] Refatorar `updateRecordAuthorFields` em [src/lib/actions.ts](../../src/lib/actions.ts) (linha ~789):
   - Antes do UPDATE, carregar `shelfLocation` atual:
     ```ts
     const [prev] = await db.select({ shelfLocation: records.shelfLocation }).from(records)
@@ -113,11 +113,11 @@
     ```
   - Edição apenas de `notes` resulta em `shelfChanged === false` → zero queries de delta.
 
-- [ ] T008 [US1] Remover `await recomputeFacets(user.id)` de `acknowledgeArchivedRecord` em [src/lib/actions.ts](../../src/lib/actions.ts) (~linha 1611). `archived_acknowledged_at` não é materializado em facets → skip total. Manter try/catch removido + adicionar comentário "// Inc 27: skip recompute — campo não materializado em user_facets".
+- [X] T008 [US1] Remover `await recomputeFacets(user.id)` de `acknowledgeArchivedRecord` em [src/lib/actions.ts](../../src/lib/actions.ts) (~linha 1611). `archived_acknowledged_at` não é materializado em facets → skip total. Manter try/catch removido + adicionar comentário "// Inc 27: skip recompute — campo não materializado em user_facets".
 
-- [ ] T009 [US1] Remover `await recomputeFacets(user.id)` de `acknowledgeAllArchived` em [src/lib/actions.ts](../../src/lib/actions.ts) (~linha 1671). Mesma justificativa de T008.
+- [X] T009 [US1] Remover `await recomputeFacets(user.id)` de `acknowledgeAllArchived` em [src/lib/actions.ts](../../src/lib/actions.ts) (~linha 1671). Mesma justificativa de T008.
 
-- [ ] T010 [US1] Verificar imports em `src/lib/actions.ts`: substituir `import { ..., recomputeFacets } from '@/lib/queries/user-facets';` por `import { ..., applyRecordStatusDelta, applyTrackSelectedDelta, recomputeShelvesOnly, applyDeltaForWrite } from '@/lib/queries/user-facets';`. Remover `recomputeFacets` se não for mais usado em actions.ts (continua usado em `sync.ts`/`import.ts`/cron). Build local pra detectar imports órfãos.
+- [X] T010 [US1] Verificar imports em `src/lib/actions.ts`: substituir `import { ..., recomputeFacets } from '@/lib/queries/user-facets';` por `import { ..., applyRecordStatusDelta, applyTrackSelectedDelta, recomputeShelvesOnly, applyDeltaForWrite } from '@/lib/queries/user-facets';`. Remover `recomputeFacets` se não for mais usado em actions.ts (continua usado em `sync.ts`/`import.ts`/cron). Build local pra detectar imports órfãos.
 
 ## Phase 4: User Story 2 — Página `/disco/[id]` com queries deduplicadas (P2)
 
@@ -125,7 +125,7 @@
 
 **Independent test**: cenário 8 do quickstart — load `/disco/[id]` mostra `select users` com `ai_provider`/`ai_model` no SELECT, **zero** ocorrências de `select "ai_provider", "ai_model" from users`.
 
-- [ ] T011 [US2] Refatorar `getUserAIConfigStatus` em [src/lib/actions.ts](../../src/lib/actions.ts) (procurar a função; ela hoje faz SELECT separado). Substituir corpo por:
+- [X] T011 [US2] Refatorar `getUserAIConfigStatus` em [src/lib/actions.ts](../../src/lib/actions.ts) (procurar a função; ela hoje faz SELECT separado). Substituir corpo por:
   ```ts
   export async function getUserAIConfigStatus(): Promise<{ configured: boolean; provider: string | null; model: string | null }> {
     const user = await requireCurrentUser(); // cached via react.cache (Inc 26)
@@ -138,9 +138,9 @@
   ```
   Zero queries SQL adicionais — derivado do user cached.
 
-- [ ] T012 [US2] Confirmar que `enrichTrackComment`/`analyzeTrackWithAI`/`suggestSetTracks` (que precisam da chave criptografada) continuam fazendo SELECT dedicado pra `aiApiKeyEncrypted` — **NÃO** trazer chave pro `CurrentUser` cached. Grep `grep -n "aiApiKeyEncrypted" src/lib/`. Verificar que apenas funções de execução IA leem essa coluna.
+- [X] T012 [US2] Confirmar que `enrichTrackComment`/`analyzeTrackWithAI`/`suggestSetTracks` (que precisam da chave criptografada) continuam fazendo SELECT dedicado pra `aiApiKeyEncrypted` — **NÃO** trazer chave pro `CurrentUser` cached. Grep `grep -n "aiApiKeyEncrypted" src/lib/`. Verificar que apenas funções de execução IA leem essa coluna.
 
-- [ ] T013 [US2] Verificar que `/disco/[id]/page.tsx` em [src/app/disco/[id]/page.tsx](../../src/app/disco/[id]/page.tsx) consome `getUserAIConfigStatus` ou similar. Se chamar `requireCurrentUser` direto e ler `user.aiProvider`/`user.aiModel`, ainda melhor. Confirmar que não há mais SELECT separado pra ai config no caminho do disco.
+- [X] T013 [US2] Verificar que `/disco/[id]/page.tsx` em [src/app/disco/[id]/page.tsx](../../src/app/disco/[id]/page.tsx) consome `getUserAIConfigStatus` ou similar. Se chamar `requireCurrentUser` direto e ler `user.aiProvider`/`user.aiModel`, ainda melhor. Confirmar que não há mais SELECT separado pra ai config no caminho do disco.
 
 ## Phase 5: User Story 3 — Drift residual auto-corrigido por cron (P2)
 
@@ -148,7 +148,7 @@
 
 **Independent test**: cenário 10 do quickstart — adulterar manualmente `records_active` em prod via Turso shell, disparar cron via curl, verificar que valor voltou ao real.
 
-- [ ] T014 [US3] Adicionar drift correction em [src/app/api/cron/sync-daily/route.ts](../../src/app/api/cron/sync-daily/route.ts):
+- [X] T014 [US3] Adicionar drift correction em [src/app/api/cron/sync-daily/route.ts](../../src/app/api/cron/sync-daily/route.ts):
   - Importar `recomputeFacets` de `@/lib/queries/user-facets`.
   - Após o loop de `runDailyAutoSync(userId)` existente (mas antes do `return NextResponse.json(...)`), adicionar:
     ```ts
@@ -168,20 +168,20 @@
 
 ## Phase 6: Polish — cleanup + build + deploy + smoke
 
-- [ ] T015 Aplicar removals/limpezas detectadas em T004. Se algum `revalidatePath('/curadoria')` ainda existir em código, remover. Confirmar via re-grep.
+- [X] T015 Aplicar removals/limpezas detectadas em T004. Se algum `revalidatePath('/curadoria')` ainda existir em código, remover. Confirmar via re-grep.
 
-- [ ] T016 Build local: `npm run build`. Confirmar zero erros TypeScript (especialmente nos novos helpers + novos campos de `CurrentUser` + novas chamadas de delta). Atenção a tipos de `'unrated' | 'active' | 'discarded'` em `applyRecordStatusDelta`.
+- [X] T016 Build local: `npm run build`. Confirmar zero erros TypeScript (especialmente nos novos helpers + novos campos de `CurrentUser` + novas chamadas de delta). Atenção a tipos de `'unrated' | 'active' | 'discarded'` em `applyRecordStatusDelta`.
 
-- [ ] T017 Verificar grep final em src/lib/:
+- [X] T017 Verificar grep final em src/lib/:
   - `grep -rn "recomputeFacets" src/lib/` — deve aparecer apenas em: `user-facets.ts` (definição), `discogs/sync.ts` (mantém uso completo), `discogs/import.ts` (mantém uso completo), e `app/api/cron/sync-daily/route.ts` (drift correction).
   - **Não deve aparecer** em `actions.ts` (todas as chamadas substituídas por deltas).
   - Se aparecer em algum Server Action de actions.ts, voltar à task correspondente.
 
-- [ ] T018 Commit em branch `025-incremental-recompute` com mensagem `feat(025): recompute incremental + dedups remanescentes (Inc 27)`. Push branch.
+- [X] T018 Commit em branch `025-incremental-recompute` com mensagem `feat(025): recompute incremental + dedups remanescentes (Inc 27)`. Push branch.
 
-- [ ] T019 Merge `025-incremental-recompute` → `main` com `--no-ff`. Push main.
+- [X] T019 Merge `025-incremental-recompute` → `main` com `--no-ff`. Push main.
 
-- [ ] T020 Deploy prod manual (auto-deploy quebrado historicamente):
+- [X] T020 Deploy prod manual (auto-deploy quebrado historicamente):
   ```bash
   vercel --prod --yes
   ```
@@ -199,7 +199,7 @@
 
 - [ ] T022 Smoke test cron (cenário 10 do quickstart): adulterar `records_active` via turso shell, disparar cron via `curl`, verificar correção. Conferir log do cron mostra `drift correction: N/N users recomputed`.
 
-- [ ] T023 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **025** — Recompute incremental + dedups remanescentes (Inc 27) · 2026-05-02 · specs/025-incremental-recompute/ · ...` com sumário (delta updates substituem recompute completo em writes; ~480 → ~30 queries por curadoria; -99% rows lidas; aiProvider/aiModel em CurrentUser cached; cron diário corrige drift). Atualizar entrada Inc 25 do BACKLOG indicando que parte foi absorvida (recompute em background via unstable_after foi substituído por delta direcionado — caminho diferente, mais agressivo).
+- [X] T023 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **025** — Recompute incremental + dedups remanescentes (Inc 27) · 2026-05-02 · specs/025-incremental-recompute/ · ...` com sumário (delta updates substituem recompute completo em writes; ~480 → ~30 queries por curadoria; -99% rows lidas; aiProvider/aiModel em CurrentUser cached; cron diário corrige drift). Atualizar entrada Inc 25 do BACKLOG indicando que parte foi absorvida (recompute em background via unstable_after foi substituído por delta direcionado — caminho diferente, mais agressivo).
 
 ## Dependencies
 
