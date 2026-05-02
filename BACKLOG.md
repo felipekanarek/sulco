@@ -12,6 +12,52 @@ Convenção:
 
 ### 🟢 Próximos (semanas)
 
+#### Incremento 30 — Excluir set
+
+Hoje DJ não consegue excluir um set criado — operação ausente do
+produto. Cenários comuns: set de teste, set duplicado, set
+ultrapassado que polui a lista `/sets`.
+
+**Possíveis ângulos** (priorizar via spec):
+- Botão "Excluir set" em `/sets/[id]` (header, com confirmação
+  `window.confirm` ou modal pattern Inc 016).
+- Cascade: excluir `set_tracks` (FK), preservar `tracks`/`records`
+  (curadoria intacta — Princípio I).
+- `revalidatePath('/sets')` + redirect pra `/sets`.
+- Server Action nova `deleteSet(setId)` em `actions.ts` com
+  ownership check.
+- Decidir se hard-delete ou soft-delete (campo `archived` em
+  `sets`?). Princípio IV sugere soft-delete preservativo, mas
+  set é metadata curatorial — DJ que cria pode querer apagar de
+  vez. Avaliar no speckit.
+
+Sem schema delta esperado se hard-delete. Esforço estimado:
+30-60min via speckit.
+
+#### Incremento 31 — UX da Bag física: capa + organização por prateleira
+
+A "bag física" no painel direito de `/sets/[id]` hoje lista os
+discos únicos do set com nome + artista + shelfLocation, mas
+sem capa visual e sem agrupar por prateleira. DJ tem que ler
+linha a linha pra saber em qual prateleira pegar cada disco
+quando tá montando a bag física pra um evento.
+
+**Possíveis ângulos** (priorizar via spec):
+- Mostrar `coverUrl` (40-60px thumb) ao lado de cada disco na
+  bag — mais rápido reconhecer visualmente.
+- Agrupar por `shelfLocation` (header com label da prateleira,
+  discos abaixo). Discos sem prateleira viram último grupo
+  "(sem prateleira)".
+- Ordenação dentro do grupo: alfabética por artista? por order
+  de aparição no set? — decidir via speckit.
+- Layout responsivo (mobile-first, Princípio V): cards
+  empilhados em mobile com capa à esquerda + meta à direita.
+- Manter contador "N discos / M faixas" no header da bag.
+
+Sem schema delta. `derivePhysicalBag` em `bag.ts` provavelmente
+já retorna `coverUrl`/`shelfLocation` (verificar). Esforço
+estimado: 1-2h via speckit.
+
 #### Incremento 29 — UX rework dos filtros do montar set
 
 Mantenedor sinalizou durante implementação do Inc 28 (sessão
