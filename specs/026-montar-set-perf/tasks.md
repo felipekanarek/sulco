@@ -153,17 +153,17 @@
   - **Verificar princípio de menor exposição (FR-006)**: `grep -rn "aiApiKeyEncrypted" src/` — esperado: aparecer apenas em (a) `src/lib/ai/index.ts` (`getUserAIConfig` que decifra pra chamar provider), (b) `src/lib/actions.ts` em `saveAIConfig` (write da chave), (c) `src/lib/auth.ts` apenas em comentário "INTENCIONALMENTE FORA". **Não deve aparecer** em `auth.ts:toCurrentUser` retorno, nem em `/sets/[id]/montar/page.tsx`, nem em outros consumidores genéricos.
   - Verificar visualmente o componente `<MontarFilters>`: helper `scheduleFlush` presente, `useEffect` cleanup presente, callsite de `persistMontarFilters` substituído.
 
-- [ ] T012 Commit em branch `026-montar-set-perf` com mensagem `feat(026): otimização do fluxo de montar set (Inc 28)`. Push branch.
+- [X] - [ ] T012 Commit em branch `026-montar-set-perf` com mensagem `feat(026): otimização do fluxo de montar set (Inc 28)`. Push branch.
 
-- [ ] T013 Merge `026-montar-set-perf` → `main` com `--no-ff`. Push main.
+- [X] - [ ] T013 Merge `026-montar-set-perf` → `main` com `--no-ff`. Push main.
 
-- [ ] T014 Deploy prod manual:
+- [X] - [ ] T014 Deploy prod manual:
   ```bash
   vercel --prod --yes
   ```
   Aguardar Ready (~1min). Confirmar via `vercel ls sulco --yes | head -3` que novo deploy aparece como Production.
 
-- [ ] T015 Smoke test pós-deploy: rodar cenários 1, 2, 4, 6, 8, 9 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow > /tmp/inc28.log 2>&1 &` durante cada cenário.
+- [X] - [ ] T015 Smoke test pós-deploy: rodar cenários 1, 2, 4, 6, 8, 9 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow > /tmp/inc28.log 2>&1 &` durante cada cenário.
   - Cenário 1 (load montar): ≤ 5 queries, ZERO `select DISTINCT value FROM tracks`, ZERO `select "ai_provider", "ai_model"` separado.
   - Cenário 2 (debounce sequência): ≤ 2 POSTs `update sets`.
   - Cenário 4 (flush on unmount): 1 POST disparado mesmo com nav rápida.
@@ -171,7 +171,7 @@
   - Cenário 8 (curadoria total): delta ≤ 5k rows lidas no dashboard Turso.
   - Cenário 9 (smoke geral): zero erros 500/JS.
 
-- [ ] T016 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **026** — Otimização do fluxo de montar set (Inc 28) · 2026-05-02 · specs/026-montar-set-perf/ · ...` com sumário (listSelectedVocab via facets cached; debounce 500ms + flush on unmount; aiProvider/aiModel via user cached Inc 27 leftover; COUNT+MAX combinado em addTrackToSet; ~600 → ~50 queries por set montado; ~1M → ~5k rows lidas; -99.5%).
+- [X] - [ ] T016 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **026** — Otimização do fluxo de montar set (Inc 28) · 2026-05-02 · specs/026-montar-set-perf/ · ...` com sumário (listSelectedVocab via facets cached; debounce 500ms + flush on unmount; aiProvider/aiModel via user cached Inc 27 leftover; COUNT+MAX combinado em addTrackToSet; ~600 → ~50 queries por set montado; ~1M → ~5k rows lidas; -99.5%).
 
 ## Dependencies
 
