@@ -35,6 +35,13 @@ export type CurrentUser = {
   // Inc 26: incluído no objeto cached pra evitar SELECT extra em
   // getImportProgressLight (caminho condicional do home).
   importAcknowledgedAt: Date | null;
+  // Inc 27: aiProvider/aiModel cached pra eliminar SELECT extra de
+  // getUserAIConfigStatus em /disco/[id] (era 1 query/render).
+  // aiApiKeyEncrypted INTENCIONALMENTE FORA — princípio de menor
+  // exposição: chave criptografada lida apenas em funções que de fato
+  // chamam o provider IA (enrichTrackComment, analyzeTrackWithAI, etc.).
+  aiProvider: 'anthropic' | 'openai' | 'gemini' | 'deepseek' | 'qwen' | null;
+  aiModel: string | null;
 };
 
 /**
@@ -105,6 +112,8 @@ function toCurrentUser(u: typeof users.$inferSelect): CurrentUser {
     isOwner: u.isOwner,
     allowlisted: u.allowlisted,
     importAcknowledgedAt: u.importAcknowledgedAt,
+    aiProvider: u.aiProvider,
+    aiModel: u.aiModel,
   };
 }
 
