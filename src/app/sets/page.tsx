@@ -24,6 +24,7 @@ export default async function SetsPage() {
         </div>
         <Link
           href="/sets/novo"
+          prefetch={false}
           className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors self-start md:self-auto"
         >
           + Novo set
@@ -38,6 +39,7 @@ export default async function SetsPage() {
           </p>
           <Link
             href="/sets/novo"
+            prefetch={false}
             className="inline-flex items-center justify-center font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] rounded-sm hover:bg-accent transition-colors"
           >
             + Novo set
@@ -58,6 +60,7 @@ function SetCard({ set }: { set: SetRow }) {
   return (
     <Link
       href={`/sets/${set.id}`}
+      prefetch={false}
       className="border border-line bg-paper-raised p-6 md:p-8 rounded-sm flex flex-col gap-4 hover:border-ink active:border-ink transition-colors"
     >
       <StatusPill status={set.status} />

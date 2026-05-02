@@ -10,8 +10,8 @@ import {
 } from '@clerk/nextjs';
 import { ptBR } from '@clerk/localizations';
 import { DiscogsCredentialBanner } from '@/components/discogs-credential-banner';
-import { ArchivedRecordsBanner } from '@/components/archived-records-banner';
-import { SyncBadge } from '@/components/sync-badge';
+// Inc 26: <ArchivedRecordsBanner> e <SyncBadge> removidos do layout
+// global. Info de archived/alertas fica acessível via menu → /status.
 import { PreviewPlayerProvider } from '@/components/preview-player-context';
 import { MobileNavTrigger } from '@/components/mobile-nav';
 
@@ -33,9 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ClerkProvider localization={ptBR}>
           <PreviewPlayerProvider>
             <Header />
-            {/* Banners globais (FR-045, FR-036) — RSC lê DB a cada request */}
+            {/* Banner de credencial Discogs continua — Inc 26 removeu apenas
+                ArchivedRecordsBanner (info via /status). */}
             <DiscogsCredentialBanner />
-            <ArchivedRecordsBanner />
             {/* Inc 23 follow-up (022 / Bug 16): <ImportPoller> global removido —
                 rodava setInterval 10s em todas as rotas autenticadas chamando
                 getImportProgress, mesmo após import completo. Causava ~86k
@@ -61,6 +61,7 @@ function Header() {
       <div className="max-w-[1240px] mx-auto px-4 md:px-8 grid grid-cols-[auto_1fr_auto] items-center md:items-baseline gap-4 md:gap-12">
         <Link
           href="/"
+          prefetch={false}
           className="font-serif italic text-[22px] md:text-[26px] font-medium tracking-tight"
         >
           Sulco<span className="text-accent not-italic">.</span>
@@ -73,9 +74,8 @@ function Header() {
           </Show>
         </nav>
         <span className="label-tech flex items-center gap-2 md:gap-3">
-          {/* SyncBadge é RSC e verifica sessão internamente; renderiza null
-              quando deslogado ou sem alertas. */}
-          <SyncBadge />
+          {/* Inc 26: <SyncBadge> removido do header global. Alertas de
+              sync/archived ficam acessíveis via NavLink "Sync" → /status. */}
           <Show when="signed-in">
             {/* Link "Conta" só desktop (mobile vai pelo drawer) */}
             <Link

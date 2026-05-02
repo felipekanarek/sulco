@@ -25,6 +25,7 @@ export async function DiscogsCredentialBanner() {
       </p>
       <Link
         href="/conta"
+        prefetch={false}
         className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-4 py-2 min-h-[44px] flex items-center justify-center rounded-sm hover:bg-accent transition-colors whitespace-nowrap self-start md:self-auto"
       >
         Atualizar token →

@@ -262,7 +262,23 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **023-user-facets-denormalization** (BACKLOG: Inc 24)
+Current active feature: **024-ux-cuts-dedup** (BACKLOG: Inc 26)
+
+Authoritative planning artifacts (read these before making changes
+ao layout global, header, banners, queries `requireCurrentUser`/
+`getUserFacets`/`computeBadgeActive`/`killZombieSyncRuns`, ou rota
+`/curadoria`):
+
+- Plan: [specs/024-ux-cuts-dedup/plan.md](specs/024-ux-cuts-dedup/plan.md)
+- Spec: [specs/024-ux-cuts-dedup/spec.md](specs/024-ux-cuts-dedup/spec.md)
+- Research: [specs/024-ux-cuts-dedup/research.md](specs/024-ux-cuts-dedup/research.md)
+- Data Model: [specs/024-ux-cuts-dedup/data-model.md](specs/024-ux-cuts-dedup/data-model.md)
+- Contracts: [specs/024-ux-cuts-dedup/contracts/](specs/024-ux-cuts-dedup/contracts/)
+- Quickstart: [specs/024-ux-cuts-dedup/quickstart.md](specs/024-ux-cuts-dedup/quickstart.md)
+
+Prior active (now legacy):
+
+**023-user-facets-denormalization** (BACKLOG: Inc 24)
 
 Authoritative planning artifacts (read these before making changes
 ao novo helper `getUserFacets`/`recomputeFacets` em

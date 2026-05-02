@@ -43,7 +43,7 @@ export default async function SetDetailPage({
       <section className="flex flex-col md:grid md:grid-cols-[1fr_auto] md:items-end gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-2 flex items-center gap-2 md:gap-3 flex-wrap">
-            <Link href="/sets" className="hover:text-ink transition-colors">
+            <Link href="/sets" prefetch={false} className="hover:text-ink transition-colors">
               ← Sets
             </Link>
             <span>·</span>
@@ -55,6 +55,7 @@ export default async function SetDetailPage({
         </div>
         <Link
           href={`/sets/${set.id}/montar`}
+          prefetch={false}
           className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors self-start md:self-auto"
         >
           Editar set
@@ -82,7 +83,7 @@ export default async function SetDetailPage({
           {trackRows.length === 0 ? (
             <p className="font-serif italic text-ink-mute text-center py-12">
               Nenhuma faixa neste set.{' '}
-              <Link href={`/sets/${set.id}/montar`} className="text-accent hover:underline">
+              <Link href={`/sets/${set.id}/montar`} prefetch={false} className="text-accent hover:underline">
                 Começar a montar →
               </Link>
             </p>
@@ -111,6 +112,7 @@ export default async function SetDetailPage({
                     <p className="label-tech mt-0.5 truncate">
                       <Link
                         href={`/disco/${t.recordId}`}
+                        prefetch={false}
                         className="hover:text-accent transition-colors"
                       >
                         {t.artist} · {t.recordTitle}

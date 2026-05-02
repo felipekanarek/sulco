@@ -24,6 +24,7 @@ export default async function AdminPage() {
         </div>
         <Link
           href="/admin/convites"
+          prefetch={false}
           className="font-mono text-[11px] uppercase tracking-[0.12em] border border-line text-ink hover:border-ink active:border-ink px-4 py-2 min-h-[44px] inline-flex items-center justify-center rounded-sm transition-colors self-start md:self-auto"
         >
           Convites →

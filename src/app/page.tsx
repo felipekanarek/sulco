@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
-import { getImportProgress } from '@/lib/actions';
+import { getImportProgressLight } from '@/lib/actions';
 
 // getImportProgress pode disparar after(runInitialImport) para continuar
 // imports que pararam em serverless timeout. after() herda o maxDuration
@@ -51,9 +51,13 @@ export default async function CollectionPage({
   // Inc 22 (paginação): page=1 default; pageSize fixo 50.
   const page = Math.max(1, Number(sp.page) || 1);
 
-  const [progress, rows, availableGenres, availableStyles, counts, selectedTotal] =
+  // Inc 26: getImportProgressLight retorna {shouldShow:false} no caso
+  // comum (DJ com import já reconhecido + idle), economizando ~3 queries.
+  // No caso edge (running ou unacked), retorna {shouldShow:true, progress}
+  // com mesmo custo do fluxo antigo.
+  const [importLight, rows, availableGenres, availableStyles, counts, selectedTotal] =
     await Promise.all([
-      getImportProgress(),
+      getImportProgressLight(),
       queryCollection({ userId: user.id, status, text, genres, styles, bomba, page }),
       listUserGenres(user.id),
       listUserStyles(user.id),
@@ -61,14 +65,17 @@ export default async function CollectionPage({
       countSelectedTracks(user.id),
     ]);
 
-  const canResume =
-    progress.outcome === 'idle' ||
-    progress.outcome === 'rate_limited' ||
-    progress.outcome === 'parcial';
-  if (canResume && !progress.running) {
-    runInitialImport(user.id).catch((err) => {
-      console.error('[sulco] runInitialImport (fallback / page) falhou:', err);
-    });
+  if (importLight.shouldShow) {
+    const progress = importLight.progress;
+    const canResume =
+      progress.outcome === 'idle' ||
+      progress.outcome === 'rate_limited' ||
+      progress.outcome === 'parcial';
+    if (canResume && !progress.running) {
+      runInitialImport(user.id).catch((err) => {
+        console.error('[sulco] runInitialImport (fallback / page) falhou:', err);
+      });
+    }
   }
 
   const hasFilters =
@@ -94,7 +101,7 @@ export default async function CollectionPage({
         </dl>
       </section>
 
-      <ImportProgressCard initial={progress} />
+      {importLight.shouldShow && <ImportProgressCard initial={importLight.progress} />}
 
       <FilterBar
         status={status}
@@ -119,7 +126,10 @@ export default async function CollectionPage({
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState hasFilters={hasFilters} importRunning={progress.running} />
+        <EmptyState
+          hasFilters={hasFilters}
+          importRunning={importLight.shouldShow && importLight.progress.running}
+        />
       ) : view === 'grade' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
           {rows.map((r) => (

@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 import { notFound, redirect } from 'next/navigation';
@@ -31,6 +32,9 @@ export type CurrentUser = {
   needsOnboarding: boolean;
   isOwner: boolean;
   allowlisted: boolean;
+  // Inc 26: incluído no objeto cached pra evitar SELECT extra em
+  // getImportProgressLight (caminho condicional do home).
+  importAcknowledgedAt: Date | null;
 };
 
 /**
@@ -42,7 +46,7 @@ export type CurrentUser = {
  *   cria a linha com email vazio e a retorna. O webhook `user.updated` atualiza
  *   o email posteriormente. NUNCA retorna `null` quando há userId válido.
  */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) return null;
 
@@ -87,7 +91,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   }
 
   return toCurrentUser(created[0]);
-}
+});
 
 function toCurrentUser(u: typeof users.$inferSelect): CurrentUser {
   return {
@@ -100,6 +104,7 @@ function toCurrentUser(u: typeof users.$inferSelect): CurrentUser {
     needsOnboarding: !u.discogsUsername || !u.discogsTokenEncrypted,
     isOwner: u.isOwner,
     allowlisted: u.allowlisted,
+    importAcknowledgedAt: u.importAcknowledgedAt,
   };
 }
 
@@ -110,7 +115,7 @@ function toCurrentUser(u: typeof users.$inferSelect): CurrentUser {
  * redireciona para `/convite-fechado`. Quem não deve ser interceptado
  * (ex: a página `/convite-fechado` em si) não chama este helper.
  */
-export async function requireCurrentUser(): Promise<CurrentUser> {
+export const requireCurrentUser = cache(async (): Promise<CurrentUser> => {
   const user = await getCurrentUser();
   if (!user) {
     throw new Error('Not authenticated');
@@ -119,7 +124,7 @@ export async function requireCurrentUser(): Promise<CurrentUser> {
     redirect('/convite-fechado');
   }
   return user;
-}
+});
 
 /**
  * Guard de rota admin (FR-011, 002-multi-conta). Chama `notFound()` —
