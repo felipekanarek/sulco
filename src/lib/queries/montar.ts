@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-or
 import { db } from '@/db';
 import { records, setTracks, tracks } from '@/db/schema';
 import { matchesNormalizedText } from '@/lib/text';
+import { getUserFacets } from '@/lib/queries/user-facets';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 
@@ -224,27 +225,26 @@ export async function listSetTracks(setId: number, userId: number) {
   return rows;
 }
 
-/** Vocabulário distinto usado em faixas SELECIONADAS de discos ATIVOS do user. */
+/**
+ * Vocabulário distinto usado em faixas do user (Inc 28: derivado de
+ * `user_facets.moodsJson`/`contextsJson` em vez de scan de tracks).
+ *
+ * **Mudança semântica aceita no Inc 28**: a versão original filtrava
+ * `archived=false AND status='active' AND selected=true` (só vocab
+ * de tracks selecionadas em discos ativos). A versão materializada em
+ * `user_facets` filtra apenas `archived=false` (vocab geral da coleção
+ * não-arquivada). Trade-off: picker pode mostrar moods/contexts que
+ * não têm candidatos resultantes (DJ filtra → 0 resultados). Ganho:
+ * -20k rows lidas por render do `/sets/[id]/montar` (cache materializado
+ * via Inc 24 + react.cache do Inc 26 = 1 SELECT a row de user_facets).
+ *
+ * Felipe (mantenedor) registrou que filtros do montar precisam de UX
+ * rework futuro — ver BACKLOG release notes do Inc 28 + entry novo.
+ */
 export async function listSelectedVocab(
   userId: number,
   kind: 'moods' | 'contexts',
 ): Promise<string[]> {
-  const column = kind === 'moods' ? tracks.moods : tracks.contexts;
-  const rows = await db
-    .select({ value: sql<string>`DISTINCT value` })
-    .from(tracks)
-    .innerJoin(records, eq(records.id, tracks.recordId))
-    .innerJoin(sql`json_each(${column})`, sql`1=1`)
-    .where(
-      and(
-        eq(records.userId, userId),
-        eq(records.archived, false),
-        eq(records.status, 'active'),
-        eq(tracks.selected, true),
-      ),
-    );
-  return rows
-    .map((r) => r.value)
-    .filter((v): v is string => typeof v === 'string' && v.length > 0)
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const facets = await getUserFacets(userId);
+  return kind === 'moods' ? facets.moods : facets.contexts;
 }

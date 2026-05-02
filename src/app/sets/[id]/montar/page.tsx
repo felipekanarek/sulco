@@ -13,7 +13,6 @@ import { MontarFiltersForm } from '@/components/montar-filters';
 import { MontarCandidates } from '@/components/montar-candidates';
 import { SetSidePanel } from '@/components/set-side-panel';
 import { EditSetModal } from '@/components/edit-set-modal';
-import { getUserAIConfigStatus } from '@/lib/ai';
 
 type SearchParams = Promise<{
   bpmMin?: string;
@@ -66,14 +65,15 @@ export default async function MontarSetPage({
   // 003 FR-014a: faixas já na bag NÃO são excluídas da lista de
   // candidatos. Elas seguem visíveis, marcadas via `alreadyIn` prop,
   // pra DJ manter contexto (avaliar outras do mesmo disco etc.).
-  const [candidates, moodSuggestions, contextSuggestions, aiStatus] =
-    await Promise.all([
-      queryCandidates(user.id, filters),
-      listSelectedVocab(user.id, 'moods'),
-      listSelectedVocab(user.id, 'contexts'),
-      getUserAIConfigStatus(user.id),
-    ]);
-  const aiConfigured = aiStatus.configured;
+  // Inc 28 Frente C: listSelectedVocab agora deriva de user_facets
+  // (cached). Inc 28 Frente B: aiConfigured derivado do user cached
+  // (Inc 27 trouxe aiProvider/aiModel pro requireCurrentUser).
+  const [candidates, moodSuggestions, contextSuggestions] = await Promise.all([
+    queryCandidates(user.id, filters),
+    listSelectedVocab(user.id, 'moods'),
+    listSelectedVocab(user.id, 'contexts'),
+  ]);
+  const aiConfigured = user.aiProvider !== null && user.aiModel !== null;
 
   const uniqueRecords = new Set(inSetTracks.map((t) => t.recordId)).size;
   const atLimit = inSetTracks.length >= 300;

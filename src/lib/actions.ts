@@ -1429,22 +1429,24 @@ export async function addTrackToSet(
     .limit(1);
   if (trackOk.length === 0) return { ok: false, error: 'Faixa não encontrada.' };
 
-  // FR-029a: verifica limite 300
-  const countRows = await db
-    .select({ c: sql<number>`COUNT(*)` })
+  // Inc 28 Frente D: combinar COUNT (limite 300) + MAX(order) em 1 SELECT.
+  // Era 2 queries separadas, mesma WHERE clause.
+  const [stats] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      maxOrder: sql<number>`COALESCE(MAX(${setTracksTable.order}), -1)`,
+    })
     .from(setTracksTable)
     .where(eq(setTracksTable.setId, parsed.data.setId));
-  const currentCount = Number(countRows[0]?.c ?? 0);
+  const currentCount = Number(stats?.total ?? 0);
+  const maxOrder = Number(stats?.maxOrder ?? -1);
+
+  // FR-029a: verifica limite 300
   if (currentCount >= 300) {
     return { ok: false, error: 'Limite de 300 faixas por set atingido.' };
   }
 
-  // Próximo order
-  const maxOrderRows = await db
-    .select({ m: sql<number>`COALESCE(MAX(${setTracksTable.order}), -1)` })
-    .from(setTracksTable)
-    .where(eq(setTracksTable.setId, parsed.data.setId));
-  const nextOrder = Number(maxOrderRows[0]?.m ?? -1) + 1;
+  const nextOrder = maxOrder + 1;
 
   await db
     .insert(setTracksTable)
