@@ -83,7 +83,7 @@ export default async function MontarSetPage({
       <section className="flex flex-col md:grid md:grid-cols-[1fr_auto] md:items-end gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-2">
-            <Link href={`/sets/${set.id}`} className="hover:text-ink transition-colors">
+            <Link href={`/sets/${set.id}`} prefetch={false} className="hover:text-ink transition-colors">
               ← {set.name}
             </Link>{' '}
             · montar
@@ -102,6 +102,7 @@ export default async function MontarSetPage({
           />
           <Link
             href={`/sets/${set.id}`}
+            prefetch={false}
             className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors"
           >
             Finalizar →

@@ -41,6 +41,7 @@ export function ConflictRow({ conflict }: { conflict: TrackConflict }) {
         <p className="label-tech truncate">
           <Link
             href={`/disco/${conflict.recordId}`}
+            prefetch={false}
             className="hover:text-accent transition-colors"
           >
             {conflict.artist} · {conflict.recordTitle}

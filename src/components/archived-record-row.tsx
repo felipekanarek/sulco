@@ -36,6 +36,7 @@ export function ArchivedRecordRow({ record }: { record: ArchivedPending }) {
     <li className="grid grid-cols-[56px_1fr_auto] gap-4 py-4 border-b border-line-soft items-center">
       <Link
         href={`/disco/${record.recordId}`}
+        prefetch={false}
         className="w-14 h-14 block border border-line relative overflow-hidden"
       >
         {record.coverUrl && !coverFailed ? (
@@ -54,7 +55,7 @@ export function ArchivedRecordRow({ record }: { record: ArchivedPending }) {
       </Link>
       <div className="min-w-0">
         <p className="label-tech truncate">{record.artist}</p>
-        <Link href={`/disco/${record.recordId}`}>
+        <Link href={`/disco/${record.recordId}`} prefetch={false}>
           <h3 className="font-serif italic text-[17px] leading-tight truncate hover:text-accent transition-colors">
             {record.title}
           </h3>

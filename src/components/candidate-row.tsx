@@ -111,6 +111,7 @@ export function CandidateRow({
       <div className="flex items-center gap-3 md:contents">
         <Link
           href={`/disco/${candidate.recordId}`}
+          prefetch={false}
           className="w-12 h-12 block border border-line relative overflow-hidden md:mt-1 shrink-0"
           aria-label={`Abrir ${candidate.artist} — ${candidate.recordTitle}`}
         >
@@ -307,6 +308,7 @@ export function CandidateRow({
               <p className="mt-3">
                 <Link
                   href={`/disco/${candidate.recordId}`}
+                  prefetch={false}
                   className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft hover:text-accent transition-colors"
                 >
                   → abrir curadoria

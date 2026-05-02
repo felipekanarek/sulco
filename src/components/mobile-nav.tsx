@@ -57,9 +57,6 @@ function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
         <NavItem href="/sets" onClick={onClose}>
           Sets
         </NavItem>
-        <NavItem href="/curadoria" onClick={onClose}>
-          Curadoria
-        </NavItem>
         <NavItem href="/status" onClick={onClose}>
           Sync
         </NavItem>

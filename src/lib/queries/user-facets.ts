@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks, userFacets } from '@/db/schema';
@@ -42,7 +43,9 @@ function parseJsonArray<T>(s: string | null | undefined, fallback: T[]): T[] {
   }
 }
 
-export async function getUserFacets(userId: number): Promise<UserFacets> {
+// Inc 26: wrappar em react.cache() pra dedupar calls dentro do
+// mesmo render RSC (4-5 callers paralelos viram 1 SELECT).
+export const getUserFacets = cache(async (userId: number): Promise<UserFacets> => {
   const [row] = await db
     .select()
     .from(userFacets)
@@ -80,7 +83,7 @@ export async function getUserFacets(userId: number): Promise<UserFacets> {
     tracksSelectedTotal: row.tracksSelectedTotal,
     updatedAt: row.updatedAt,
   };
-}
+});
 
 /* -------- Internas (queries pesadas) -------- */
 

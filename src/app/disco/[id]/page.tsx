@@ -64,7 +64,7 @@ export default async function RecordDetailPage({
       <section className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 md:gap-8 pb-4 md:pb-6 border-b border-line mb-6 md:mb-8">
         <div>
           <p className="eyebrow mb-2">
-            <Link href="/" className="hover:text-ink transition-colors">
+            <Link href="/" prefetch={false} className="hover:text-ink transition-colors">
               ← Coleção
             </Link>{' '}
             · disco {disc.id}
@@ -73,6 +73,7 @@ export default async function RecordDetailPage({
         </div>
         <Link
           href="/"
+          prefetch={false}
           className="hidden md:inline-flex font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 min-h-[44px] items-center justify-center rounded-sm hover:bg-accent transition-colors whitespace-nowrap"
         >
           ✓ Concluir e voltar à coleção
@@ -135,12 +136,7 @@ export default async function RecordDetailPage({
               >
                 → Ver no Discogs
               </a>
-              <Link
-                href="/curadoria"
-                className="block font-mono text-[11px] uppercase tracking-[0.1em] text-ink-soft hover:text-accent py-2 min-h-[44px] flex items-center"
-              >
-                → Voltar à triagem
-              </Link>
+              {/* Inc 26: link "Voltar à triagem" → /curadoria removido (rota deletada). */}
             </div>
           </div>
         </aside>
@@ -202,6 +198,7 @@ export default async function RecordDetailPage({
             </p>
             <Link
               href="/"
+              prefetch={false}
               className="font-mono text-[11px] uppercase tracking-[0.14em] bg-ink text-paper px-6 py-3 min-h-[44px] flex items-center justify-center rounded-sm hover:bg-accent transition-colors whitespace-nowrap self-start md:self-auto"
             >
               ✓ Concluir e voltar à coleção

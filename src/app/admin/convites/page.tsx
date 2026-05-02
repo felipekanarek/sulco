@@ -15,7 +15,7 @@ export default async function AdminInvitesPage() {
   return (
     <main className="max-w-[760px] mx-auto px-4 md:px-8 pt-8 md:pt-12 pb-16 md:pb-24">
       <p className="eyebrow mb-3">
-        <Link href="/admin" className="hover:text-ink">
+        <Link href="/admin" prefetch={false} className="hover:text-ink">
           ← Painel
         </Link>
         {' · '}

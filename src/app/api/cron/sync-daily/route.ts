@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import { runDailyAutoSync } from '@/lib/discogs/sync';
+import { killZombieSyncRuns } from '@/lib/discogs/zombie';
 
 /**
  * POST /api/cron/sync-daily — FR-032, contracts/cron-endpoint.md.
@@ -55,6 +56,21 @@ export async function POST(req: NextRequest) {
   let okCount = 0;
   let rateLimitedCount = 0;
   let errCount = 0;
+  let zombiesKilled = 0;
+
+  // Inc 26: zombie cleanup centralizado aqui (era em getImportProgress
+  // e loadStatusSnapshot, rodando 1× por load — agora 1×/dia/user).
+  // Itera TODOS os users (não só os com credencial Discogs), pois
+  // zombies podem existir em syncRuns de qualquer kind.
+  const allUsers = await db.select({ id: users.id }).from(users);
+  for (const u of allUsers) {
+    try {
+      await killZombieSyncRuns(u.id);
+      zombiesKilled += 1;
+    } catch (err) {
+      console.error(`[cron] killZombieSyncRuns falhou pra user ${u.id}:`, err);
+    }
+  }
 
   for (const userId of runnable) {
     try {
@@ -74,6 +90,7 @@ export async function POST(req: NextRequest) {
       ok: okCount,
       rate_limited: rateLimitedCount,
       erro: errCount,
+      zombies_swept: zombiesKilled,
       durationMs: Date.now() - started,
     },
     { status: 200 },

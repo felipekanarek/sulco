@@ -241,13 +241,52 @@ const getImportProgressRead = cacheUser(getImportProgressReadRaw, 'getImportProg
 export async function getImportProgress(): Promise<ImportProgress> {
   const user = await requireCurrentUser();
 
-  // Em serverless, o worker do import morre a cada ~60s (maxDuration Hobby).
-  // Mata zumbis antes de ler estado — assim o UI sempre mostra algo coerente.
-  // Mantido FORA do cache (write side-effect).
-  await killZombieSyncRuns(user.id, 'initial_import');
+  // Inc 26: zombie cleanup movido pra cron diário (`/api/cron/sync-daily`).
+  // Trade-off: zombie pode demorar até 24h pra ser detectado, mas evita
+  // 1 UPDATE em sync_runs por load de página.
 
-  // Cache via Map in-memory mantém Date intactos (sem serialização).
   return getImportProgressRead(user.id);
+}
+
+/**
+ * Inc 26 — Versão "light" pra render condicional na home.
+ *
+ * Caso comum (DJ com import já reconhecido + idle): retorna
+ * `{ shouldShow: false }` em 1 SELECT mínimo (`sync_runs latest`).
+ * Caso edge (running ou unacked): chama `getImportProgress()` cheio
+ * pra preencher x/y/outcome — custo igual ao atual.
+ *
+ * Reduz ~3 queries/load pra 99% dos loads (DJ com import antigo
+ * já reconhecido).
+ */
+export async function getImportProgressLight(): Promise<
+  | { shouldShow: false }
+  | { shouldShow: true; progress: ImportProgress }
+> {
+  const user = await requireCurrentUser(); // Inc 26: cached via react.cache()
+  const lastAck = user.importAcknowledgedAt;
+
+  const [latest] = await db
+    .select({
+      outcome: syncRuns.outcome,
+      startedAt: syncRuns.startedAt,
+    })
+    .from(syncRuns)
+    .where(and(eq(syncRuns.userId, user.id), eq(syncRuns.kind, 'initial_import')))
+    .orderBy(desc(syncRuns.startedAt))
+    .limit(1);
+
+  const isRunning = latest?.outcome === 'running';
+  const isUnacked =
+    latest?.startedAt != null &&
+    (lastAck == null || latest.startedAt.getTime() > lastAck.getTime());
+
+  if (!isRunning && !isUnacked) {
+    return { shouldShow: false };
+  }
+
+  const progress = await getImportProgress();
+  return { shouldShow: true, progress };
 }
 
 type LatestRow = {
@@ -627,7 +666,6 @@ export async function updateRecordStatus(input: {
   }
 
   revalidatePath('/');
-  revalidatePath('/curadoria');
   revalidatePath(`/disco/${parsed.data.recordId}`);
   revalidateUserCache(user.id);
   return { ok: true };
@@ -745,7 +783,6 @@ export async function updateTrackCuration(
   }
 
   revalidatePath(`/disco/${parsed.data.recordId}`);
-  revalidatePath('/curadoria');
   revalidatePath('/');
   revalidateUserCache(user.id);
   return { ok: true };
@@ -819,7 +856,6 @@ export async function updateRecordAuthorFields(
   }
 
   revalidatePath(`/disco/${parsed.data.recordId}`);
-  revalidatePath('/curadoria');
   revalidatePath('/');
   revalidateUserCache(user.id);
   return { ok: true };

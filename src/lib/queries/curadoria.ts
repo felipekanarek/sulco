@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 
@@ -32,6 +32,12 @@ export function compareTrackPositions(a: string, b: string): number {
   if (pa.track !== pb.track) return pa.track - pb.track;
   return a.localeCompare(b);
 }
+
+// Inc 26: rota /curadoria deletada (legado morto). Manteve-se este
+// arquivo porque `loadDisc`, `compareTrackPositions`, `CuradoriaDisc`
+// e `CuradoriaStatusFilter` ainda são usados por `/disco/[id]` e
+// `acousticbrainz/index.ts`. `listCuradoriaIds` (exclusivo de
+// /curadoria) foi removido.
 
 export type CuradoriaStatusFilter = 'unrated' | 'active' | 'discarded' | 'all';
 
@@ -72,27 +78,6 @@ export type CuradoriaDisc = {
     previewUrlCachedAt: Date | null;
   }[];
 };
-
-/**
- * Retorna TODOS os IDs de records que pertencem ao filtro de triagem,
- * ordenados por `importedAt ASC` (mesma ordem em que foram importados).
- * Usado para construir a lista sequencial de /curadoria.
- */
-export async function listCuradoriaIds(
-  userId: number,
-  statusFilter: CuradoriaStatusFilter,
-): Promise<number[]> {
-  const conds: SQL[] = [eq(records.userId, userId), eq(records.archived, false)];
-  if (statusFilter !== 'all') {
-    conds.push(eq(records.status, statusFilter));
-  }
-  const rows = await db
-    .select({ id: records.id })
-    .from(records)
-    .where(and(...conds))
-    .orderBy(asc(records.importedAt), asc(records.id));
-  return rows.map((r) => r.id);
-}
 
 /** Carrega um disco específico pelo id (escopo do user) com suas faixas. */
 export async function loadDisc(
