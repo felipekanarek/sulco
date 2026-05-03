@@ -6,6 +6,7 @@ import type { Record as RecordRow } from '@/db/schema';
 import { normalizeText } from '@/lib/text';
 import { cacheUser } from '@/lib/cache';
 import { getUserFacets } from '@/lib/queries/user-facets';
+import { listVocab } from '@/lib/queries/user-vocab';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
@@ -224,22 +225,23 @@ export async function countSelectedTracks(userId: number): Promise<number> {
 
 export type FacetCount = { value: string; count: number };
 
-// Inc 24: derivado de user_facets.genresJson/stylesJson (1 SELECT total).
+// Inc 33: derivado de user_vocab (1 SELECT contra index).
+// Wrapper preservando assinatura externa (FacetCount = {value, count}).
 export async function listUserGenres(userId: number): Promise<FacetCount[]> {
-  const f = await getUserFacets(userId);
-  return f.genres;
+  const entries = await listVocab(userId, 'genres');
+  return entries.map((e) => ({ value: e.term, count: e.count }));
 }
 
 export async function listUserStyles(userId: number): Promise<FacetCount[]> {
-  const f = await getUserFacets(userId);
-  return f.styles;
+  const entries = await listVocab(userId, 'styles');
+  return entries.map((e) => ({ value: e.term, count: e.count }));
 }
 
 /**
  * Lista distinct de prateleiras (`shelfLocation`) em uso pelo user.
- * Inc 24: derivado de user_facets.shelvesJson.
+ * Inc 33: derivado de user_vocab kind='shelves'.
  */
 export async function listUserShelves(userId: number): Promise<string[]> {
-  const f = await getUserFacets(userId);
-  return f.shelves;
+  const entries = await listVocab(userId, 'shelves');
+  return entries.map((e) => e.term);
 }
