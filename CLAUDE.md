@@ -262,15 +262,24 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **029-drop-user-facets-json** (BACKLOG: Inc 34)
+Current active feature: nenhuma — última release shipped foi Inc 34
+(029-drop-user-facets-json) em 2026-05-03. Inc 34 fechou o ciclo de
+cleanup pós-otimizações de reads (Inc 22-33). Próximas candidatas
+no BACKLOG: Inc 30 (excluir set), Inc 31 (UX bag física), Inc 29
+(UX rework filtros montar) — todas UX puras, zero relação com reads.
+
+Prior active (now legacy):
+
+**029-drop-user-facets-json** (BACKLOG: Inc 34)
 
 Authoritative planning artifacts (read these before making changes
-ao schema da tabela `user_facets` em `src/db/schema.ts` (5 colunas
-JSON removidas), tipo `UserFacets` em `src/lib/queries/user-facets.ts`
-(enxugado para 7 campos), `recomputeFacets` (perde 5 chamadas a
-agregadores no Promise.all + 5 fields no INSERT/onConflictDoUpdate),
-ou helpers privados `aggregateFacet`/`aggregateVocabulary`/
-`aggregateShelves` (deletados)):
+ao schema da tabela `user_facets` em `src/db/schema.ts` (apenas 7
+colunas: userId + 4 records counters + tracksSelectedTotal +
+updatedAt), tipo `UserFacets` em `src/lib/queries/user-facets.ts`
+(7 campos), `recomputeFacets` (apenas counters + chamada a
+`_repopulateVocab` self-contained), ou `_repopulateVocab` (agrega
+genres/styles inline via SELECT em records + reusa
+`_aggregateVocabCounts`/`_aggregateShelfCounts`)):
 
 - Plan: [specs/029-drop-user-facets-json/plan.md](specs/029-drop-user-facets-json/plan.md)
 - Spec: [specs/029-drop-user-facets-json/spec.md](specs/029-drop-user-facets-json/spec.md)

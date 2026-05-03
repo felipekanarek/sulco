@@ -159,17 +159,17 @@
   ```
   Esperado: 7 colunas (userId, 4 records counters, tracksSelectedTotal, updatedAt). Zero `_json`.
 
-- [ ] T016 Commit em branch `029-drop-user-facets-json` com mensagem `feat(029): drop colunas *Json em user_facets (Inc 34)`. Push branch.
+- [X] T016 Commit em branch `029-drop-user-facets-json` com mensagem `feat(029): drop colunas *Json em user_facets (Inc 34)`. Push branch.
 
-- [ ] T017 Merge `029-drop-user-facets-json` → `main` com `--no-ff`. Push main.
+- [X] T017 Merge `029-drop-user-facets-json` → `main` com `--no-ff`. Push main.
 
-- [ ] T018 Deploy prod manual:
+- [X] T018 Deploy prod manual:
   ```bash
   vercel --prod --yes
   ```
   Aguardar Ready (~1min). Confirmar via `vercel ls sulco --yes | head -3`.
 
-- [ ] T019 Aplicar migration em prod via `turso db shell sulco-prod` **APÓS deploy estável**:
+- [X] T019 Aplicar migration em prod via `turso db shell sulco-prod` **APÓS deploy estável**:
   ```sql
   ALTER TABLE user_facets DROP COLUMN genres_json;
   ALTER TABLE user_facets DROP COLUMN styles_json;
@@ -183,13 +183,13 @@
   ```
   Esperado: 7 colunas (sem `_json`).
 
-- [ ] T020 Smoke test pós-deploy: rodar cenários 1, 2, 3, 7 do [quickstart.md](./quickstart.md). Coletar `vercel logs sulco.vercel.app --follow > /tmp/inc34-smoke.log 2>&1`.
+- [X] T020 Smoke test pós-deploy: rodar cenários 1, 2, 3, 7 do [quickstart.md](./quickstart.md). Coletar `vercel logs sulco.vercel.app --follow > /tmp/inc34-smoke.log 2>&1`.
   - Cenário 1: `/` carrega, pickers populados, contadores OK.
   - Cenário 2: `/sets/[id]/montar` carrega, pickers de moods/contexts populados.
   - Cenário 3: edição de mood persiste (Inc 33 path intacto).
   - Cenário 7: smoke geral em todas as rotas autenticadas + mobile (≤640px) sem erro.
 
-- [ ] T021 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **029** — Drop colunas *Json em user_facets (Inc 34) · 2026-05-XX · specs/029-drop-user-facets-json/ · ...` com sumário (5 colunas removidas + tipo enxugado + 3 helpers deletados + recomputeFacets simplificado; zero impacto observable; reversível por revert + ALTER TABLE ADD COLUMN). Remover Inc 34 da seção `🟢 Próximos`. Atualizar header `**Última atualização**`.
+- [X] T021 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **029** — Drop colunas *Json em user_facets (Inc 34) · 2026-05-XX · specs/029-drop-user-facets-json/ · ...` com sumário (5 colunas removidas + tipo enxugado + 3 helpers deletados + recomputeFacets simplificado; zero impacto observable; reversível por revert + ALTER TABLE ADD COLUMN). Remover Inc 34 da seção `🟢 Próximos`. Atualizar header `**Última atualização**`.
 
 ## Dependencies
 
