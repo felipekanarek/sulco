@@ -44,3 +44,25 @@ export function matchesNormalizedText(
   }
   return false;
 }
+
+/**
+ * Compõe a string `search_text` materializada em `records` (Inc 32).
+ *
+ * Concatena `artist + ' ' + title + ' ' + (label ?? '')` e aplica
+ * `normalizeText`. Determinístico: mesma input → mesma output.
+ * Pode rodar múltiplas vezes sem divergir (idempotente para
+ * backfill).
+ *
+ * Usado por:
+ * - `applyDiscogsUpdate` em src/lib/discogs/apply-update.ts (sync)
+ * - `runInitialImport` em src/lib/discogs/import.ts (import)
+ * - `scripts/_backfill-search-text.mjs` (backfill — re-implementa
+ *   inline pois script Node não importa de TS)
+ */
+export function computeRecordSearchText(
+  artist: string,
+  title: string,
+  label: string | null,
+): string {
+  return normalizeText([artist, title, label ?? ''].join(' '));
+}

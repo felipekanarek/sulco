@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-05-01 (Bug 16 incluído no pacote 022 — fix poller + cache getImportProgress)
+**Última atualização**: 2026-05-02 (Inc 32 entregue — search text materializado em records)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -75,67 +75,6 @@ CREATE INDEX user_vocab_user_kind_idx ON user_vocab(user_id, kind);
 **Esforço**: ~5-6h via speckit. Mais pesado que Inc 27 mas resolve definitivamente o gargalo de vocabulário em todas as telas.
 
 **Drop das colunas `*Json` em `user_facets`**: fica para Inc 34 (cleanup separado, ~30min). Reduz risco do Inc 33.
-
-#### Incremento 32 — Search text materializado em records (paginação SQL com busca)
-
-Diagnóstico em prod (sessão 2026-05-02 pós-Inc 28) revelou que o
-home `/` carrega ~2588 rows (coleção inteira) quando há text
-filter ativo na URL (`?q=...`). Causa: Inc 18 (busca insensitive
-a acentos) deliberadamente desabilitou paginação SQL com text
-filter porque SQLite/Turso não tem `unaccent` nativo — filtro
-roda em JS pós-query, exigindo carregar tudo. Trade-off pesa:
-8 loads de `/` × 2588 rows = ~21k rows lidas só nos loads da
-home com busca.
-
-Solução: **coluna pre-normalizada `records.searchText` + index
-+ LIKE SQL**.
-
-**Schema delta**: 1 coluna nova em `records`:
-```sql
-ALTER TABLE records ADD COLUMN search_text TEXT NOT NULL DEFAULT '';
-CREATE INDEX records_user_search_text_idx ON records(user_id, search_text);
-```
-
-`search_text` armazena versão normalizada (`lowercase + NFD +
-remove diacritics`) de `artist + ' ' + title + ' ' +
-(label ?? '')`.
-
-**Hooks**:
-- `applyDiscogsUpdate` (sync): computa `search_text` ao
-  insert/update.
-- `runInitialImport`: idem para cada record novo.
-
-**Refator** em `buildCollectionFilters`:
-- text path passa a usar `LIKE '%' + normalizeText(q.text) +
-  '%'` em SQL contra `records.searchText`.
-- Remove `omitText: true` flag e o post-query `matchesNormalizedText`.
-- SQL com LIMIT/OFFSET volta a funcionar pra paginação.
-
-**Backfill**: script `_backfill-search-text.mjs` populando
-`search_text` pra todos os records existentes (1× via env prod).
-
-**Ganho**:
-- Load `/` com text filter: 2588 → ~50 rows lidas (-98%).
-- Cobertura completa de busca insensitive a acentos preservada
-  (a coluna já é normalizada, LIKE casa diretamente).
-- Outras telas com `buildCollectionFilters` (e.g.
-  `pickRandomUnratedRecord` em /011) também ganham.
-
-**Princípios**:
-- I (Soberania): `search_text` é zona SYS derivada de campos
-  Discogs (artist/title/label) — não toca AUTHOR.
-- II (Server-First): SQL volta a fazer todo trabalho. JS
-  pós-filter some.
-- III (Schema verdade): 1 coluna nova + 1 index. Migration via
-  Turso shell.
-- IV (Preservar): código antigo pode ser removido após validação
-  (Inc 21 fica obsoleto na parte de SQL — `normalizeText` em
-  text.ts continua útil pra UI).
-- V (Mobile-Native): buscas mais rápidas em rede 3G (paginação
-  SQL = 50 rows vs 2588 antes).
-
-**Esforço**: ~2h via speckit (schema delta + migration + hooks +
-refator filtro + backfill).
 
 #### Incremento 30 — Excluir set
 
@@ -665,6 +604,7 @@ spec/plan/data-model/contracts/quickstart.
 - **019** — Editar status do disco direto na grid (Inc 19) · 2026-04-29 · `specs/019-edit-status-on-grid/` · botões inline `Ativar`/`Descartar`/`Reativar` em cada item da grid `/` (ambas views — `<RecordRow>` list + `<RecordGridCard>` grid) com optimistic UI ≤100ms via `useTransition` + `useState<optimistic>`; rollback visual em erro com mensagem inline auto-dismiss 5s (Clarification Q2 — toast-like, sem botão fechar); pattern Inbox-zero (Clarification Q1) — card some naturalmente após `revalidatePath('/')` quando filtro corrente exclui novo status; reusa Server Action `updateRecordStatus` existente (Zod + ownership + revalidatePath nas 3 rotas) sem mudança; botões condicionais por status (`unrated` → Ativar+Descartar; `active` → Descartar; `discarded` → Reativar) com `aria-label` descritivo + tap target `min-h-[44px] md:min-h-[32px]` (Princípio V mobile + densidade desktop); discos `archived` ficam fora (filtrados pela query); 1 client component novo `<RecordStatusActions>` compartilhado entre as duas views via prop `className`; zero schema delta, zero novas Server Actions
 - **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit). Bug 15 hotfix incluído (commit `0615c24`): MobileDrawer vazava em desktop por portal — fix com `matchMedia` + render condicional.
 - **021** — Busca insensitive a acentos (Inc 18) · 2026-04-30 · `specs/021-accent-insensitive-search/` · busca textual em `/` (home) e `/sets/[id]/montar` agora normaliza diacríticos antes de comparar — digitar `joao` acha `João Gilberto`, `acucar` acha `Açúcar`, `sergio` acha `Sérgio`, bidirecional (FR-003); novo helper puro `normalizeText(s)` em `src/lib/text.ts` (`lowercase + NFD + replace(/\p{M}/gu, '')`) + helper auxiliar `matchesNormalizedText(haystacks, query)` para DRY; cobertura universal Unicode (não só pt-BR — `naive`/`naïve`, `cafe`/`café`, `garcon`/`garçon`); JS-side post-query (SQLite/Turso não tem `unaccent` nativo): `buildCollectionFilters` ganha flag opcional `omitText` (default false); `queryCollection` carrega rows com filtros não-text via SQL e aplica `matchesNormalizedText` em `[artist, title, label]` antes da agregação de tracks; `queryCandidates` remove LIKE textual SQL + move `.limit()` pra JS (`slice(0, opts.limit ?? 300)`) APÓS filtro JS pra preservar candidatos válidos; `pickRandomUnratedRecord` (Inc 11) re-estrutura: SELECT amplo sem text → JS post-filter → `Math.random()` JS sobre filtrados (preserva uniformidade); filtros multi-select de tag (genres, styles, moods, contexts) permanecem exact match (vocabulário canônico — Decisão 8 do research) — `fineGenre` (texto livre) entra no text filter geral; zero schema delta, zero novas Server Actions; refator localizado em 4 arquivos. Princípios I/II/III/V todos OK.
+- **027** — Search text materializado em records (Inc 32) · 2026-05-02 · `specs/027-search-text-materialized/` · resolve gargalo identificado no diagnóstico pós-Inc 28: home `/?q=...` carregava 2588 rows quando text filter ativo, porque Inc 18 (busca accent-insensitive) deliberadamente desabilitou paginação SQL com text por falta de `unaccent` nativo no SQLite. **Schema delta**: 1 coluna `records.search_text TEXT NOT NULL DEFAULT ''` + 1 index `records_user_search_text_idx ON (user_id, search_text)`. `search_text` armazena versão pre-normalizada (`lowercase + NFD + strip diacritics`) de `artist + ' ' + title + ' ' + (label ?? '')`. **Helper novo** `computeRecordSearchText(artist, title, label)` em [src/lib/text.ts](src/lib/text.ts) reusa `normalizeText` do Inc 18. **Hooks em writes**: `applyDiscogsUpdate` em [src/lib/discogs/apply-update.ts](src/lib/discogs/apply-update.ts) computa `search_text` no INSERT e re-computa no UPDATE quando metadata muda; `runInitialImport` em [src/lib/discogs/import.ts](src/lib/discogs/import.ts) chama `applyDiscogsUpdate` no loop (cobertura automática, sem hook explícito). **Refator** em `buildCollectionFilters` em [src/lib/queries/collection.ts](src/lib/queries/collection.ts): flag `omitText` removida; text path passa a usar `LIKE '%' + normalizeText(q.text) + '%'` em SQL contra `records.search_text`. `queryCollection` sempre faz SQL `LIMIT/OFFSET` (branch condicional `hasTextFilter` removido). `pickRandomUnratedRecord` (Inc 11) em [src/lib/actions.ts](src/lib/actions.ts) sempre usa `ORDER BY RANDOM() LIMIT 1` (slow path JS post-filter eliminado). **Backfill** via `scripts/_backfill-search-text.mjs` (mesmo padrão Inc 24/27): re-implementa `normalizeText` inline (script Node não importa TS); 2597 records atualizados em prod 1× pré-deploy. **Migration aplicada em prod** via `turso db shell sulco-prod` antes do code deploy (ordem crítica documentada — code antes de backfill faria LIKE casar contra `''` e busca retornaria 0 em prod). Gate verificável: `SELECT COUNT(*) WHERE search_text=''` retornou 0 antes do push. **`queryCandidates` em montar.ts fica fora do escopo** — usa `matchesNormalizedText` JS sobre tracks (Inc 18) com LIMIT 1000 pré-filtro (Inc 23) mitigando; tracks viram Inc futuro se mostrar gargalo. **Ganho**: load `/?q=` cai de ~2588 → ≤50 rows lidas (-98%); cobertura accent/case-insensitive 100% preservada (LIKE contra normalized casa diretamente); paginação SQL volta a funcionar com text filter (LIMIT/OFFSET correto); `pickRandomUnratedRecord` cai de full-scan JS pra 1 row read em qualquer caso. Princípios I/II/III/IV/V todos OK. Helper `matchesNormalizedText` em text.ts mantido pra callers de tracks (montar.ts queryCandidates).
 - **026** — Otimização do fluxo de montar set (Inc 28) · 2026-05-02 · `specs/026-montar-set-perf/` · ataca o gargalo do `/sets/[id]/montar` em 4 frentes. **Frente C**: `listSelectedVocab` em [src/lib/queries/montar.ts](src/lib/queries/montar.ts) deriva de `user_facets.moodsJson`/`contextsJson` (Inc 24 + Inc 26 cached) em vez de scan de ~10k tracks por render. **Mudança semântica aceita pelo mantenedor**: vocab agora é o conjunto geral (archived=false), não restrito a selected+active — chip picker pode mostrar moods/contexts sem candidatos resultantes. Filtros do `/sets/[id]/montar` precisam de UX rework futuro (nota do mantenedor durante implementação). **Frente B (Inc 27 leftover)**: `aiConfigured` em `/sets/[id]/montar/page.tsx` derivado de `user.aiProvider`/`user.aiModel` cached (Inc 27 já trouxe esses campos pro `requireCurrentUser`). Eliminou 1 query/render. `getUserAIConfigStatus` em `src/lib/ai/index.ts` mantida pra `/conta/page.tsx` (caller legítimo). **Frente A — debounce filter persist**: `<MontarFiltersForm>` em [src/components/montar-filters.tsx](src/components/montar-filters.tsx) sobe de 400ms→500ms + flush on unmount via 2 `useRef` (`timerRef`, `pendingRef`) + useEffect cleanup que chama `saveMontarFilters` imediato fire-and-forget se houver pending. Antes navegação rápida descartava persist. **Frente D — `addTrackToSet`**: combina COUNT (limite 300) + COALESCE(MAX(order), -1) em 1 SELECT (era 2 separados com mesma WHERE). -1 query por add. Schema delta zero. Reversível por revert. Ganho esperado em curadoria de set (30 toggles + 20 adds + 5 removes): ~600 queries / ~1M rows reads → ~50 queries / ~5k rows reads (-99.5% rows, -92% queries). Princípios I/II/III/IV/V todos OK.
 - **025** — Recompute incremental + dedups remanescentes (Inc 27) · 2026-05-02 · `specs/025-incremental-recompute/` · ataca o caminho crítico de write (curadoria em `/disco/[id]`). Diagnóstico em prod (instrumentação `[DB]` pós-Inc 26) revelou que cada edição disparava `recomputeFacets` síncrono = ~7 queries pesadas + ~50-100k rows/edição → curadoria típica de 1 disco com 30 edições = ~2M+ rows lidas (estouro confirmado de cota Turso). Pacote consolida 3 frentes em 1 release. **Frente principal — delta updates direcionados em `user_facets`**: 5 helpers novos em [src/lib/queries/user-facets.ts](src/lib/queries/user-facets.ts) (`applyRecordStatusDelta`, `applyTrackSelectedDelta`, `recomputeShelvesOnly`, `recomputeVocabularyOnly`, `applyDeltaForWrite`) substituem `recomputeFacets` em 5 Server Actions de write críticas. Edições em campos não-materializados (BPM, key, energy, comment, rating, fineGenre, references, isBomb, aiAnalysis, notes) fazem **ZERO queries de delta**. Edições em status/selected fazem 1 UPDATE atomic com `MAX(0, x ± 1)` defensivo. Mudanças em moods/contexts/shelves disparam recompute parcial APENAS daquela faceta. Helper local `setEquals` em `updateTrackCuration` evita falso-positivo quando DJ envia mesma lista em ordem diferente. **Frente B — `aiProvider`/`aiModel` em `CurrentUser` cached**: tipo estendido em `src/lib/auth.ts`; `/disco/[id]/page.tsx` deriva `aiConfigured` direto do user cached (Inc 26 + Inc 27) — eliminou 1 query/render. `aiApiKeyEncrypted` INTENCIONALMENTE FORA do cached (princípio menor exposição — chave lida apenas em `getUserAIConfig` quando provider IA é chamado). **Frente C (drift correction)**: cron diário `/api/cron/sync-daily/route.ts` ganha `recomputeFacets(userId)` por user no fim — corrige drift residual (race em `applyRecordStatusDelta`, edição via SQL direto, edge cases) em ≤24h. `recomputeFacets` permanece exportado como fallback (usado em `runIncrementalSync`/`runInitialImport`/cron). **Server Actions skip total** em `acknowledgeArchivedRecord`/`acknowledgeAllArchived` (`archived_acknowledged_at` não está em facets). Schema delta zero. Reversível por revert. Ganho esperado: curadoria de 30 edições passa de ~480 queries / ~2.1M rows → ~30 queries / ~500 rows (-99% rows, -94% queries). Em uso solo: 2-6M reads/dia → ~150 reads/dia. Cabe folgado pra escala 5-10 amigos no free tier. Princípios I/II/III/IV/V todos OK.
 - **024** — Cortes UX agressivos + dedup de queries (Inc 26) · 2026-05-02 · `specs/024-ux-cuts-dedup/` · pacote pós-diagnóstico Vercel logs (instrumentação `[DB]` em `src/db/index.ts`). Reduz queries SQL por load `/` de 17 → 6 (-65%) atacando 3 vetores: (1) **dedup de RSCs paralelos** — `requireCurrentUser`/`getCurrentUser` em `src/lib/auth.ts` e `getUserFacets` em `src/lib/queries/user-facets.ts` wrappados em `cache()` do React 19 (4-5 SELECT users + 4-5 SELECT user_facets por render → 1 cada); (2) **remoção de componentes globais com baixo valor** — `<SyncBadge>` e `<ArchivedRecordsBanner>` deletados do layout (rodavam em TODA rota autenticada — info acessível via menu "Sync" → `/status`); (3) **render condicional + cron-only** — novo `getImportProgressLight()` em `actions.ts` retorna `{shouldShow: false}` em 1 SELECT mínimo no caso comum (DJ com import já reconhecido + idle), economizando ~3 queries/load; `killZombieSyncRuns` movido de `getImportProgress`/`loadStatusSnapshot` para o cron diário `/api/cron/sync-daily` (era 1 UPDATE/load — agora 1×/dia/user). **Cleanup de rota morta**: `/curadoria` deletada inteira (`src/app/curadoria/`, `curadoria-view.tsx`, `listCuradoriaIds`); helpers `loadDisc` + `compareTrackPositions` preservados em `src/lib/queries/curadoria.ts` por serem usados externamente. **Prefetch=false universal**: ~16 `<Link>` em rotas autenticadas que ainda disparavam prefetch RSC em hover ganharam `prefetch={false}`. **`CurrentUser` ganha campo `importAcknowledgedAt`** pra evitar SELECT extra no caminho condicional do home. Schema delta zero. Reversível por revert. Validado em prod via `vercel logs sulco.vercel.app --follow` — log mostra exatamente 6 linhas `[DB]` por load: 1× users + 1× user_facets + 1× sync_runs (light) + 1× records LIMIT 50 + 1× tracks aggregations + 1× tracks bombs. Princípios I/II/III/IV/V todos OK.

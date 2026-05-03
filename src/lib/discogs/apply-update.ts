@@ -2,6 +2,7 @@ import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
+import { computeRecordSearchText } from '@/lib/text';
 import type { DiscogsRelease } from './client';
 
 /**
@@ -52,6 +53,8 @@ export async function applyDiscogsUpdate(
         coverUrl: release.coverUrl,
         genres: release.genres,
         styles: release.styles,
+        // Inc 32 (027): search_text materializado pra LIKE SQL.
+        searchText: computeRecordSearchText(release.artist, release.title, release.label),
         // status começa 'unrated' por default do schema; se opts.isNew=false (reimport
         // de disco que sumiu do DB) também começa 'unrated' — caller decide quando criar.
         importedAt: new Date(),
@@ -94,6 +97,8 @@ export async function applyDiscogsUpdate(
         coverUrl: release.coverUrl,
         genres: release.genres,
         styles: release.styles,
+        // Inc 32 (027): re-computa search_text quando metadata muda.
+        searchText: computeRecordSearchText(release.artist, release.title, release.label),
         updatedAt: new Date(),
         ...(wasArchived
           ? { archived: false, archivedAt: null, archivedAcknowledgedAt: null }

@@ -3,7 +3,7 @@ import { and, desc, eq, exists, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
-import { matchesNormalizedText } from '@/lib/text';
+import { normalizeText } from '@/lib/text';
 import { cacheUser } from '@/lib/cache';
 import { getUserFacets } from '@/lib/queries/user-facets';
 
@@ -60,26 +60,24 @@ export type CollectionCounts = {
  *
  * Recebe apenas filtros refinos (texto, genres, styles, bomba). Filtros
  * base (`userId`, `archived`, `status`) são responsabilidade do caller.
+ *
+ * Inc 32 (027): text filter usa LIKE SQL contra `records.searchText`
+ * (versão pre-normalizada de artist + title + label). Paginação SQL
+ * volta a funcionar — sem JS post-filter.
  */
 export function buildCollectionFilters(q: {
   text: string;
   genres: string[];
   styles: string[];
   bomba: BombaFilter;
-  /**
-   * Quando true, ignora o filtro `text` no SQL — caller deve
-   * aplicar `matchesNormalizedText` em JS pós-query (Inc 18 /
-   * 021). Default false preserva callers existentes.
-   */
-  omitText?: boolean;
 }): SQL[] {
   const conds: SQL[] = [];
 
-  if (!q.omitText && q.text.length > 0) {
-    const pattern = `%${q.text.toLowerCase()}%`;
-    conds.push(
-      sql`(lower(${records.artist}) LIKE ${pattern} OR lower(${records.title}) LIKE ${pattern} OR lower(COALESCE(${records.label},'')) LIKE ${pattern})`,
-    );
+  if (q.text.length > 0) {
+    const normalized = normalizeText(q.text);
+    if (normalized.length > 0) {
+      conds.push(sql`${records.searchText} LIKE ${`%${normalized}%`}`);
+    }
   }
 
   // OR dentro de gêneros (FR-006): disco aparece se tiver QUALQUER um dos gêneros selecionados
@@ -118,7 +116,6 @@ async function queryCollectionRaw(q: CollectionQuery): Promise<CollectionRow[]> 
   const page = Math.max(1, q.page ?? 1);
   const pageSize = Math.max(1, q.pageSize ?? DEFAULT_PAGE_SIZE);
   const offset = (page - 1) * pageSize;
-  const hasTextFilter = q.text.trim().length > 0;
 
   const conds: SQL[] = [eq(records.userId, q.userId), eq(records.archived, false)];
 
@@ -126,13 +123,10 @@ async function queryCollectionRaw(q: CollectionQuery): Promise<CollectionRow[]> 
     conds.push(eq(records.status, q.status));
   }
 
-  // Inc 18 (021): text filter sai do SQL e vai pra JS pós-query
-  // pra ser accent-insensitive. Demais filtros continuam SQL.
-  conds.push(...buildCollectionFilters({ ...q, omitText: true }));
+  // Inc 32 (027): text filter via LIKE SQL contra records.searchText
+  // (pre-normalizado). Paginação SQL volta a funcionar com text filter.
+  conds.push(...buildCollectionFilters(q));
 
-  // Inc 22: paginação SQL quando SEM text filter (caso comum, máximo
-  // ganho). Com text filter, carrega tudo + filtra JS + pagina JS
-  // pra preservar matches accent-insensitive (Inc 18).
   const baseSelect = {
     id: records.id,
     artist: records.artist,
@@ -148,30 +142,13 @@ async function queryCollectionRaw(q: CollectionQuery): Promise<CollectionRow[]> 
     shelfLocation: records.shelfLocation,
   };
 
-  const rowsRaw = hasTextFilter
-    ? await db
-        .select(baseSelect)
-        .from(records)
-        .where(and(...conds))
-        .orderBy(desc(records.importedAt))
-    : await db
-        .select(baseSelect)
-        .from(records)
-        .where(and(...conds))
-        .orderBy(desc(records.importedAt))
-        .limit(pageSize)
-        .offset(offset);
-
-  // Inc 18: text filter JS sobre o resultado SQL.
-  const filtered = hasTextFilter
-    ? rowsRaw.filter((r) =>
-        matchesNormalizedText([r.artist, r.title, r.label], q.text),
-      )
-    : rowsRaw;
-
-  // Inc 22: paginação JS aplica APENAS quando há text filter (SQL
-  // já trouxe a página correta no caso sem text).
-  const rows = hasTextFilter ? filtered.slice(offset, offset + pageSize) : filtered;
+  const rows = await db
+    .select(baseSelect)
+    .from(records)
+    .where(and(...conds))
+    .orderBy(desc(records.importedAt))
+    .limit(pageSize)
+    .offset(offset);
 
   if (rows.length === 0) return [];
 
