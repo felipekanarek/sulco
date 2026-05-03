@@ -262,7 +262,25 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **026-montar-set-perf** (BACKLOG: Inc 28)
+Current active feature: **027-search-text-materialized** (BACKLOG: Inc 32)
+
+Authoritative planning artifacts (read these before making changes
+ao schema de `records` (nova coluna `search_text` + index),
+`buildCollectionFilters` em `src/lib/queries/collection.ts`,
+hooks de write em `src/lib/discogs/apply-update.ts` e
+`src/lib/discogs/import.ts`, ou `pickRandomUnratedRecord` em
+`src/lib/actions.ts`):
+
+- Plan: [specs/027-search-text-materialized/plan.md](specs/027-search-text-materialized/plan.md)
+- Spec: [specs/027-search-text-materialized/spec.md](specs/027-search-text-materialized/spec.md)
+- Research: [specs/027-search-text-materialized/research.md](specs/027-search-text-materialized/research.md)
+- Data Model: [specs/027-search-text-materialized/data-model.md](specs/027-search-text-materialized/data-model.md)
+- Contracts: [specs/027-search-text-materialized/contracts/](specs/027-search-text-materialized/contracts/)
+- Quickstart: [specs/027-search-text-materialized/quickstart.md](specs/027-search-text-materialized/quickstart.md)
+
+Prior active (now legacy):
+
+**026-montar-set-perf** (BACKLOG: Inc 28)
 
 Authoritative planning artifacts (read these before making changes
 ao `/sets/[id]/montar/page.tsx`, `<MontarFilters>` component,

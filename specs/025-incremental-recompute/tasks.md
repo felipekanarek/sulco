@@ -187,7 +187,7 @@
   ```
   Aguardar Ready (~1min). Conferir via `vercel ls sulco --yes | head -3`.
 
-- [ ] T021 Smoke test pós-deploy: rodar cenários 1, 2, 3, 4, 5, 6, 8, 11 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow` durante cada cenário; colar resultado consolidado. Confirmar:
+- [X] T021 Smoke test pós-deploy: rodar cenários 1, 2, 3, 4, 5, 6, 8, 11 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow` durante cada cenário; colar resultado consolidado. Confirmar:
   - Cenário 1 (BPM only): zero queries de scan ou recompute. **Sub-step pra SC-003**: anotar Vercel Function Duration desse Server Action no dashboard de Functions; esperado ≤200ms warm.
   - Cenário 2 (status): exatamente 1 UPDATE em `user_facets` (counters).
   - Cenário 3 (selected): exatamente 1 UPDATE em `user_facets` (tracks_selected_total).

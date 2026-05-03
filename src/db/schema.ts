@@ -92,6 +92,10 @@ export const records = sqliteTable(
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
     archivedAt: integer('archived_at', { mode: 'timestamp' }),
     archivedAcknowledgedAt: integer('archived_acknowledged_at', { mode: 'timestamp' }),
+    // Inc 32 (027): versão pre-normalizada (lowercase + sem diacríticos)
+    // de `artist + ' ' + title + ' ' + (label ?? '')`. Permite paginação
+    // SQL com text filter via LIKE em vez de pós-filtro JS.
+    searchText: text('search_text').notNull().default(''),
     importedAt: integer('imported_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
   },
@@ -106,6 +110,10 @@ export const records = sqliteTable(
       t.archived,
       t.status,
     ),
+    // Inc 32 (027): cobre `WHERE userId = ? AND search_text LIKE ?`.
+    // user_id reduz scan; LIKE com %prefix% não usa index pra prefix-match
+    // mas full-scan dentro do user (~2588 records) é trivial.
+    userSearchTextIdx: index('records_user_search_text_idx').on(t.userId, t.searchText),
   }),
 );
 

@@ -14,7 +14,6 @@ import {
   recomputeShelvesOnly,
   applyDeltaForWrite,
 } from '@/lib/queries/user-facets';
-import { matchesNormalizedText } from '@/lib/text';
 import { cacheUser, revalidateUserCache } from '@/lib/cache';
 import { encryptSecret } from '@/lib/crypto';
 import { enrichTrackComment, getAdapter } from '@/lib/ai';
@@ -1034,54 +1033,23 @@ export async function pickRandomUnratedRecord(
   ];
 
   // Filtros refinos opcionais (text/genres/styles/bomba).
-  // Inc 23 (022): fast path SQL quando text vazio (1 row read).
-  // Slow path JS post-filter (Inc 18) preservado quando há text.
-  const textTerm = parsed.data?.text?.trim() ?? '';
-  const hasText = textTerm.length > 0;
-
+  // Inc 32 (027): text filter via SQL LIKE contra records.searchText.
+  // Sempre fast path — 1 row read independente de haver text filter.
   if (parsed.data) {
-    conds.push(...buildCollectionFilters({ ...parsed.data, omitText: true }));
+    conds.push(...buildCollectionFilters(parsed.data));
   }
 
-  // FAST PATH (Inc 23): sem text, random direto no SQL — 1 row read.
-  if (!hasText) {
-    const row = await db
-      .select({ id: records.id })
-      .from(records)
-      .where(and(...conds))
-      .orderBy(sql`RANDOM()`)
-      .limit(1);
-    if (row.length === 0) {
-      return { ok: true, data: { recordId: null } };
-    }
-    return { ok: true, data: { recordId: row[0].id } };
-  }
-
-  // SLOW PATH (Inc 18): com text, JS post-filter accent-insensitive.
-  const candidates = await db
-    .select({
-      id: records.id,
-      artist: records.artist,
-      title: records.title,
-      label: records.label,
-    })
+  const row = await db
+    .select({ id: records.id })
     .from(records)
-    .where(and(...conds));
+    .where(and(...conds))
+    .orderBy(sql`RANDOM()`)
+    .limit(1);
 
-  if (candidates.length === 0) {
+  if (row.length === 0) {
     return { ok: true, data: { recordId: null } };
   }
-
-  const filtered = candidates.filter((c) =>
-    matchesNormalizedText([c.artist, c.title, c.label], textTerm),
-  );
-
-  if (filtered.length === 0) {
-    return { ok: true, data: { recordId: null } };
-  }
-
-  const picked = filtered[Math.floor(Math.random() * filtered.length)];
-  return { ok: true, data: { recordId: picked.id } };
+  return { ok: true, data: { recordId: row[0].id } };
 }
 
 /* ============================================================
