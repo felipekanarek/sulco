@@ -226,17 +226,17 @@ export async function listSetTracks(setId: number, userId: number) {
 }
 
 /**
- * Vocabulário distinto usado em faixas do user (Inc 28: derivado de
- * `user_facets.moodsJson`/`contextsJson` em vez de scan de tracks).
+ * Vocabulário distinto usado em faixas do user (Inc 33: derivado de
+ * `user_vocab` via `listVocab` — counters incrementais por termo).
  *
  * **Mudança semântica aceita no Inc 28**: a versão original filtrava
  * `archived=false AND status='active' AND selected=true` (só vocab
- * de tracks selecionadas em discos ativos). A versão materializada em
- * `user_facets` filtra apenas `archived=false` (vocab geral da coleção
+ * de tracks selecionadas em discos ativos). A versão materializada
+ * filtra apenas `archived=false` (vocab geral da coleção
  * não-arquivada). Trade-off: picker pode mostrar moods/contexts que
  * não têm candidatos resultantes (DJ filtra → 0 resultados). Ganho:
- * -20k rows lidas por render do `/sets/[id]/montar` (cache materializado
- * via Inc 24 + react.cache do Inc 26 = 1 SELECT a row de user_facets).
+ * -20k rows lidas por render do `/sets/[id]/montar` (Inc 33 = 1 SELECT
+ * contra index `user_vocab_user_kind_idx` retornando ~15 rows).
  *
  * Felipe (mantenedor) registrou que filtros do montar precisam de UX
  * rework futuro — ver BACKLOG release notes do Inc 28 + entry novo.

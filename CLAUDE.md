@@ -262,11 +262,21 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: nenhuma — última release shipped foi Inc 33
-(028-user-vocab-table) em 2026-05-03. Próximas candidatas no BACKLOG:
-Inc 34 (drop colunas `*Json` em `user_facets` — cleanup pós-Inc 33),
-Inc 30 (excluir set), Inc 31 (UX bag física), Inc 29 (UX rework
-filtros montar).
+Current active feature: **029-drop-user-facets-json** (BACKLOG: Inc 34)
+
+Authoritative planning artifacts (read these before making changes
+ao schema da tabela `user_facets` em `src/db/schema.ts` (5 colunas
+JSON removidas), tipo `UserFacets` em `src/lib/queries/user-facets.ts`
+(enxugado para 7 campos), `recomputeFacets` (perde 5 chamadas a
+agregadores no Promise.all + 5 fields no INSERT/onConflictDoUpdate),
+ou helpers privados `aggregateFacet`/`aggregateVocabulary`/
+`aggregateShelves` (deletados)):
+
+- Plan: [specs/029-drop-user-facets-json/plan.md](specs/029-drop-user-facets-json/plan.md)
+- Spec: [specs/029-drop-user-facets-json/spec.md](specs/029-drop-user-facets-json/spec.md)
+- Research: [specs/029-drop-user-facets-json/research.md](specs/029-drop-user-facets-json/research.md)
+- Data Model: [specs/029-drop-user-facets-json/data-model.md](specs/029-drop-user-facets-json/data-model.md)
+- Quickstart: [specs/029-drop-user-facets-json/quickstart.md](specs/029-drop-user-facets-json/quickstart.md)
 
 Prior active (now legacy):
 

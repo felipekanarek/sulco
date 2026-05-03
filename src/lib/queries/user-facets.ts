@@ -5,39 +5,39 @@ import { db } from '@/db';
 import { records, tracks, userFacets, userVocab } from '@/db/schema';
 
 /**
- * Inc 24 — denormalização de filtros + counts.
+ * Inc 24 — denormalização de counts em user_facets.
  * Inc 27 — delta updates direcionados em vez de recompute completo.
+ * Inc 33 — vocabulário materializado em user_vocab (genres/styles/moods/
+ *          contexts/shelves) — substituiu colunas JSON em user_facets.
+ * Inc 34 — drop das colunas JSON em user_facets (agora retém apenas
+ *          counters de records/tracks).
  *
- * `getUserFacets(userId)` — leitura barata (1 SELECT). Usado por todas
- * as queries que antes scaneavam toda a coleção (genres/styles/moods/
- * contexts/shelves/counts). Defaults seguros se row ausente.
+ * `getUserFacets(userId)` — leitura barata (1 SELECT). Retorna counters
+ * (recordsTotal/Active/Unrated/Discarded + tracksSelectedTotal) +
+ * userId + updatedAt. Defaults seguros se row ausente.
  *
- * `recomputeFacets(userId)` — recalcula TUDO a partir das fontes
- * (records + tracks) e UPSERT na row do user. ~7 queries pesadas,
- * ~50-100k rows lidas. Continua sendo usado em:
+ * `recomputeFacets(userId)` — recalcula counters + re-popula user_vocab
+ * via `_repopulateVocab`. Usado em:
  *   - `runIncrementalSync` / `runInitialImport` (operações em massa)
  *   - cron diário `/api/cron/sync-daily` (drift correction)
- *   - backfill via script (raro)
- * Server Actions de edição (status/curation/author) NÃO usam mais —
- * usam delta direcionado.
  *
- * Helpers de delta (Inc 27):
+ * Helpers de delta (Inc 27 — counters em user_facets):
  *   - `applyRecordStatusDelta` — UPDATE atomic counters por status
  *   - `applyTrackSelectedDelta` — UPDATE atomic tracksSelectedTotal
- *   - `recomputeShelvesOnly` — recompute parcial só shelves (1 SELECT DISTINCT)
- *   - `recomputeVocabularyOnly` — recompute parcial só moods OU contexts
  *   - `applyDeltaForWrite` — wrapper que despacha em paralelo via scope
+ *
+ * Helpers de vocab (Inc 33 — user_vocab — em src/lib/queries/user-vocab.ts):
+ *   - `applyVocabDelta` — increment/decrement direcionado por termo
+ *   - `listVocab` — leitura cached por (userId, kind)
  */
 
 export type FacetCount = { value: string; count: number };
 
+// Inc 34 (029): tipo enxugado — vocabulário (genres/styles/moods/
+// contexts/shelves) vive em `user_vocab` (Inc 33). user_facets retém
+// apenas counters de records/tracks.
 export type UserFacets = {
   userId: number;
-  genres: FacetCount[];
-  styles: FacetCount[];
-  moods: string[];
-  contexts: string[];
-  shelves: string[];
   recordsTotal: number;
   recordsActive: number;
   recordsUnrated: number;
@@ -46,18 +46,8 @@ export type UserFacets = {
   updatedAt: Date;
 };
 
-function parseJsonArray<T>(s: string | null | undefined, fallback: T[]): T[] {
-  if (!s) return fallback;
-  try {
-    const parsed = JSON.parse(s);
-    return Array.isArray(parsed) ? (parsed as T[]) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 // Inc 26: wrappar em react.cache() pra dedupar calls dentro do
-// mesmo render RSC (4-5 callers paralelos viram 1 SELECT).
+// mesmo render RSC (callers paralelos viram 1 SELECT).
 export const getUserFacets = cache(async (userId: number): Promise<UserFacets> => {
   const [row] = await db
     .select()
@@ -68,11 +58,6 @@ export const getUserFacets = cache(async (userId: number): Promise<UserFacets> =
   if (!row) {
     return {
       userId,
-      genres: [],
-      styles: [],
-      moods: [],
-      contexts: [],
-      shelves: [],
       recordsTotal: 0,
       recordsActive: 0,
       recordsUnrated: 0,
@@ -84,11 +69,6 @@ export const getUserFacets = cache(async (userId: number): Promise<UserFacets> =
 
   return {
     userId: row.userId,
-    genres: parseJsonArray<FacetCount>(row.genresJson, []),
-    styles: parseJsonArray<FacetCount>(row.stylesJson, []),
-    moods: parseJsonArray<string>(row.moodsJson, []),
-    contexts: parseJsonArray<string>(row.contextsJson, []),
-    shelves: parseJsonArray<string>(row.shelvesJson, []),
     recordsTotal: row.recordsTotal,
     recordsActive: row.recordsActive,
     recordsUnrated: row.recordsUnrated,
@@ -100,67 +80,11 @@ export const getUserFacets = cache(async (userId: number): Promise<UserFacets> =
 
 /* -------- Internas (queries pesadas) -------- */
 
-async function aggregateFacet(
-  userId: number,
-  column: typeof records.genres | typeof records.styles,
-): Promise<FacetCount[]> {
-  const rows = await db
-    .select({
-      value: sql<string>`value`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(records)
-    .innerJoin(sql`json_each(${column})`, sql`1=1`)
-    .where(and(eq(records.userId, userId), eq(records.archived, false)))
-    .groupBy(sql`value`);
-
-  return rows
-    .filter((r) => typeof r.value === 'string' && r.value.length > 0)
-    .map((r) => ({ value: r.value, count: Number(r.count) }))
-    .sort(
-      (a, b) =>
-        b.count - a.count || a.value.localeCompare(b.value, 'pt-BR'),
-    );
-}
-
-async function aggregateVocabulary(
-  userId: number,
-  column: typeof tracks.moods | typeof tracks.contexts,
-): Promise<string[]> {
-  // Ordenado por frequência (count DESC, desempate alfa) — preserva
-  // semântica do `listUserVocabulary` original (FR-017a).
-  const rows = await db
-    .select({
-      value: sql<string>`value`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(tracks)
-    .innerJoin(records, eq(records.id, tracks.recordId))
-    .innerJoin(sql`json_each(${column})`, sql`1=1`)
-    .where(and(eq(records.userId, userId), eq(records.archived, false)))
-    .groupBy(sql`value`);
-
-  return rows
-    .filter((r) => typeof r.value === 'string' && r.value.length > 0)
-    .map((r) => ({ value: r.value, count: Number(r.count) }))
-    .sort(
-      (a, b) =>
-        b.count - a.count || a.value.localeCompare(b.value, 'pt-BR'),
-    )
-    .map((r) => r.value);
-}
-
-async function aggregateShelves(userId: number): Promise<string[]> {
-  const rows = await db
-    .selectDistinct({ shelf: records.shelfLocation })
-    .from(records)
-    .where(and(eq(records.userId, userId), isNotNull(records.shelfLocation)))
-    .orderBy(sql`lower(${records.shelfLocation})`);
-
-  return rows
-    .map((r) => r.shelf)
-    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-}
+// Inc 34 (029): `aggregateFacet`/`aggregateVocabulary`/`aggregateShelves`
+// foram REMOVIDOS — alimentavam exclusivamente as colunas JSON em
+// `user_facets` que foram dropadas. Vocab agora vive em `user_vocab`
+// (Inc 33), populado via `_aggregateVocabCounts`/`_aggregateShelfCounts`
+// + agregação inline de genres/styles em `_repopulateVocab`.
 
 async function aggregateCounts(userId: number): Promise<{
   total: number;
@@ -204,26 +128,18 @@ async function aggregateTracksSelected(userId: number): Promise<number> {
 /* -------- Recompute (UPSERT) -------- */
 
 export async function recomputeFacets(userId: number): Promise<void> {
-  const [genres, styles, moods, contexts, shelves, counts, tracksSelectedTotal] =
-    await Promise.all([
-      aggregateFacet(userId, records.genres),
-      aggregateFacet(userId, records.styles),
-      aggregateVocabulary(userId, tracks.moods),
-      aggregateVocabulary(userId, tracks.contexts),
-      aggregateShelves(userId),
-      aggregateCounts(userId),
-      aggregateTracksSelected(userId),
-    ]);
+  // Inc 34 (029): user_facets retém apenas counters. Vocabulário
+  // (genres/styles/moods/contexts/shelves) é re-populado em user_vocab
+  // via `_repopulateVocab` (self-contained, agrega internamente).
+  const [counts, tracksSelectedTotal] = await Promise.all([
+    aggregateCounts(userId),
+    aggregateTracksSelected(userId),
+  ]);
 
   await db
     .insert(userFacets)
     .values({
       userId,
-      genresJson: JSON.stringify(genres),
-      stylesJson: JSON.stringify(styles),
-      moodsJson: JSON.stringify(moods),
-      contextsJson: JSON.stringify(contexts),
-      shelvesJson: JSON.stringify(shelves),
       recordsTotal: counts.total,
       recordsActive: counts.active,
       recordsUnrated: counts.unrated,
@@ -234,11 +150,6 @@ export async function recomputeFacets(userId: number): Promise<void> {
     .onConflictDoUpdate({
       target: userFacets.userId,
       set: {
-        genresJson: sql`excluded.genres_json`,
-        stylesJson: sql`excluded.styles_json`,
-        moodsJson: sql`excluded.moods_json`,
-        contextsJson: sql`excluded.contexts_json`,
-        shelvesJson: sql`excluded.shelves_json`,
         recordsTotal: sql`excluded.records_total`,
         recordsActive: sql`excluded.records_active`,
         recordsUnrated: sql`excluded.records_unrated`,
@@ -249,32 +160,39 @@ export async function recomputeFacets(userId: number): Promise<void> {
     });
 
   // Inc 33: re-popula user_vocab do zero pra este user — drift correction.
-  // Filtro `archived=false` em todos os 3 ramos (FR-013): apenas registros
+  // Filtro `archived=false` em todos os ramos (FR-013): apenas registros
   // não-arquivados contam pro vocabulário ativo.
-  await _repopulateVocab(userId, genres, styles, moods, contexts, shelves);
+  await _repopulateVocab(userId);
 }
 
 /**
- * Inc 33 helper privado — re-popula `user_vocab` do user a partir das
- * agregações já calculadas em `recomputeFacets`. DELETE + INSERT idempotente.
- *
- * `genresAgg`/`stylesAgg`: FacetCount[] com {value, count}.
- * `moodsAgg`/`contextsAgg`: agregações já ordenadas (string[]) — perdem
- * count na conversão Inc 24, então recomputamos count via raw SELECT
- * separado pra preservar `ref_count` correto. Trade-off: 2 SELECTs extras
- * vs JSON parsing — aceitável (cron noturno raro).
- * `shelvesAgg`: string[] — recompute count via SELECT.
+ * Inc 33/34 helper privado — re-popula `user_vocab` do user a partir do
+ * estado autoritativo de records/tracks (archived=false). DELETE + INSERT
+ * idempotente. Self-contained: agrega genres/styles via SELECT em records
+ * + delega moods/contexts/shelves a `_aggregateVocabCounts`/`_aggregateShelfCounts`.
  */
-async function _repopulateVocab(
-  userId: number,
-  genresAgg: FacetCount[],
-  stylesAgg: FacetCount[],
-  _moodsAgg: string[],
-  _contextsAgg: string[],
-  _shelvesAgg: string[],
-): Promise<void> {
-  // Re-agregar moods/contexts/shelves COM count (não vem em string[]).
-  // Filtro archived=false aplicado dentro de aggregateVocabulary/Shelves.
+async function _repopulateVocab(userId: number): Promise<void> {
+  // Genres + styles via SELECT direto records archived=false.
+  const recordsRows = await db
+    .select({ genres: records.genres, styles: records.styles })
+    .from(records)
+    .where(and(eq(records.userId, userId), eq(records.archived, false)));
+  const genresMap = new Map<string, number>();
+  const stylesMap = new Map<string, number>();
+  for (const r of recordsRows) {
+    for (const g of (r.genres ?? []) as string[]) {
+      if (typeof g === 'string' && g.trim().length > 0) {
+        genresMap.set(g, (genresMap.get(g) ?? 0) + 1);
+      }
+    }
+    for (const s of (r.styles ?? []) as string[]) {
+      if (typeof s === 'string' && s.trim().length > 0) {
+        stylesMap.set(s, (stylesMap.get(s) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Moods/contexts via JOIN tracks ↔ records, shelves via DISTINCT.
   const [moodsCounts, contextsCounts, shelfCounts] = await Promise.all([
     _aggregateVocabCounts(userId, tracks.moods),
     _aggregateVocabCounts(userId, tracks.contexts),
@@ -283,29 +201,28 @@ async function _repopulateVocab(
 
   await db.delete(userVocab).where(eq(userVocab.userId, userId));
 
-  const now = sql`(unixepoch())`;
   const inserts: Array<Promise<unknown>> = [];
 
-  for (const g of genresAgg) {
-    if (!g.value || g.count <= 0) continue;
+  for (const [term, count] of genresMap) {
+    if (count <= 0) continue;
     inserts.push(
       db.insert(userVocab).values({
         userId,
         kind: 'genres',
-        term: g.value,
-        refCount: g.count,
+        term,
+        refCount: count,
         updatedAt: sql`(unixepoch())` as unknown as Date,
       }),
     );
   }
-  for (const s of stylesAgg) {
-    if (!s.value || s.count <= 0) continue;
+  for (const [term, count] of stylesMap) {
+    if (count <= 0) continue;
     inserts.push(
       db.insert(userVocab).values({
         userId,
         kind: 'styles',
-        term: s.value,
-        refCount: s.count,
+        term,
+        refCount: count,
         updatedAt: sql`(unixepoch())` as unknown as Date,
       }),
     );
@@ -343,9 +260,6 @@ async function _repopulateVocab(
       }),
     );
   }
-
-  // Suppress `now` lint — usado via sql`(unixepoch())` por entry.
-  void now;
 
   await Promise.all(inserts);
 }
@@ -455,9 +369,10 @@ export async function applyTrackSelectedDelta(
  * da coleção em writes. Drift residual é corrigido por `recomputeFacets`
  * (acima) que re-popula `user_vocab` via `_repopulateVocab`.
  *
- * `aggregateFacet`/`aggregateVocabulary`/`aggregateShelves` permanecem
- * privados — usados por `recomputeFacets` para manter as colunas JSON
- * em `user_facets` populadas como fallback até Inc 34 dropar as colunas.
+ * Inc 34 (029): `aggregateFacet`/`aggregateVocabulary`/`aggregateShelves`
+ * também REMOVIDOS — alimentavam exclusivamente as colunas JSON em
+ * `user_facets` que foram dropadas. `_repopulateVocab` agora agrega
+ * genres/styles inline via SELECT em records.
  *
  * Wrapper que despacha em paralelo (Promise.all) baseado no scope
  * do que mudou. Try/catch defensivo no caller — write principal já

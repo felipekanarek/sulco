@@ -254,17 +254,13 @@ export const syncRuns = sqliteTable(
    Atualizado por `recomputeFacets(userId)` (síncrono) no fim de
    Server Actions de write críticas.
    ============================================================ */
+// Inc 34 (029): contadores denormalizados de records/tracks por user.
+// Vocabulário (genres/styles/moods/contexts/shelves) vive em `user_vocab`
+// (Inc 33) — colunas JSON antigas em user_facets foram dropadas.
 export const userFacets = sqliteTable('user_facets', {
   userId: integer('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
-  // Listas como JSON
-  genresJson: text('genres_json').notNull().default('[]'),
-  stylesJson: text('styles_json').notNull().default('[]'),
-  moodsJson: text('moods_json').notNull().default('[]'),
-  contextsJson: text('contexts_json').notNull().default('[]'),
-  shelvesJson: text('shelves_json').notNull().default('[]'),
-  // Contadores
   recordsTotal: integer('records_total').notNull().default(0),
   recordsActive: integer('records_active').notNull().default(0),
   recordsUnrated: integer('records_unrated').notNull().default(0),
