@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { records, tracks, userFacets } from '@/db/schema';
+import { records, tracks, userFacets, userVocab } from '@/db/schema';
 
 /**
  * Inc 24 — denormalização de filtros + counts.
@@ -247,6 +247,158 @@ export async function recomputeFacets(userId: number): Promise<void> {
         updatedAt: sql`excluded.updated_at`,
       },
     });
+
+  // Inc 33: re-popula user_vocab do zero pra este user — drift correction.
+  // Filtro `archived=false` em todos os 3 ramos (FR-013): apenas registros
+  // não-arquivados contam pro vocabulário ativo.
+  await _repopulateVocab(userId, genres, styles, moods, contexts, shelves);
+}
+
+/**
+ * Inc 33 helper privado — re-popula `user_vocab` do user a partir das
+ * agregações já calculadas em `recomputeFacets`. DELETE + INSERT idempotente.
+ *
+ * `genresAgg`/`stylesAgg`: FacetCount[] com {value, count}.
+ * `moodsAgg`/`contextsAgg`: agregações já ordenadas (string[]) — perdem
+ * count na conversão Inc 24, então recomputamos count via raw SELECT
+ * separado pra preservar `ref_count` correto. Trade-off: 2 SELECTs extras
+ * vs JSON parsing — aceitável (cron noturno raro).
+ * `shelvesAgg`: string[] — recompute count via SELECT.
+ */
+async function _repopulateVocab(
+  userId: number,
+  genresAgg: FacetCount[],
+  stylesAgg: FacetCount[],
+  _moodsAgg: string[],
+  _contextsAgg: string[],
+  _shelvesAgg: string[],
+): Promise<void> {
+  // Re-agregar moods/contexts/shelves COM count (não vem em string[]).
+  // Filtro archived=false aplicado dentro de aggregateVocabulary/Shelves.
+  const [moodsCounts, contextsCounts, shelfCounts] = await Promise.all([
+    _aggregateVocabCounts(userId, tracks.moods),
+    _aggregateVocabCounts(userId, tracks.contexts),
+    _aggregateShelfCounts(userId),
+  ]);
+
+  await db.delete(userVocab).where(eq(userVocab.userId, userId));
+
+  const now = sql`(unixepoch())`;
+  const inserts: Array<Promise<unknown>> = [];
+
+  for (const g of genresAgg) {
+    if (!g.value || g.count <= 0) continue;
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'genres',
+        term: g.value,
+        refCount: g.count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+  for (const s of stylesAgg) {
+    if (!s.value || s.count <= 0) continue;
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'styles',
+        term: s.value,
+        refCount: s.count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+  for (const m of moodsCounts) {
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'moods',
+        term: m.term,
+        refCount: m.count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+  for (const c of contextsCounts) {
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'contexts',
+        term: c.term,
+        refCount: c.count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+  for (const sh of shelfCounts) {
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'shelves',
+        term: sh.term,
+        refCount: sh.count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+
+  // Suppress `now` lint — usado via sql`(unixepoch())` por entry.
+  void now;
+
+  await Promise.all(inserts);
+}
+
+/**
+ * Re-agrega vocabulário (moods/contexts) com count — usado por
+ * `_repopulateVocab`. Filtro archived=false (FR-013).
+ */
+async function _aggregateVocabCounts(
+  userId: number,
+  column: typeof tracks.moods | typeof tracks.contexts,
+): Promise<Array<{ term: string; count: number }>> {
+  const rows = await db
+    .select({
+      value: sql<string>`value`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(tracks)
+    .innerJoin(records, eq(records.id, tracks.recordId))
+    .innerJoin(sql`json_each(${column})`, sql`1=1`)
+    .where(and(eq(records.userId, userId), eq(records.archived, false)))
+    .groupBy(sql`value`);
+
+  return rows
+    .filter((r) => typeof r.value === 'string' && r.value.trim().length > 0)
+    .map((r) => ({ term: r.value, count: Number(r.count) }));
+}
+
+/**
+ * Re-agrega shelves com count — usado por `_repopulateVocab`.
+ * Filtro archived=false + shelf_location IS NOT NULL.
+ */
+async function _aggregateShelfCounts(
+  userId: number,
+): Promise<Array<{ term: string; count: number }>> {
+  const rows = await db
+    .select({
+      shelf: records.shelfLocation,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(records)
+    .where(
+      and(
+        eq(records.userId, userId),
+        eq(records.archived, false),
+        isNotNull(records.shelfLocation),
+      ),
+    )
+    .groupBy(records.shelfLocation);
+
+  return rows
+    .filter((r) => typeof r.shelf === 'string' && r.shelf.trim().length > 0)
+    .map((r) => ({ term: r.shelf as string, count: Number(r.count) }));
 }
 
 /* -------- Inc 27: Delta updates direcionados -------- */
@@ -297,48 +449,16 @@ export async function applyTrackSelectedDelta(
 }
 
 /**
- * Recomputa APENAS shelves_json em user_facets. Usado quando
- * shelfLocation de um disco muda. Mais simples que tentar incrementar
- * lista (precisaria saber se outro disco ainda usa a shelf).
+ * Inc 33: `recomputeShelvesOnly` e `recomputeVocabularyOnly` foram
+ * REMOVIDOS — substituídos por `applyVocabDelta` direcionado em
+ * `src/lib/queries/user-vocab.ts`, que opera em `user_vocab` sem scan
+ * da coleção em writes. Drift residual é corrigido por `recomputeFacets`
+ * (acima) que re-popula `user_vocab` via `_repopulateVocab`.
  *
- * Custo: ~2.5k row reads (proporcional a records do user) + 1 UPDATE.
- */
-export async function recomputeShelvesOnly(userId: number): Promise<void> {
-  const shelves = await aggregateShelves(userId);
-  await db
-    .update(userFacets)
-    .set({
-      shelvesJson: JSON.stringify(shelves),
-      updatedAt: new Date(),
-    })
-    .where(eq(userFacets.userId, userId));
-}
-
-/**
- * Recomputa APENAS o vocabulário (moods OU contexts) em user_facets.
- * Usado quando moods/contexts de uma track mudam. Mesmo padrão do
- * recomputeShelvesOnly — idempotente sobre o conjunto inteiro do kind.
+ * `aggregateFacet`/`aggregateVocabulary`/`aggregateShelves` permanecem
+ * privados — usados por `recomputeFacets` para manter as colunas JSON
+ * em `user_facets` populadas como fallback até Inc 34 dropar as colunas.
  *
- * Custo: ~10k row reads (proporcional a tracks do user) + 1 UPDATE.
- */
-export async function recomputeVocabularyOnly(
-  userId: number,
-  kind: 'moods' | 'contexts',
-): Promise<void> {
-  const column = kind === 'moods' ? tracks.moods : tracks.contexts;
-  const vocab = await aggregateVocabulary(userId, column);
-  await db
-    .update(userFacets)
-    .set({
-      ...(kind === 'moods'
-        ? { moodsJson: JSON.stringify(vocab) }
-        : { contextsJson: JSON.stringify(vocab) }),
-      updatedAt: new Date(),
-    })
-    .where(eq(userFacets.userId, userId));
-}
-
-/**
  * Wrapper que despacha em paralelo (Promise.all) baseado no scope
  * do que mudou. Try/catch defensivo no caller — write principal já
  * foi committado, falha no delta só causa drift transitório (cron resolve).
@@ -349,9 +469,6 @@ export async function recomputeVocabularyOnly(
 export type DeltaScope = {
   recordStatus?: { prev: RecordStatus; next: RecordStatus };
   trackSelected?: { delta: -1 | 1 };
-  shelves?: boolean;
-  moods?: boolean;
-  contexts?: boolean;
 };
 
 export async function applyDeltaForWrite(
@@ -364,15 +481,6 @@ export async function applyDeltaForWrite(
   }
   if (scope.trackSelected) {
     tasks.push(applyTrackSelectedDelta(userId, scope.trackSelected.delta));
-  }
-  if (scope.shelves) {
-    tasks.push(recomputeShelvesOnly(userId));
-  }
-  if (scope.moods) {
-    tasks.push(recomputeVocabularyOnly(userId, 'moods'));
-  }
-  if (scope.contexts) {
-    tasks.push(recomputeVocabularyOnly(userId, 'contexts'));
   }
   if (tasks.length === 0) return;
   await Promise.all(tasks);

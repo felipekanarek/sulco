@@ -262,10 +262,29 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: nenhuma — última release shipped foi Inc 32
-(027-search-text-materialized) em 2026-05-02. Próximas candidatas no
-BACKLOG: Inc 33 (user_vocab dedicada), Inc 30 (excluir set), Inc 31
-(UX bag física), Inc 29 (UX rework filtros montar).
+Current active feature: **028-user-vocab-table** (BACKLOG: Inc 33)
+
+Authoritative planning artifacts (read these before making changes
+ao schema (nova tabela `user_vocab`),
+`src/lib/queries/user-vocab.ts` (helpers `listVocab` +
+`applyVocabDelta` + `diffVocabArrays` — NOVO arquivo),
+`src/lib/queries/user-facets.ts` (`recomputeFacets` ganha
+sub-step de re-popular `user_vocab`; `recomputeVocabularyOnly`/
+`recomputeShelvesOnly`/`aggregateFacet`/`aggregateVocabulary`
+removidos), `src/lib/queries/collection.ts` (`listUserGenres`/
+`listUserStyles`/`listUserShelves` migram pra `listVocab`),
+`src/lib/queries/montar.ts` (`listSelectedVocab` migra pra
+`listVocab`), Server Actions de write em `src/lib/actions.ts`
+(`updateTrackCuration`/`updateRecordAuthorFields`/`archiveRecord`/
+`listUserVocabulary`), ou `src/lib/discogs/apply-update.ts`
+(diff genres/styles)):
+
+- Plan: [specs/028-user-vocab-table/plan.md](specs/028-user-vocab-table/plan.md)
+- Spec: [specs/028-user-vocab-table/spec.md](specs/028-user-vocab-table/spec.md)
+- Research: [specs/028-user-vocab-table/research.md](specs/028-user-vocab-table/research.md)
+- Data Model: [specs/028-user-vocab-table/data-model.md](specs/028-user-vocab-table/data-model.md)
+- Contracts: [specs/028-user-vocab-table/contracts/](specs/028-user-vocab-table/contracts/)
+- Quickstart: [specs/028-user-vocab-table/quickstart.md](specs/028-user-vocab-table/quickstart.md)
 
 Prior active (now legacy):
 

@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import { computeRecordSearchText } from '@/lib/text';
+import { applyVocabDelta, diffVocabArrays } from '@/lib/queries/user-vocab';
 import type { DiscogsRelease } from './client';
 
 /**
@@ -27,7 +28,12 @@ export async function applyDiscogsUpdate(
 ): Promise<{ recordId: number; created: boolean }> {
   // ---------------- records ----------------
   const existing = await db
-    .select({ id: records.id, archived: records.archived })
+    .select({
+      id: records.id,
+      archived: records.archived,
+      oldGenres: records.genres,
+      oldStyles: records.styles,
+    })
     .from(records)
     .where(and(eq(records.userId, userId), eq(records.discogsId, release.id)))
     .limit(1);
@@ -65,6 +71,15 @@ export async function applyDiscogsUpdate(
     if (inserted.length > 0) {
       recordId = inserted[0].id;
       created = true;
+      // Inc 33: increment de vocab apenas no ramo vencedor (Decisão F1
+      // do speckit.analyze): evita duplicar quando outro worker
+      // ganhou a race do onConflictDoNothing.
+      try {
+        await applyVocabDelta(userId, 'genres', release.genres ?? [], []);
+        await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
+      } catch (err) {
+        console.error('[applyVocabDelta] erro pós-INSERT (sync):', err);
+      }
     } else {
       // Race: outro worker inseriu primeiro. Re-seleciona para continuar
       // idempotentemente para a atualização de tracks.
@@ -85,6 +100,8 @@ export async function applyDiscogsUpdate(
     recordId = existing[0].id;
     // UPDATE só em colunas DISCOGS. Reaparição: se archived=true, reseta.
     const wasArchived = existing[0].archived;
+    const oldGenres = (existing[0].oldGenres ?? []) as string[];
+    const oldStyles = (existing[0].oldStyles ?? []) as string[];
     await db
       .update(records)
       .set({
@@ -105,6 +122,48 @@ export async function applyDiscogsUpdate(
           : {}),
       })
       .where(eq(records.id, recordId));
+
+    // Inc 33: vocab delta para genres/styles do record.
+    try {
+      if (wasArchived) {
+        // Reaparição: re-incrementa todo o vocab do record.
+        // genres/styles do record (DISCOGS) + moods/contexts das tracks +
+        // shelf são re-incrementados aqui pra restaurar estado.
+        await applyVocabDelta(userId, 'genres', release.genres ?? [], []);
+        await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
+
+        // moods/contexts e shelf: ler do estado atual no banco.
+        const trackRows = await db
+          .select({ moods: tracks.moods, contexts: tracks.contexts })
+          .from(tracks)
+          .where(eq(tracks.recordId, recordId));
+        const allMoods = trackRows.flatMap((t) => (t.moods ?? []) as string[]);
+        const allContexts = trackRows.flatMap((t) => (t.contexts ?? []) as string[]);
+        if (allMoods.length > 0) await applyVocabDelta(userId, 'moods', allMoods, []);
+        if (allContexts.length > 0) await applyVocabDelta(userId, 'contexts', allContexts, []);
+
+        const [shelfRow] = await db
+          .select({ shelf: records.shelfLocation })
+          .from(records)
+          .where(eq(records.id, recordId))
+          .limit(1);
+        if (shelfRow?.shelf) {
+          await applyVocabDelta(userId, 'shelves', [shelfRow.shelf], []);
+        }
+      } else {
+        // Update normal: diff genres/styles old vs new.
+        const gDiff = diffVocabArrays(oldGenres, release.genres ?? []);
+        const sDiff = diffVocabArrays(oldStyles, release.styles ?? []);
+        if (gDiff.added.length > 0 || gDiff.removed.length > 0) {
+          await applyVocabDelta(userId, 'genres', gDiff.added, gDiff.removed);
+        }
+        if (sDiff.added.length > 0 || sDiff.removed.length > 0) {
+          await applyVocabDelta(userId, 'styles', sDiff.added, sDiff.removed);
+        }
+      }
+    } catch (err) {
+      console.error('[applyVocabDelta] erro pós-UPDATE (sync):', err);
+    }
   }
 
   // ---------------- tracks ----------------

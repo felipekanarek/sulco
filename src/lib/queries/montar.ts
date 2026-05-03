@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from 'drizzle-or
 import { db } from '@/db';
 import { records, setTracks, tracks } from '@/db/schema';
 import { matchesNormalizedText } from '@/lib/text';
-import { getUserFacets } from '@/lib/queries/user-facets';
+import { listVocab } from '@/lib/queries/user-vocab';
 
 export type BombaFilter = 'any' | 'only' | 'none';
 
@@ -245,6 +245,8 @@ export async function listSelectedVocab(
   userId: number,
   kind: 'moods' | 'contexts',
 ): Promise<string[]> {
-  const facets = await getUserFacets(userId);
-  return kind === 'moods' ? facets.moods : facets.contexts;
+  // Inc 33 (Decisão 11 oficializada): vocab de termos com ref_count>0
+  // — em uso real em qualquer track não-arquivada.
+  const entries = await listVocab(userId, kind);
+  return entries.map((e) => e.term);
 }

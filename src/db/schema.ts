@@ -276,6 +276,36 @@ export const userFacets = sqliteTable('user_facets', {
 });
 
 /* ============================================================
+   USER_VOCAB — vocabulário materializado por user × kind × term (Inc 33)
+   Substitui as 5 colunas JSON em user_facets por counters incrementais.
+   Cada entry representa um termo em uso (ref_count > 0); decrement
+   leva a 0 → DELETE no cleanup. PK composta evita duplicação.
+   ============================================================ */
+export const userVocab = sqliteTable(
+  'user_vocab',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', {
+      enum: ['genres', 'styles', 'moods', 'contexts', 'shelves'],
+    }).notNull(),
+    term: text('term').notNull(),
+    refCount: integer('ref_count').notNull().default(0),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.kind, t.term] }),
+    userKindIdx: index('user_vocab_user_kind_idx').on(t.userId, t.kind),
+  }),
+);
+
+export type UserVocabRow = typeof userVocab.$inferSelect;
+export type NewUserVocabRow = typeof userVocab.$inferInsert;
+
+/* ============================================================
    PLAYLIST — bloco reutilizável de faixas
    (FR-053a: NUNCA aparece na UI do piloto; tabelas mantidas para evitar
    migration destrutiva, mas não são lidas nem escritas)

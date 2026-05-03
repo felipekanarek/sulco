@@ -11,9 +11,9 @@ import { buildCollectionFilters } from '@/lib/queries/collection';
 import {
   getUserFacets,
   applyRecordStatusDelta,
-  recomputeShelvesOnly,
   applyDeltaForWrite,
 } from '@/lib/queries/user-facets';
+import { applyVocabDelta, diffVocabArrays, listVocab } from '@/lib/queries/user-vocab';
 import { cacheUser, revalidateUserCache } from '@/lib/cache';
 import { encryptSecret } from '@/lib/crypto';
 import { enrichTrackComment, getAdapter } from '@/lib/ai';
@@ -822,16 +822,24 @@ export async function updateTrackCuration(
     parsed.data.contexts !== undefined && !setEquals(prev.contexts ?? [], payload.contexts ?? []);
 
   // Edições em BPM/key/energy/comment/rating/aiAnalysis/fineGenre/
-  // references/isBomb/audioFeaturesSource resultam em todos os flags
-  // false → scope vazio → applyDeltaForWrite é no-op (zero queries).
+  // references/isBomb/audioFeaturesSource resultam em scope vazio →
+  // applyDeltaForWrite é no-op (zero queries) e diffs também.
   try {
+    // Inc 27: counter `tracks_selected_total` em user_facets.
     await applyDeltaForWrite(user.id, {
       trackSelected: selectedChanged
         ? { delta: parsed.data.selected ? 1 : -1 }
         : undefined,
-      moods: moodsChanged,
-      contexts: contextsChanged,
     });
+    // Inc 33: delta direcionado em user_vocab para moods/contexts.
+    if (moodsChanged) {
+      const { added, removed } = diffVocabArrays(prev.moods ?? [], payload.moods ?? []);
+      await applyVocabDelta(user.id, 'moods', added, removed);
+    }
+    if (contextsChanged) {
+      const { added, removed } = diffVocabArrays(prev.contexts ?? [], payload.contexts ?? []);
+      await applyVocabDelta(user.id, 'contexts', added, removed);
+    }
   } catch (err) {
     console.error('[applyDelta] erro pós-write (updateTrackCuration):', err);
   }
@@ -847,16 +855,16 @@ export async function updateTrackCuration(
    Retorna termos ordenados (uso do DJ por frequência + sementes alfa).
    ============================================================ */
 
-// Inc 24: derivado de user_facets.moods/contexts (1 SELECT da row).
-// Termos do user já vêm ordenados por frequência (aggregateVocabulary
-// no helper). Aqui só mergeamos com sementes ainda não usadas.
+// Inc 33: derivado de user_vocab (1 SELECT contra index).
+// Termos do user já vêm ordenados por frequência (`ORDER BY ref_count DESC`).
+// Aqui só mergeamos com sementes ainda não usadas.
 export async function listUserVocabulary(
   kind: 'moods' | 'contexts',
 ): Promise<string[]> {
   const user = await requireCurrentUser();
-  const facets = await getUserFacets(user.id);
-  const userOrdered = (kind === 'moods' ? facets.moods : facets.contexts)
-    .map(normalizeVocabTerm)
+  const entries = await listVocab(user.id, kind);
+  const userOrdered = entries
+    .map((e) => normalizeVocabTerm(e.term))
     .filter((t) => t.length > 0);
   const userSet = new Set(userOrdered);
   const seeds = kind === 'moods' ? DEFAULT_MOOD_SEEDS : DEFAULT_CONTEXT_SEEDS;
@@ -913,16 +921,18 @@ export async function updateRecordAuthorFields(
     return { ok: false, error: 'Disco não encontrado.' };
   }
 
-  // Inc 27: delta direcionado — apenas shelves se shelfLocation mudou.
+  // Inc 33: delta direcionado em user_vocab para shelves.
   // Edição apenas de `notes` resulta em shelfChanged=false → zero queries.
-  const shelfChanged =
-    parsed.data.shelfLocation !== undefined &&
-    parsed.data.shelfLocation !== prev.shelfLocation;
+  const oldShelf = prev.shelfLocation ?? null;
+  const newShelf = parsed.data.shelfLocation ?? null;
+  const shelfChanged = parsed.data.shelfLocation !== undefined && oldShelf !== newShelf;
   if (shelfChanged) {
+    const added = newShelf ? [newShelf] : [];
+    const removed = oldShelf ? [oldShelf] : [];
     try {
-      await recomputeShelvesOnly(user.id);
+      await applyVocabDelta(user.id, 'shelves', added, removed);
     } catch (err) {
-      console.error('[applyDelta] erro pós-write (updateRecordAuthorFields):', err);
+      console.error('[applyVocabDelta] erro pós-write (updateRecordAuthorFields):', err);
     }
   }
 
