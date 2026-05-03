@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-05-02 (Inc 32 entregue — search text materializado em records)
+**Última atualização**: 2026-05-03 (Inc 33 entregue — tabela user_vocab dedicada)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -12,69 +12,31 @@ Convenção:
 
 ### 🟢 Próximos (semanas)
 
-#### Incremento 33 — Tabela `user_vocab` dedicada (genres/styles/moods/contexts/shelves)
+#### Incremento 34 — Drop colunas `*Json` em `user_facets` (cleanup pós-Inc 33)
 
-Mantenedor identificou (sessão 2026-05-02 pós-Inc 28) que cada
-edição de moods/contexts em uma track dispara
-`recomputeVocabularyOnly` que escaneia ~10k tracks pra
-re-aggregar conjunto distinto. Idem `shelfLocation` →
-`recomputeShelvesOnly` (~2.5k records). Em curadoria com
-edições de vocab, custa ~10-20k rows por edição.
+Após Inc 33 validar em prod (✅ entregue 2026-05-03), as colunas
+`genresJson`, `stylesJson`, `moodsJson`, `contextsJson`,
+`shelvesJson` em `user_facets` ficam mortas — toda leitura agora
+vai pra `user_vocab`. Cleanup:
 
-Padrão arquitetural unificado: **substituir as 5 colunas JSON em
-`user_facets` (`genresJson`, `stylesJson`, `moodsJson`,
-`contextsJson`, `shelvesJson`) por uma tabela `user_vocab` com
-counters por termo**.
+1. Schema delta em [src/db/schema.ts](src/db/schema.ts): remover as 5 colunas JSON de `user_facets`.
+2. `recomputeFacets` em [src/lib/queries/user-facets.ts](src/lib/queries/user-facets.ts):
+   remover lógica de UPDATE das colunas JSON (mantém só counters de records/tracks
+   + chamada a `_repopulateVocab`). Ajustar tipo `UserFacets` removendo campos
+   `genres`/`styles`/`moods`/`contexts`/`shelves` (callers já migraram pra `listVocab`).
+3. Helpers `aggregateFacet`/`aggregateVocabulary`/`aggregateShelves` viram
+   redundantes (eram usados só pra alimentar `*Json`) — deletar.
+4. Migration prod via `turso db shell sulco-prod`:
+   ```sql
+   ALTER TABLE user_facets DROP COLUMN genres_json;
+   ALTER TABLE user_facets DROP COLUMN styles_json;
+   ALTER TABLE user_facets DROP COLUMN moods_json;
+   ALTER TABLE user_facets DROP COLUMN contexts_json;
+   ALTER TABLE user_facets DROP COLUMN shelves_json;
+   ```
 
-**Schema novo**:
-```sql
-CREATE TABLE user_vocab (
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK(kind IN ('genres','styles','moods','contexts','shelves')),
-  term TEXT NOT NULL,
-  ref_count INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  PRIMARY KEY (user_id, kind, term)
-);
-CREATE INDEX user_vocab_user_kind_idx ON user_vocab(user_id, kind);
-```
-
-5 kinds em 1 schema unificado. Index cobre listagem por (user, kind).
-
-**Custo por operação**:
-
-| Operação | Hoje | Pós-Inc 33 |
-|---|---|---|
-| Listagem chips (qualquer kind) | 1 SELECT user_facets cached | 1 SELECT user_vocab WHERE user/kind (~15 rows index) |
-| Edit `tracks.moods` (1 add, 1 remove) | ~10k rows scan | 2 UPSERTs (~5 rows) |
-| Edit `records.shelfLocation` | ~2.5k rows scan | 2 UPSERTs |
-| Sync adiciona track (5 moods) | recompute completo (~60k) | 5 UPSERTs |
-| Archive record (5 moods + 2 genres + 1 shelf) | recompute completo | ~8 UPSERTs/DECREMENTs |
-
-**Frentes**:
-
-1. Schema delta: tabela `user_vocab` + index. Migration prod via Turso shell.
-2. Helper `listVocab(userId, kind)` em `src/lib/queries/user-vocab.ts` (cached via `react.cache`). Retorna `{term, count}[]` ordenado por count desc.
-3. Helper `applyVocabDelta(userId, kind, added: string[], removed: string[])`: 1 UPSERT por add, 1 UPDATE por remove (DELETE se ref_count chega a 0). Idempotente.
-4. Hooks em writes:
-   - `updateTrackCuration` (moods/contexts mudou) → diff + applyVocabDelta
-   - `updateRecordAuthorFields` (shelfLocation mudou) → diff + applyVocabDelta
-   - `applyDiscogsUpdate` (sync) → diff genres/styles do record + diff moods/contexts de tracks
-   - `archiveRecord` → decrement TODAS entries do disco
-5. Refator callers: `listUserGenres`, `listUserStyles`, `listUserShelves`, `listSelectedVocab`, `listUserVocabulary` → todos passam a ler de `user_vocab` via wrapper.
-6. `recomputeFacets` ganha lógica de re-popular `user_vocab` do zero (cron drift correction). `recomputeVocabularyOnly`/`recomputeShelvesOnly`/`aggregateFacet` viram redundantes (deletar).
-7. Backfill via script `_backfill-user-vocab.mjs` (mesmo padrão Inc 24).
-
-**Princípios**:
-- I (Soberania): `user_vocab` é zona SYS materializada. Edição via DJ continua escrevendo em `tracks.moods/contexts` etc.
-- II (Server-First): RSC + Server Actions.
-- III (Schema verdade): 1 tabela nova. Migration prod.
-- IV (Preservar): drift residual corrigido pelo cron. `recomputeFacets` continua como fallback.
-- V (Mobile-Native): edições mais rápidas em rede 3G.
-
-**Esforço**: ~5-6h via speckit. Mais pesado que Inc 27 mas resolve definitivamente o gargalo de vocabulário em todas as telas.
-
-**Drop das colunas `*Json` em `user_facets`**: fica para Inc 34 (cleanup separado, ~30min). Reduz risco do Inc 33.
+**Esforço**: ~30min via speckit (schema delta + edição focada + migration
+prod). Reversível por revert + ALTER TABLE ADD COLUMN se necessário.
 
 #### Incremento 30 — Excluir set
 
@@ -604,6 +566,7 @@ spec/plan/data-model/contracts/quickstart.
 - **019** — Editar status do disco direto na grid (Inc 19) · 2026-04-29 · `specs/019-edit-status-on-grid/` · botões inline `Ativar`/`Descartar`/`Reativar` em cada item da grid `/` (ambas views — `<RecordRow>` list + `<RecordGridCard>` grid) com optimistic UI ≤100ms via `useTransition` + `useState<optimistic>`; rollback visual em erro com mensagem inline auto-dismiss 5s (Clarification Q2 — toast-like, sem botão fechar); pattern Inbox-zero (Clarification Q1) — card some naturalmente após `revalidatePath('/')` quando filtro corrente exclui novo status; reusa Server Action `updateRecordStatus` existente (Zod + ownership + revalidatePath nas 3 rotas) sem mudança; botões condicionais por status (`unrated` → Ativar+Descartar; `active` → Descartar; `discarded` → Reativar) com `aria-label` descritivo + tap target `min-h-[44px] md:min-h-[32px]` (Princípio V mobile + densidade desktop); discos `archived` ficam fora (filtrados pela query); 1 client component novo `<RecordStatusActions>` compartilhado entre as duas views via prop `className`; zero schema delta, zero novas Server Actions
 - **020** — Prateleira como select picker com auto-add (Inc 21) · 2026-04-29 · `specs/020-shelf-picker-autoadd/` · substitui o `<input type="text">` da seção Prateleira em `/disco/[id]` por combobox `<ShelfPicker>` com (a) lista distinct de prateleiras do user via novo helper `listUserShelves(userId)` em `src/lib/queries/collection.ts` (selectDistinct + ORDER BY lower(...)), (b) busca incremental case-insensitive por substring, (c) "+ Adicionar 'X' como nova prateleira" como último item quando termo não bate exatamente com nenhum existente (case-sensitive match), (d) "— Sem prateleira —" como primeiro item para limpar (NULL); reusa Server Action `updateRecordAuthorFields` existente sem mudança; `useTransition` + `useState<optimistic>` + auto-dismiss 5s pra erro (mesma UX Inc 19); desktop popover absoluto + mobile bottom sheet via `<MobileDrawer side="bottom">` (primitiva Inc 009) — mesma `<ListPanel>` em ambos via `md:` Tailwind; ARIA combobox completo (`role="combobox"`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`); navegação por teclado (↑/↓/Enter/Escape); tap target `min-h-[44px] md:min-h-[36px]` (Princípio V); casing preservado (Decisão 1 do research — apenas `trim()`, sem UPPERCASE forçado); ordem alfabética case-insensitive (não LRU); empty state acolhedor; zero schema delta, zero novas Server Actions de escrita; pré-requisito UX do Inc 20 (multi-select bulk edit). Bug 15 hotfix incluído (commit `0615c24`): MobileDrawer vazava em desktop por portal — fix com `matchMedia` + render condicional.
 - **021** — Busca insensitive a acentos (Inc 18) · 2026-04-30 · `specs/021-accent-insensitive-search/` · busca textual em `/` (home) e `/sets/[id]/montar` agora normaliza diacríticos antes de comparar — digitar `joao` acha `João Gilberto`, `acucar` acha `Açúcar`, `sergio` acha `Sérgio`, bidirecional (FR-003); novo helper puro `normalizeText(s)` em `src/lib/text.ts` (`lowercase + NFD + replace(/\p{M}/gu, '')`) + helper auxiliar `matchesNormalizedText(haystacks, query)` para DRY; cobertura universal Unicode (não só pt-BR — `naive`/`naïve`, `cafe`/`café`, `garcon`/`garçon`); JS-side post-query (SQLite/Turso não tem `unaccent` nativo): `buildCollectionFilters` ganha flag opcional `omitText` (default false); `queryCollection` carrega rows com filtros não-text via SQL e aplica `matchesNormalizedText` em `[artist, title, label]` antes da agregação de tracks; `queryCandidates` remove LIKE textual SQL + move `.limit()` pra JS (`slice(0, opts.limit ?? 300)`) APÓS filtro JS pra preservar candidatos válidos; `pickRandomUnratedRecord` (Inc 11) re-estrutura: SELECT amplo sem text → JS post-filter → `Math.random()` JS sobre filtrados (preserva uniformidade); filtros multi-select de tag (genres, styles, moods, contexts) permanecem exact match (vocabulário canônico — Decisão 8 do research) — `fineGenre` (texto livre) entra no text filter geral; zero schema delta, zero novas Server Actions; refator localizado em 4 arquivos. Princípios I/II/III/V todos OK.
+- **028** — Tabela `user_vocab` dedicada (Inc 33) · 2026-05-03 · `specs/028-user-vocab-table/` · substitui as 5 colunas JSON em `user_facets` (`genresJson`/`stylesJson`/`moodsJson`/`contextsJson`/`shelvesJson`) por tabela `user_vocab` com counters incrementais por termo. Schema delta: 1 tabela nova com PK composta `(user_id, kind, term)` + index `(user_id, kind)`. CHECK constraint em kind (5 valores). FK cascade delete. **Helpers novos** em [src/lib/queries/user-vocab.ts](src/lib/queries/user-vocab.ts) (NOVO arquivo): `listVocab(userId, kind)` cached via `react.cache` (1 SELECT contra index, ordenado `ref_count DESC, lower(term) ASC`); `applyVocabDelta(userId, kind, added, removed)` (UPSERT increment atomic via `ON CONFLICT DO UPDATE` + UPDATE decrement com clamp `MAX(0, ref_count-1)` + DELETE cleanup de zerados); `diffVocabArrays(old, new)` utility puro O(N+M) via Set. **Hooks de write substituem chamadas a recompute scan-pesadas**: `updateTrackCuration` (actions.ts) faz diff moods/contexts → applyVocabDelta (era ~10k rows scan); `updateRecordAuthorFields` (actions.ts) faz diff shelf → applyVocabDelta (era ~2.5k rows scan); `applyDiscogsUpdate` (discogs/apply-update.ts) — INSERT path increment APENAS quando `created=true` (ramo vencedor de onConflictDoNothing, evita duplicação em race), UPDATE path diff old vs new genres/styles, reaparição (wasArchived=true) re-incrementa todas as 5 dimensões; `archiveRecord` (discogs/archive.ts) faz bulk decrement de TODAS referências do disco — genres+styles+shelf+moods/contexts de cada track (centralizado em archive.ts, caminho único — sync chama). **Migração de 5 callers de leitura** (assinatura externa preservada): `listUserGenres`/`listUserStyles`/`listUserShelves` (collection.ts); `listSelectedVocab` (montar.ts) — Decisão 11 oficializada: termos com `ref_count>0` (em uso real); `listUserVocabulary` (actions.ts). **`recomputeFacets`** (user-facets.ts) ganha sub-step `_repopulateVocab` que `DELETE WHERE user_id` + INSERT N entries baseado em estado autoritativo (records/tracks `WHERE archived=false` — FR-013). Drift residual corrigido pelo cron diário existing. **Helpers redundantes removidos**: `recomputeVocabularyOnly`, `recomputeShelvesOnly`. `applyDeltaForWrite` (Inc 27) perde branches `shelves`/`moods`/`contexts` (substituídos por chamadas diretas a applyVocabDelta nos callers); preserva apenas `recordStatus` + `trackSelected` (counters de user_facets). `aggregateFacet`/`aggregateVocabulary`/`aggregateShelves` permanecem privados — usados por `recomputeFacets` para manter colunas JSON em user_facets como fallback até Inc 34 dropar. Backfill 1× via `scripts/_backfill-user-vocab.mjs` (mesmo padrão Inc 24/27/32) populou 211 entries em prod (15G/171S/15M/8Ctx/2Sh). Migration prod aplicada antes do code deploy (ordem crítica documentada — gate verificável: `SELECT kind, COUNT(*) FROM user_vocab GROUP BY kind` retornou 5 kinds com terms>0, `WHERE ref_count=0` retornou 0 antes do push). **Smoke test em prod confirmou**: edição de mood (1 add/remove) consome ~4 rows write path + 1 UPSERT/UPDATE em user_vocab (vs ~10k scan pré-Inc 33); edição de shelf consome ~5 rows + INSERT/UPDATE/DELETE em user_vocab (vs ~2.5k scan); listagens de chips renderizam via 1 SELECT contra `user_vocab_user_kind_idx` retornando 2-15 rows direto do index. Princípios I (vocab é zona SYS materializada — DJ continua escrevendo em campos primários), II (RSC + react.cache request-scoped), III (1 tabela + 1 index, migration explícita), IV (colunas JSON ficam como fallback até Inc 34, drift correction via cron), V (edições mais rápidas em mobile, pickers preservados sem mudança UI) todos OK.
 - **027** — Search text materializado em records (Inc 32) · 2026-05-02 · `specs/027-search-text-materialized/` · resolve gargalo identificado no diagnóstico pós-Inc 28: home `/?q=...` carregava 2588 rows quando text filter ativo, porque Inc 18 (busca accent-insensitive) deliberadamente desabilitou paginação SQL com text por falta de `unaccent` nativo no SQLite. **Schema delta**: 1 coluna `records.search_text TEXT NOT NULL DEFAULT ''` + 1 index `records_user_search_text_idx ON (user_id, search_text)`. `search_text` armazena versão pre-normalizada (`lowercase + NFD + strip diacritics`) de `artist + ' ' + title + ' ' + (label ?? '')`. **Helper novo** `computeRecordSearchText(artist, title, label)` em [src/lib/text.ts](src/lib/text.ts) reusa `normalizeText` do Inc 18. **Hooks em writes**: `applyDiscogsUpdate` em [src/lib/discogs/apply-update.ts](src/lib/discogs/apply-update.ts) computa `search_text` no INSERT e re-computa no UPDATE quando metadata muda; `runInitialImport` em [src/lib/discogs/import.ts](src/lib/discogs/import.ts) chama `applyDiscogsUpdate` no loop (cobertura automática, sem hook explícito). **Refator** em `buildCollectionFilters` em [src/lib/queries/collection.ts](src/lib/queries/collection.ts): flag `omitText` removida; text path passa a usar `LIKE '%' + normalizeText(q.text) + '%'` em SQL contra `records.search_text`. `queryCollection` sempre faz SQL `LIMIT/OFFSET` (branch condicional `hasTextFilter` removido). `pickRandomUnratedRecord` (Inc 11) em [src/lib/actions.ts](src/lib/actions.ts) sempre usa `ORDER BY RANDOM() LIMIT 1` (slow path JS post-filter eliminado). **Backfill** via `scripts/_backfill-search-text.mjs` (mesmo padrão Inc 24/27): re-implementa `normalizeText` inline (script Node não importa TS); 2597 records atualizados em prod 1× pré-deploy. **Migration aplicada em prod** via `turso db shell sulco-prod` antes do code deploy (ordem crítica documentada — code antes de backfill faria LIKE casar contra `''` e busca retornaria 0 em prod). Gate verificável: `SELECT COUNT(*) WHERE search_text=''` retornou 0 antes do push. **`queryCandidates` em montar.ts fica fora do escopo** — usa `matchesNormalizedText` JS sobre tracks (Inc 18) com LIMIT 1000 pré-filtro (Inc 23) mitigando; tracks viram Inc futuro se mostrar gargalo. **Ganho**: load `/?q=` cai de ~2588 → ≤50 rows lidas (-98%); cobertura accent/case-insensitive 100% preservada (LIKE contra normalized casa diretamente); paginação SQL volta a funcionar com text filter (LIMIT/OFFSET correto); `pickRandomUnratedRecord` cai de full-scan JS pra 1 row read em qualquer caso. Princípios I/II/III/IV/V todos OK. Helper `matchesNormalizedText` em text.ts mantido pra callers de tracks (montar.ts queryCandidates).
 - **026** — Otimização do fluxo de montar set (Inc 28) · 2026-05-02 · `specs/026-montar-set-perf/` · ataca o gargalo do `/sets/[id]/montar` em 4 frentes. **Frente C**: `listSelectedVocab` em [src/lib/queries/montar.ts](src/lib/queries/montar.ts) deriva de `user_facets.moodsJson`/`contextsJson` (Inc 24 + Inc 26 cached) em vez de scan de ~10k tracks por render. **Mudança semântica aceita pelo mantenedor**: vocab agora é o conjunto geral (archived=false), não restrito a selected+active — chip picker pode mostrar moods/contexts sem candidatos resultantes. Filtros do `/sets/[id]/montar` precisam de UX rework futuro (nota do mantenedor durante implementação). **Frente B (Inc 27 leftover)**: `aiConfigured` em `/sets/[id]/montar/page.tsx` derivado de `user.aiProvider`/`user.aiModel` cached (Inc 27 já trouxe esses campos pro `requireCurrentUser`). Eliminou 1 query/render. `getUserAIConfigStatus` em `src/lib/ai/index.ts` mantida pra `/conta/page.tsx` (caller legítimo). **Frente A — debounce filter persist**: `<MontarFiltersForm>` em [src/components/montar-filters.tsx](src/components/montar-filters.tsx) sobe de 400ms→500ms + flush on unmount via 2 `useRef` (`timerRef`, `pendingRef`) + useEffect cleanup que chama `saveMontarFilters` imediato fire-and-forget se houver pending. Antes navegação rápida descartava persist. **Frente D — `addTrackToSet`**: combina COUNT (limite 300) + COALESCE(MAX(order), -1) em 1 SELECT (era 2 separados com mesma WHERE). -1 query por add. Schema delta zero. Reversível por revert. Ganho esperado em curadoria de set (30 toggles + 20 adds + 5 removes): ~600 queries / ~1M rows reads → ~50 queries / ~5k rows reads (-99.5% rows, -92% queries). Princípios I/II/III/IV/V todos OK.
 - **025** — Recompute incremental + dedups remanescentes (Inc 27) · 2026-05-02 · `specs/025-incremental-recompute/` · ataca o caminho crítico de write (curadoria em `/disco/[id]`). Diagnóstico em prod (instrumentação `[DB]` pós-Inc 26) revelou que cada edição disparava `recomputeFacets` síncrono = ~7 queries pesadas + ~50-100k rows/edição → curadoria típica de 1 disco com 30 edições = ~2M+ rows lidas (estouro confirmado de cota Turso). Pacote consolida 3 frentes em 1 release. **Frente principal — delta updates direcionados em `user_facets`**: 5 helpers novos em [src/lib/queries/user-facets.ts](src/lib/queries/user-facets.ts) (`applyRecordStatusDelta`, `applyTrackSelectedDelta`, `recomputeShelvesOnly`, `recomputeVocabularyOnly`, `applyDeltaForWrite`) substituem `recomputeFacets` em 5 Server Actions de write críticas. Edições em campos não-materializados (BPM, key, energy, comment, rating, fineGenre, references, isBomb, aiAnalysis, notes) fazem **ZERO queries de delta**. Edições em status/selected fazem 1 UPDATE atomic com `MAX(0, x ± 1)` defensivo. Mudanças em moods/contexts/shelves disparam recompute parcial APENAS daquela faceta. Helper local `setEquals` em `updateTrackCuration` evita falso-positivo quando DJ envia mesma lista em ordem diferente. **Frente B — `aiProvider`/`aiModel` em `CurrentUser` cached**: tipo estendido em `src/lib/auth.ts`; `/disco/[id]/page.tsx` deriva `aiConfigured` direto do user cached (Inc 26 + Inc 27) — eliminou 1 query/render. `aiApiKeyEncrypted` INTENCIONALMENTE FORA do cached (princípio menor exposição — chave lida apenas em `getUserAIConfig` quando provider IA é chamado). **Frente C (drift correction)**: cron diário `/api/cron/sync-daily/route.ts` ganha `recomputeFacets(userId)` por user no fim — corrige drift residual (race em `applyRecordStatusDelta`, edição via SQL direto, edge cases) em ≤24h. `recomputeFacets` permanece exportado como fallback (usado em `runIncrementalSync`/`runInitialImport`/cron). **Server Actions skip total** em `acknowledgeArchivedRecord`/`acknowledgeAllArchived` (`archived_acknowledged_at` não está em facets). Schema delta zero. Reversível por revert. Ganho esperado: curadoria de 30 edições passa de ~480 queries / ~2.1M rows → ~30 queries / ~500 rows (-99% rows, -94% queries). Em uso solo: 2-6M reads/dia → ~150 reads/dia. Cabe folgado pra escala 5-10 amigos no free tier. Princípios I/II/III/IV/V todos OK.

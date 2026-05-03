@@ -8,13 +8,13 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar status — feature dir `specs/028-user-vocab-table/` + spec + plan + research + data-model + contracts + quickstart já criados nesta sessão. Branch `028-user-vocab-table` ativa.
+- [X] T001 Confirmar status — feature dir `specs/028-user-vocab-table/` + spec + plan + research + data-model + contracts + quickstart já criados nesta sessão. Branch `028-user-vocab-table` ativa.
 
 ## Phase 2: Foundational (schema delta + helpers core antes das US)
 
 ### Schema delta
 
-- [ ] T002 Adicionar `userVocab` a [src/db/schema.ts](../../src/db/schema.ts):
+- [X] T002 Adicionar `userVocab` a [src/db/schema.ts](../../src/db/schema.ts):
   ```ts
   export const userVocab = sqliteTable(
     'user_vocab',
@@ -42,7 +42,7 @@
   ```
   Verificar imports `primaryKey` (já existe), `index` (já existe). Rodar `npm run build` pra confirmar tipos.
 
-- [ ] T003 Aplicar migration SQL em sqlite local (dev):
+- [X] T003 Aplicar migration SQL em sqlite local (dev):
   ```bash
   sqlite3 sulco.db <<'SQL'
   CREATE TABLE user_vocab (
@@ -64,7 +64,7 @@
 
 ### Helpers core (`src/lib/queries/user-vocab.ts` — NOVO arquivo)
 
-- [ ] T004 Criar [src/lib/queries/user-vocab.ts](../../src/lib/queries/user-vocab.ts) com 3 helpers (`listVocab`, `applyVocabDelta`, `diffVocabArrays`) conforme [contracts/user-vocab-helpers.md](./contracts/user-vocab-helpers.md):
+- [X] T004 Criar [src/lib/queries/user-vocab.ts](../../src/lib/queries/user-vocab.ts) com 3 helpers (`listVocab`, `applyVocabDelta`, `diffVocabArrays`) conforme [contracts/user-vocab-helpers.md](./contracts/user-vocab-helpers.md):
   - `'server-only'` no topo.
   - Imports: `cache` de `react`, `eq`, `and`, `sql` de `drizzle-orm`, `db` de `@/db`, `userVocab` de `@/db/schema`.
   - Type export `VocabKind = 'genres' | 'styles' | 'moods' | 'contexts' | 'shelves'`.
@@ -73,17 +73,17 @@
   - `listVocab` cached via `cache((userId, kind) => ...)`. SQL: `SELECT term, ref_count FROM user_vocab WHERE user_id = ? AND kind = ? ORDER BY ref_count DESC, lower(term) ASC`.
   - `applyVocabDelta` recebe `(userId, kind, added: string[], removed: string[])`. Filtra termos vazios via `.filter(t => t.trim().length > 0)`. Para cada `added`: drizzle UPSERT `db.insert(userVocab).values({...refCount: 1}).onConflictDoUpdate({target: [userVocab.userId, userVocab.kind, userVocab.term], set: {refCount: sql\`ref_count + 1\`, updatedAt: sql\`unixepoch()\`}})`. Para cada `removed`: UPDATE com `MAX(0, ref_count - 1)` via `sql\`MAX(0, ref_count - 1)\``. Após todos UPDATEs, 1 DELETE: `db.delete(userVocab).where(and(eq(userVocab.userId, userId), eq(userVocab.kind, kind), eq(userVocab.refCount, 0)))`.
 
-- [ ] T005 Build local: `npm run build`. Confirmar zero erros TS em schema.ts + user-vocab.ts.
+- [X] T005 Build local: `npm run build`. Confirmar zero erros TS em schema.ts + user-vocab.ts.
 
 ### Script de backfill
 
-- [ ] T006 Criar `scripts/_backfill-user-vocab.mjs` (mesmo padrão Inc 24/27/32). Implementação descrita em [data-model.md](./data-model.md). Pontos críticos:
+- [X] T006 Criar `scripts/_backfill-user-vocab.mjs` (mesmo padrão Inc 24/27/32). Implementação descrita em [data-model.md](./data-model.md). Pontos críticos:
   - `for (const userId of allUserIds) { await db.transaction(...) }` — Decisão 14.
   - Filtrar termos vazios/whitespace: `if (typeof term !== 'string' || term.trim().length === 0) continue`.
   - 4 SELECTs por user: records (genres+styles), tracks JOIN records (moods+contexts), records distinct shelf, e contar com `Map`. Insert resultado.
   - Log progress: `console.log` por user + a cada 500 inserts.
 
-- [ ] T007 Rodar backfill em sqlite local:
+- [X] T007 Rodar backfill em sqlite local:
   ```bash
   node scripts/_backfill-user-vocab.mjs
   ```
@@ -100,7 +100,7 @@
 
 **Independent test**: cenários 1 e 2 do [quickstart.md](./quickstart.md) — edição de moods/shelf consome ≤10 rows.
 
-- [ ] T008 [US1] Refatorar `updateTrackCuration` em [src/lib/actions.ts](../../src/lib/actions.ts):
+- [X] T008 [US1] Refatorar `updateTrackCuration` em [src/lib/actions.ts](../../src/lib/actions.ts):
   - Antes do UPDATE, carregar `oldMoods`/`oldContexts` da track (pode reusar SELECT existente que já lê estado atual; checar).
   - Substituir chamada a `recomputeVocabularyOnly(user.id)` por:
     ```ts
@@ -114,7 +114,7 @@
   - Manter `applyDeltaForWrite` (Inc 27) que cuida de outros campos (status, selected etc.) intacto. Apenas substituir o ramo de moods/contexts.
   - Build local pra confirmar.
 
-- [ ] T009 [US1] Refatorar `updateRecordAuthorFields` em [src/lib/actions.ts](../../src/lib/actions.ts):
+- [X] T009 [US1] Refatorar `updateRecordAuthorFields` em [src/lib/actions.ts](../../src/lib/actions.ts):
   - Antes do UPDATE, carregar `oldShelf` do record (pode reusar SELECT existente).
   - Substituir chamada a `recomputeShelvesOnly(user.id)` por:
     ```ts
@@ -126,7 +126,7 @@
     ```
   - Manter outros side-effects intactos.
 
-- [ ] T010 [US1] Auditar Server Actions remanescentes que ainda chamam `recomputeVocabularyOnly`/`recomputeShelvesOnly`:
+- [X] T010 [US1] Auditar Server Actions remanescentes que ainda chamam `recomputeVocabularyOnly`/`recomputeShelvesOnly`:
   ```bash
   grep -rn "recomputeVocabularyOnly\|recomputeShelvesOnly" src/
   ```
@@ -138,7 +138,7 @@
 
 **Independent test**: cenário 4 do quickstart — pickers em /sets/[id]/montar e / mostram termos em uso, ordenados por frequência.
 
-- [ ] T011 [US2] Refatorar callers de leitura em batch:
+- [X] T011 [US2] Refatorar callers de leitura em batch:
   - `listUserGenres` em [src/lib/queries/collection.ts](../../src/lib/queries/collection.ts): `import { listVocab } from '@/lib/queries/user-vocab'` + `const entries = await listVocab(userId, 'genres'); return entries.map((e) => ({ value: e.term, count: e.count }));`
   - `listUserStyles` idem com `'styles'`.
   - `listUserShelves` retorna `string[]`: `return entries.map((e) => e.term);`
@@ -154,7 +154,7 @@
 
 **Independent test**: cenário 3 do quickstart — archive consome ≤30 rows; sync atualiza vocab automaticamente.
 
-- [ ] T012 [US3] Adicionar hooks em `applyDiscogsUpdate` em [src/lib/discogs/apply-update.ts](../../src/lib/discogs/apply-update.ts):
+- [X] T012 [US3] Adicionar hooks em `applyDiscogsUpdate` em [src/lib/discogs/apply-update.ts](../../src/lib/discogs/apply-update.ts):
   - **Path INSERT (record novo)**: increment **apenas quando `created=true`** (após o ramo `if (inserted.length > 0)`). Evita duplicar quando `onConflictDoNothing` rola pra outro worker que ganhou a race:
     ```ts
     if (inserted.length > 0) {
@@ -186,13 +186,13 @@
   - **Reaparição** (`wasArchived` true → false): vocab deve ser re-incrementado pra TODAS as 5 dimensões. Implementação: chamar helper bulk descrito em T013 com `add=true`.
   - moods/contexts NÃO são tocados aqui (são AUTHOR — Decisão 7 do research).
 
-- [ ] T013 [US3] Implementar bulk hook de archive/restore em [src/lib/actions.ts](../../src/lib/actions.ts):
+- [X] T013 [US3] Implementar bulk hook de archive/restore em [src/lib/actions.ts](../../src/lib/actions.ts):
   - Localizar Server Action `archiveRecord` (ou caminho equivalente — checar via `grep -n "archived: true\|archive" src/lib/actions.ts | head`).
   - Antes do UPDATE archived=true: SELECT genres+styles+shelf do record + SELECT moods+contexts de TODAS as tracks do record.
   - Após o UPDATE: bulk decrement via 5 chamadas a `applyVocabDelta` (genres, styles, moods flatMap, contexts flatMap, shelves opcional).
   - **Restore** (Server Action de des-arquivar manualmente, se existir, OU caminho de reaparição em `applyDiscogsUpdate`): inverso — `added=...` em vez de `removed=...`. Centralizar lógica num helper privado se ficar duplicada.
 
-- [ ] T014 [US3] Auditar todos os caminhos de write em moods/contexts/shelf/genres/styles:
+- [X] T014 [US3] Auditar todos os caminhos de write em moods/contexts/shelf/genres/styles:
   ```bash
   grep -rn "tracks\.moods\|tracks\.contexts\|records\.shelfLocation\|records\.genres\|records\.styles" src/lib/ | grep -v "queries/" | head -30
   ```
@@ -204,7 +204,7 @@
 
 **Independent test**: cenário 5 do quickstart — drift introduzido manualmente é corrigido após cron rodar.
 
-- [ ] T015 [US4] Estender `recomputeFacets(userId)` em [src/lib/queries/user-facets.ts](../../src/lib/queries/user-facets.ts):
+- [X] T015 [US4] Estender `recomputeFacets(userId)` em [src/lib/queries/user-facets.ts](../../src/lib/queries/user-facets.ts):
   - Após a lógica existente que re-computa `user_facets` (manter intacta — colunas JSON ainda existem como fallback até Inc 34), adicionar bloco `db.transaction` que faz:
     ```ts
     await tx.delete(userVocab).where(eq(userVocab.userId, userId));
@@ -214,7 +214,7 @@
   - Reusar lógica do backfill — refatorar pra função helper privada `_repopulateVocab(tx, userId)` se ficar grande.
   - Build local pra confirmar.
 
-- [ ] T016 [US4] Remover helpers redundantes em [src/lib/queries/user-facets.ts](../../src/lib/queries/user-facets.ts):
+- [X] T016 [US4] Remover helpers redundantes em [src/lib/queries/user-facets.ts](../../src/lib/queries/user-facets.ts):
   - DELETAR funções: `recomputeVocabularyOnly`, `recomputeShelvesOnly`, `aggregateFacet`, `aggregateVocabulary`.
   - Verificar `applyDeltaForWrite` (Inc 27) — manter, mas pode chamar diferente. Se `applyDeltaForWrite` chamava `recomputeVocabularyOnly`/`recomputeShelvesOnly`, remover essas chamadas (já substituídas em T008/T009).
   - Manter `applyRecordStatusDelta`, `applyTrackSelectedDelta` (Inc 27 — não tocam vocab).
@@ -222,18 +222,18 @@
 
 ## Phase 7: Polish — build + commit + deploy + smoke
 
-- [ ] T017 Build local final: `npm run build`. Confirmar zero erros TypeScript em schema.ts, user-vocab.ts, user-facets.ts, collection.ts, montar.ts, actions.ts, apply-update.ts.
+- [X] T017 Build local final: `npm run build`. Confirmar zero erros TypeScript em schema.ts, user-vocab.ts, user-facets.ts, collection.ts, montar.ts, actions.ts, apply-update.ts.
 
-- [ ] T018 Verificar grep final:
+- [X] T018 Verificar grep final:
   - `grep -rn "recomputeVocabularyOnly\|recomputeShelvesOnly\|aggregateFacet\|aggregateVocabulary" src/` — esperado: 0 ocorrências.
   - `grep -rn "applyVocabDelta\|listVocab\|diffVocabArrays" src/` — esperado: definição em user-vocab.ts + usos em actions.ts (3+: updateTrackCuration, updateRecordAuthorFields, archiveRecord) + apply-update.ts (2+: INSERT path + UPDATE path) + collection.ts (3: listUserGenres/Styles/Shelves) + montar.ts (1: listSelectedVocab).
   - `grep -rn "user_facets\.\(moods_json\|contexts_json\|genres_json\|styles_json\|shelves_json\)" src/` — esperado: zero ocorrências em código ativo (colunas existem no banco mas não são mais lidas).
 
-- [ ] T019 Commit em branch `028-user-vocab-table` com mensagem `feat(028): tabela user_vocab dedicada (Inc 33)`. Push branch.
+- [X] T019 Commit em branch `028-user-vocab-table` com mensagem `feat(028): tabela user_vocab dedicada (Inc 33)`. Push branch.
 
-- [ ] T020 Merge `028-user-vocab-table` → `main` com `--no-ff`. **NÃO PUSHE AINDA** se backfill prod (T022) ainda não rodou. Verifica em ordem.
+- [X] T020 Merge `028-user-vocab-table` → `main` com `--no-ff`. **NÃO PUSHE AINDA** se backfill prod (T022) ainda não rodou. Verifica em ordem.
 
-- [ ] T021 [US3] Aplicar migration em prod via `turso db shell sulco-prod`:
+- [X] T021 [US3] Aplicar migration em prod via `turso db shell sulco-prod`:
   ```sql
   CREATE TABLE user_vocab (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -253,7 +253,7 @@
   -- 1 row
   ```
 
-- [ ] T022 [US3] Rodar backfill em prod (mesmo padrão Inc 32 — usar token efêmero turso CLI ou env vars):
+- [X] T022 [US3] Rodar backfill em prod (mesmo padrão Inc 32 — usar token efêmero turso CLI ou env vars):
   ```bash
   DATABASE_URL=libsql://sulco-prod-felipekanarek.aws-us-east-1.turso.io \
   DATABASE_AUTH_TOKEN=<token> \
@@ -267,7 +267,7 @@
   -- esperado: 0
   ```
 
-- [ ] T023 **Gate verificável antes do push** — executar comando explícito:
+- [X] T023 **Gate verificável antes do push** — executar comando explícito:
   ```bash
   turso db shell sulco-prod "SELECT kind, COUNT(*) AS terms FROM user_vocab GROUP BY kind"
   ```
@@ -276,13 +276,13 @@
   
   **Por que crítico**: se code deploy entra antes do backfill completo, `listVocab` retorna 0 em algum kind e pickers ficam vazios em prod. Regressão UX grave.
 
-- [ ] T024 Deploy prod manual:
+- [X] T024 Deploy prod manual:
   ```bash
   vercel --prod --yes
   ```
   Aguardar Ready (~1min). Confirmar via `vercel ls sulco --yes | head -3`.
 
-- [ ] T025 Smoke test pós-deploy: rodar cenários 1, 2, 3, 4, 6, 8 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow > /tmp/inc33-smoke.log 2>&1` durante cada cenário.
+- [X] T025 Smoke test pós-deploy: rodar cenários 1, 2, 3, 4, 6, 8 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow > /tmp/inc33-smoke.log 2>&1` durante cada cenário.
   - Cenário 1 (edição moods): ≤10 rows lidas, 0 SELECTs de scan ~10k tracks.
   - Cenário 2 (edição shelf): ≤10 rows lidas, 0 SELECTs de scan ~2.5k records.
   - Cenário 3 (archive): ≤30 rows lidas, 0 chamadas a recomputeFacets síncrono.
@@ -290,7 +290,7 @@
   - Cenário 6 (paridade pós-deploy): contagens em `user_vocab` batem com `json_array_length(*_json)` em `user_facets` (paridade ±1 aceito).
   - Cenário 8 (smoke geral): pickers em /, /sets/[id]/montar, /disco/[id] todos populados; mobile testado em viewport ≤640px (Princípio V).
 
-- [ ] T026 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **028** — Tabela user_vocab dedicada (Inc 33) · 2026-05-XX · specs/028-user-vocab-table/ · ...` com sumário (tabela `user_vocab` com counters incrementais por termo + 3 helpers + 4 hooks de write + migração de 5 callers de leitura + recomputeFacets ganha sub-step + backfill + cron drift correction; redução ~99% em reads de write paths). Remover Inc 33 da seção `🟢 Próximos`. Promover Inc 32 → Inc 28 SPECKIT marker pra "Prior active" e atualizar Current active feature em CLAUDE.md (ou deixar vazio se nada ativo logo após).
+- [X] T026 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar entrada `- **028** — Tabela user_vocab dedicada (Inc 33) · 2026-05-XX · specs/028-user-vocab-table/ · ...` com sumário (tabela `user_vocab` com counters incrementais por termo + 3 helpers + 4 hooks de write + migração de 5 callers de leitura + recomputeFacets ganha sub-step + backfill + cron drift correction; redução ~99% em reads de write paths). Remover Inc 33 da seção `🟢 Próximos`. Promover Inc 32 → Inc 28 SPECKIT marker pra "Prior active" e atualizar Current active feature em CLAUDE.md (ou deixar vazio se nada ativo logo após).
 
 ## Dependencies
 
