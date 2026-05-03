@@ -203,11 +203,11 @@
   - `grep -rn "omitText" src/` — esperado: zero.
   - `grep -rn "computeRecordSearchText" src/` — esperado: 1× definição em text.ts + ≥2× usos em apply-update.ts/import.ts.
 
-- [ ] T018 Commit em branch `027-search-text-materialized` com mensagem `feat(027): search text materializado em records (Inc 32)`. Push branch.
+- [X] T018 Commit em branch `027-search-text-materialized` com mensagem `feat(027): search text materializado em records (Inc 32)`. Push branch.
 
-- [ ] T019 Merge `027-search-text-materialized` → `main` com `--no-ff`. **NÃO PUSHE AINDA** se backfill prod (T015) ainda não rodou. Verifica em ordem.
+- [X] T019 Merge `027-search-text-materialized` → `main` com `--no-ff`. **NÃO PUSHE AINDA** se backfill prod (T015) ainda não rodou. Verifica em ordem.
 
-- [ ] T020 **Gate verificável antes do push** — executar comando explícito:
+- [X] T020 **Gate verificável antes do push** — executar comando explícito:
   ```bash
   turso db shell sulco-prod "SELECT COUNT(*) AS empty FROM records WHERE search_text = ''"
   ```
@@ -218,13 +218,13 @@
   
   **Por que crítico**: se code deploy entra antes do backfill completo, queries `LIKE search_text` casam contra `''` (todos records pré-backfill), busca retorna 0. Regressão funcional grave em prod.
 
-- [ ] T021 Deploy prod manual:
+- [X] T021 Deploy prod manual:
   ```bash
   vercel --prod --yes
   ```
   Aguardar Ready (~1min). Confirmar via `vercel ls sulco --yes | head -3`.
 
-- [ ] T022 Smoke test pós-deploy: rodar cenários 1, 2, 3, 4, 8 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow > /tmp/inc32-smoke.log 2>&1 &` durante cada cenário.
+- [X] T022 Smoke test pós-deploy: rodar cenários 1, 2, 3, 4, 8 do [quickstart.md](./quickstart.md). Coletar output de `vercel logs sulco.vercel.app --follow > /tmp/inc32-smoke.log 2>&1 &` durante cada cenário.
   - Cenário 1 (paginação SQL com text): query records retorna ≤ 50 rows (não 2588).
   - Cenário 2 (cobertura accent): `?q=acucar` encontra "Açúcar Amargo".
   - Cenário 3 (cobertura case): `?q=JOAO` encontra "João".

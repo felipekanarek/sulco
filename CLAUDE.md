@@ -262,14 +262,22 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **027-search-text-materialized** (BACKLOG: Inc 32)
+Current active feature: nenhuma — última release shipped foi Inc 32
+(027-search-text-materialized) em 2026-05-02. Próximas candidatas no
+BACKLOG: Inc 33 (user_vocab dedicada), Inc 30 (excluir set), Inc 31
+(UX bag física), Inc 29 (UX rework filtros montar).
+
+Prior active (now legacy):
+
+**027-search-text-materialized** (BACKLOG: Inc 32)
 
 Authoritative planning artifacts (read these before making changes
-ao schema de `records` (nova coluna `search_text` + index),
-`buildCollectionFilters` em `src/lib/queries/collection.ts`,
-hooks de write em `src/lib/discogs/apply-update.ts` e
-`src/lib/discogs/import.ts`, ou `pickRandomUnratedRecord` em
-`src/lib/actions.ts`):
+ao schema de `records` (coluna `search_text` + index
+`records_user_search_text_idx`), `buildCollectionFilters` em
+`src/lib/queries/collection.ts`, hook de write em
+`src/lib/discogs/apply-update.ts`, `pickRandomUnratedRecord` em
+`src/lib/actions.ts`, ou helper `computeRecordSearchText` em
+`src/lib/text.ts`):
 
 - Plan: [specs/027-search-text-materialized/plan.md](specs/027-search-text-materialized/plan.md)
 - Spec: [specs/027-search-text-materialized/spec.md](specs/027-search-text-materialized/spec.md)
