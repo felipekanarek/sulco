@@ -7,6 +7,7 @@ import { derivePhysicalBag } from '@/lib/queries/bag';
 import { deriveSetStatus, formatForDisplay } from '@/lib/tz';
 import { PhysicalBag } from '@/components/physical-bag';
 import { BombaInline } from '@/components/bomba-badge';
+import { DeleteSetButton } from '@/components/delete-set-button';
 
 /**
  * Rota `/sets/[id]` (FR-027). Visualização completa do set com:
@@ -53,13 +54,16 @@ export default async function SetDetailPage({
           </p>
           <h1 className="title-display text-[26px] md:text-[36px]">{set.name}</h1>
         </div>
-        <Link
-          href={`/sets/${set.id}/montar`}
-          prefetch={false}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors self-start md:self-auto"
-        >
-          Editar set
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <Link
+            href={`/sets/${set.id}/montar`}
+            prefetch={false}
+            className="font-mono text-[11px] uppercase tracking-[0.12em] bg-ink text-paper px-5 py-3 min-h-[44px] inline-flex items-center justify-center rounded-sm hover:bg-accent transition-colors"
+          >
+            Editar set
+          </Link>
+          <DeleteSetButton setId={set.id} setName={set.name} />
+        </div>
       </section>
 
       {set.briefing ? (

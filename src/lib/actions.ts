@@ -1156,6 +1156,39 @@ export async function updateSet(
   return { ok: true };
 }
 
+/* ============================================================
+   deleteSet — Inc 30 (031)
+   Hard-delete do set. Cascade automático em set_tracks via FK
+   `onDelete: cascade` (linha 215 schema). Tracks/records intactos.
+   Ownership check via WHERE userId = user.id.
+   ============================================================ */
+
+const deleteSetSchema = z.object({
+  setId: z.number().int().positive(),
+});
+
+export async function deleteSet(
+  input: z.infer<typeof deleteSetSchema>,
+): Promise<ActionResult> {
+  const user = await requireCurrentUser();
+  const parsed = deleteSetSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'ID inválido.' };
+  }
+
+  const result = await db
+    .delete(setsTable)
+    .where(and(eq(setsTable.id, parsed.data.setId), eq(setsTable.userId, user.id)))
+    .returning({ id: setsTable.id });
+
+  if (result.length === 0) {
+    return { ok: false, error: 'Set não encontrado.' };
+  }
+
+  revalidatePath('/sets');
+  return { ok: true };
+}
+
 function normalizeDate(value: string | null | undefined): Date | null {
   if (!value || value.length === 0) return null;
   const d = new Date(value);
