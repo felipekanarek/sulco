@@ -153,6 +153,17 @@ export const records = sqliteTable(
       t.archived,
       t.shelfLocation,
     ),
+    // Inc 36 (033): composite (user, archived, year, imported_at DESC) permite
+    // planner usar `year=?` como driver SEM perder ORDER BY natural. Validado
+    // via EXPLAIN local: `SEARCH records USING COVERING INDEX
+    // records_user_archived_year_imported_idx`. Year é o filtro não-format
+    // mais provável de ser seletivo (~60 valores distintos típicos).
+    userArchivedYearImportedIdx: index('records_user_archived_year_imported_idx').on(
+      t.userId,
+      t.archived,
+      t.year,
+      sql`${t.importedAt} DESC`,
+    ),
   }),
 );
 
@@ -377,6 +388,24 @@ export const recordStyles = sqliteTable(
   (t) => ({
     pk: primaryKey({ columns: [t.recordId, t.style] }),
     styleIdx: index('record_styles_style_idx').on(t.style, t.recordId),
+  }),
+);
+
+// Inc 36 (033): pivot pra tokens de format do Discogs ("Vinyl, LP, Album,
+// Stereo" → 4 entries). Substitui OR-de-LIKE × 4 patterns por
+// `id IN (SELECT record_id FROM record_formats WHERE token IN ?)` —
+// ~85% redução de reads esperada (mesmo pattern Inc 35).
+export const recordFormats = sqliteTable(
+  'record_formats',
+  {
+    recordId: integer('record_id')
+      .notNull()
+      .references(() => records.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordId, t.token] }),
+    tokenIdx: index('record_formats_token_idx').on(t.token, t.recordId),
   }),
 );
 

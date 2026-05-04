@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, desc, eq, exists, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
-import { records, tracks } from '@/db/schema';
+import { records, tracks, recordFormats } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
 import { normalizeText } from '@/lib/text';
 import { cacheUser } from '@/lib/cache';
@@ -131,16 +131,12 @@ export function buildCollectionFilters(q: {
   // Inc 8 (032): 5 filtros novos single-column, OR dentro de cada kind.
   // Pickers populam via user_vocab (Inc 33 estendido). Filtros usam coluna direta.
   if (q.formats && q.formats.length > 0) {
-    // Inc 8 follow-up: format vem composto ("Vinyl, LP, Album, Stereo").
-    // Match posicional pra evitar falsos positivos ("LP" ≠ "Maxi-LP"):
-    // exato OU início "X, %" OU fim "%, X" OU meio "%, X, %".
-    const fmtClauses = q.formats.flatMap((f) => [
-      sql`${records.format} = ${f}`,
-      sql`${records.format} LIKE ${`${f}, %`}`,
-      sql`${records.format} LIKE ${`%, ${f}`}`,
-      sql`${records.format} LIKE ${`%, ${f}, %`}`,
-    ]);
-    conds.push(sql`(${sql.join(fmtClauses, sql` OR `)})`);
+    // Inc 36 (033): substitui OR-de-LIKE × 4 patterns (Inc 8 follow-up) por
+    // subquery contra `record_formats_token_idx`. Paralelo a Inc 35 com
+    // record_genres/record_styles. Evita scan ~2.6k rows no full-scan.
+    conds.push(
+      sql`${records.id} IN (SELECT record_id FROM record_formats WHERE token IN ${q.formats})`,
+    );
   }
   if (q.shelves && q.shelves.length > 0) {
     conds.push(sql`${records.shelfLocation} IN ${q.shelves}`);

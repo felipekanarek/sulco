@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { recordGenres, recordStyles, trackMoods, trackContexts } from '@/db/schema';
+import { recordGenres, recordStyles, recordFormats, trackMoods, trackContexts } from '@/db/schema';
 
 /**
  * Inc 35 (030) — Helper privado para aplicar delta direcionado em
@@ -27,13 +27,14 @@ import { recordGenres, recordStyles, trackMoods, trackContexts } from '@/db/sche
 type PivotTable =
   | typeof recordGenres
   | typeof recordStyles
+  | typeof recordFormats
   | typeof trackMoods
   | typeof trackContexts;
 
 export async function applyPivotDelta(
   table: PivotTable,
   fkColumn: 'recordId' | 'trackId',
-  valueColumn: 'genre' | 'style' | 'mood' | 'context',
+  valueColumn: 'genre' | 'style' | 'token' | 'mood' | 'context',
   fkId: number,
   added: string[],
   removed: string[],
