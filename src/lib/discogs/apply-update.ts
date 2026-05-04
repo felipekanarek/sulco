@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { records, tracks, recordGenres, recordStyles, trackMoods, trackContexts } from '@/db/schema';
+import { records, tracks, recordGenres, recordStyles, recordFormats, trackMoods, trackContexts } from '@/db/schema';
 import { computeRecordSearchText } from '@/lib/text';
 import { applyVocabDelta, diffVocabArrays } from '@/lib/queries/user-vocab';
 import { applyPivotDelta } from '@/lib/pivot-helpers';
@@ -90,9 +90,11 @@ export async function applyDiscogsUpdate(
         console.error('[applyVocabDelta] erro pós-INSERT (sync):', err);
       }
       // Inc 35 (030): popula record_genres/record_styles pivot pra filtros.
+      // Inc 36 (033): + record_formats (tokens base do composite Discogs).
       try {
         await applyPivotDelta(recordGenres, 'recordId', 'genre', recordId, release.genres ?? [], []);
         await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, release.styles ?? [], []);
+        await applyPivotDelta(recordFormats, 'recordId', 'token', recordId, tokenizeFormat(release.format), []);
       } catch (err) {
         console.error('[applyPivotDelta] erro pós-INSERT (sync):', err);
       }
@@ -158,8 +160,10 @@ export async function applyDiscogsUpdate(
         await applyVocabDelta(userId, 'countries', singleTerm(release.country), []);
         await applyVocabDelta(userId, 'labels', singleTerm(release.label), []);
         // Inc 35: pivot record-level (idempotente via onConflictDoNothing).
+        // Inc 36: + record_formats (tokens base).
         await applyPivotDelta(recordGenres, 'recordId', 'genre', recordId, release.genres ?? [], []);
         await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, release.styles ?? [], []);
+        await applyPivotDelta(recordFormats, 'recordId', 'token', recordId, tokenizeFormat(release.format), []);
 
         // moods/contexts e shelf: ler do estado atual no banco.
         const trackRows = await db
@@ -205,9 +209,12 @@ export async function applyDiscogsUpdate(
         }
         // Inc 8 (032): diff per-field. format é tokenizado (composto Discogs);
         // country/label permanecem single-value.
+        // Inc 36 (033): mesmo diff alimenta `record_formats` pivot (paralelo
+        // a record_genres/record_styles).
         const fmtDiff = diffVocabArrays(tokenizeFormat(oldFormat), tokenizeFormat(release.format));
         if (fmtDiff.added.length > 0 || fmtDiff.removed.length > 0) {
           await applyVocabDelta(userId, 'formats', fmtDiff.added, fmtDiff.removed);
+          await applyPivotDelta(recordFormats, 'recordId', 'token', recordId, fmtDiff.added, fmtDiff.removed);
         }
         await applySingleValueVocabDiff(userId, 'countries', oldCountry, release.country);
         await applySingleValueVocabDiff(userId, 'labels', oldLabel, release.label);

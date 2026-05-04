@@ -262,18 +262,45 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Inc 8 (032) deployado em 2026-05-04. Felipe testou em prod e
-identificou problema de cota: ~3k rows/navegação com filtros
-aplicados, devido a ORDER BY imported_at DESC + LIMIT 50 forçar
-planner a varrer todo o index quando filtros restritivos retornam
-< 50 matches. **4 indexes single-column** em `records` aplicados
-em prod (year/country/label/shelf_location) como mitigação parcial,
-mas planner ainda prefere `imported_idx` por causa do ORDER BY
-natural. **Inc 36 (BACKLOG, 🟢 Próximos)** trata o que sobrou —
-pivot `record_formats` análoga a Inc 35 + index composite
-`(user_id, archived, year, imported_at)` pra forçar uso do filtro
-seletivo como driver. Próxima feature: Inc 36 ou Inc 31 (UX bag
-física) — Felipe decide.
+Inc 36 (033) deployado em 2026-05-04. Pivot `record_formats(record_id, token)`
+substitui OR-de-LIKE × 4 patterns (Inc 8 follow-up) — EXPLAIN prod
+confirma `SEARCH record_formats USING COVERING INDEX
+record_formats_token_idx + BLOOM FILTER`. Index composite
+`records_user_archived_year_imported_idx (user_id, archived, year,
+imported_at DESC)` força planner a usar year como driver mantendo
+ORDER BY natural (EXPLAIN prod confirmado). 8661 entries / 39 tokens
+distintos populados em prod (Vinyl=2575, LP=2243, 7"=235, 12"=37, etc).
+Hooks de write paralelos a Inc 35: `applyDiscogsUpdate` 3 paths
+(insert/update diff/reaparição) via `applyPivotDelta`; `archiveRecord`
+NÃO toca pivot (filter archived=0 cobre). Schema delta: 1 tabela + 1
+index. Princípios I-V todos OK. Próximas features candidatas: Inc 31
+(UX bag física) ou Inc 36b (composite indexes adicionais pra
+country/label/shelf se monitoring revelar gargalo).
+
+Prior active (now legacy):
+
+**033-format-pivot-composite-idx** (BACKLOG: Inc 36)
+
+Authoritative planning artifacts (read these before making changes
+ao schema (1 tabela pivot nova `record_formats(record_id, token)`
+com PK composta + index reverso `(token, record_id)` análogo a
+record_genres/record_styles do Inc 35; +1 index composite
+`records_user_archived_year_imported_idx` cobrindo filter restritivo
+`year=?` mantendo ORDER BY natural), `buildCollectionFilters` em
+`src/lib/queries/collection.ts` (format troca OR-de-LIKE × 4
+patterns por `id IN (SELECT record_id FROM record_formats WHERE
+token IN ?)` — ~85% redução reads esperada conforme Inc 35), hooks
+em `src/lib/discogs/apply-update.ts` (insert/update/reaparição via
+`applyPivotDelta` paralelo a record_genres), `src/lib/discogs/archive.ts`
+(NÃO toca pivot — filter `archived=0` cobre), ou novo backfill
+`scripts/_backfill-record-formats.mjs` (~10k entries esperadas em
+prod via `db.batch` chunk 500)):
+
+- Plan: [specs/033-format-pivot-composite-idx/plan.md](specs/033-format-pivot-composite-idx/plan.md)
+- Spec: [specs/033-format-pivot-composite-idx/spec.md](specs/033-format-pivot-composite-idx/spec.md)
+- Research: [specs/033-format-pivot-composite-idx/research.md](specs/033-format-pivot-composite-idx/research.md)
+- Data Model: [specs/033-format-pivot-composite-idx/data-model.md](specs/033-format-pivot-composite-idx/data-model.md)
+- Quickstart: [specs/033-format-pivot-composite-idx/quickstart.md](specs/033-format-pivot-composite-idx/quickstart.md)
 
 Prior active (now legacy):
 
@@ -560,6 +587,13 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   kinds via recreate atomic sem CHECK; 7 listUser* cacheados via
   cacheUser; 4 indexes single-column em records pra mitigação
   parcial; Inc 36 endereça gargalo restante via pivot record_formats)
+- 033 format-pivot-composite-idx (Inc 36 — pivot record_formats com
+  PK (record_id, token) + index reverso substitui OR-de-LIKE × 4
+  patterns por subquery indexada; index composite (user_id, archived,
+  year, imported_at DESC) força planner a usar year como driver
+  mantendo ORDER BY natural; hooks Inc 35 pattern em apply-update
+  insert/update/reaparição; archive não toca pivot (filter archived=0
+  cobre); 8661 entries / 39 tokens em prod)
 
 Key points of 022 (Inc 23 — Otimização de leituras Turso / cota estourada):
 - **3 frentes em 1 release**: revert parcial Inc 21 + cache layer
