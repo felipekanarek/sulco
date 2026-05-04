@@ -18,7 +18,12 @@ import { runInitialImport } from '@/lib/discogs/import';
 import {
   collectionCounts,
   countSelectedTracks,
+  getYearRange,
+  listUserCountries,
+  listUserFormats,
   listUserGenres,
+  listUserLabels,
+  listUserShelves,
   listUserStyles,
   queryCollection,
 } from '@/lib/queries/collection';
@@ -30,6 +35,11 @@ type SearchParams = Promise<{
   view?: string;
   genre?: string | string[];
   style?: string | string[];
+  format?: string | string[];
+  shelf?: string | string[];
+  decade?: string | string[];
+  country?: string | string[];
+  label?: string | string[];
   page?: string;
 }>;
 
@@ -48,6 +58,11 @@ export default async function CollectionPage({
   const view = parseView(sp.view);
   const genres = parseMultiList(sp.genre);
   const styles = parseMultiList(sp.style);
+  const formats = parseMultiList(sp.format);
+  const shelves = parseMultiList(sp.shelf);
+  const decades = parseMultiInt(sp.decade);
+  const countries = parseMultiList(sp.country);
+  const labels = parseMultiList(sp.label);
   // Inc 22 (paginação): page=1 default; pageSize fixo 50.
   const page = Math.max(1, Number(sp.page) || 1);
 
@@ -55,15 +70,46 @@ export default async function CollectionPage({
   // comum (DJ com import já reconhecido + idle), economizando ~3 queries.
   // No caso edge (running ou unacked), retorna {shouldShow:true, progress}
   // com mesmo custo do fluxo antigo.
-  const [importLight, rows, availableGenres, availableStyles, counts, selectedTotal] =
-    await Promise.all([
-      getImportProgressLight(),
-      queryCollection({ userId: user.id, status, text, genres, styles, bomba, page }),
-      listUserGenres(user.id),
-      listUserStyles(user.id),
-      collectionCounts(user.id),
-      countSelectedTracks(user.id),
-    ]);
+  const [
+    importLight,
+    rows,
+    availableGenres,
+    availableStyles,
+    availableFormats,
+    availableShelves,
+    availableCountries,
+    availableLabels,
+    yearRange,
+    counts,
+    selectedTotal,
+  ] = await Promise.all([
+    getImportProgressLight(),
+    queryCollection({
+      userId: user.id,
+      status,
+      text,
+      genres,
+      styles,
+      bomba,
+      formats,
+      shelves,
+      decades,
+      countries,
+      labels,
+      page,
+    }),
+    listUserGenres(user.id),
+    listUserStyles(user.id),
+    listUserFormats(user.id),
+    listUserShelves(user.id),
+    listUserCountries(user.id),
+    listUserLabels(user.id),
+    getYearRange(user.id),
+    collectionCounts(user.id),
+    countSelectedTracks(user.id),
+  ]);
+
+  const availableDecades = deriveDecades(yearRange);
 
   if (importLight.shouldShow) {
     const progress = importLight.progress;
@@ -83,7 +129,12 @@ export default async function CollectionPage({
     text.length > 0 ||
     bomba !== 'any' ||
     genres.length > 0 ||
-    styles.length > 0;
+    styles.length > 0 ||
+    formats.length > 0 ||
+    shelves.length > 0 ||
+    decades.length > 0 ||
+    countries.length > 0 ||
+    labels.length > 0;
 
   return (
     <div className="max-w-[1240px] mx-auto px-4 md:px-8">
@@ -111,6 +162,16 @@ export default async function CollectionPage({
         availableGenres={availableGenres}
         styles={styles}
         availableStyles={availableStyles}
+        formats={formats}
+        availableFormats={availableFormats}
+        shelves={shelves}
+        availableShelves={availableShelves}
+        decades={decades}
+        availableDecades={availableDecades}
+        countries={countries}
+        availableCountries={availableCountries}
+        labels={labels}
+        availableLabels={availableLabels}
         counts={counts}
       />
 
@@ -167,6 +228,11 @@ type PaginatorSearchParams = {
   view?: string;
   genre?: string | string[];
   style?: string | string[];
+  format?: string | string[];
+  shelf?: string | string[];
+  decade?: string | string[];
+  country?: string | string[];
+  label?: string | string[];
   page?: string;
 };
 
@@ -197,6 +263,11 @@ function Paginator({
         : [searchParams.style];
       list.forEach((s) => params.append('style', s));
     }
+    appendMulti(params, 'format', searchParams.format);
+    appendMulti(params, 'shelf', searchParams.shelf);
+    appendMulti(params, 'decade', searchParams.decade);
+    appendMulti(params, 'country', searchParams.country);
+    appendMulti(params, 'label', searchParams.label);
     if (target > 1) params.set('page', String(target));
     const qs = params.toString();
     return qs ? `/?${qs}` : '/';
@@ -289,4 +360,32 @@ function parseView(v: string | undefined): ViewMode {
 function parseMultiList(v: string | string[] | undefined): string[] {
   if (!v) return [];
   return Array.isArray(v) ? v.filter(Boolean) : [v];
+}
+function parseMultiInt(v: string | string[] | undefined): number[] {
+  const list = parseMultiList(v);
+  const nums: number[] = [];
+  for (const s of list) {
+    const n = Number(s);
+    if (Number.isInteger(n) && n >= 1900 && n <= 2100) nums.push(n);
+  }
+  return nums;
+}
+function deriveDecades(range: { min: number | null; max: number | null }): number[] {
+  if (range.min == null || range.max == null) return [];
+  const start = Math.floor(range.min / 10) * 10;
+  const end = Math.floor(range.max / 10) * 10;
+  const out: number[] = [];
+  for (let d = start; d <= end; d += 10) out.push(d);
+  return out;
+}
+function appendMulti(
+  params: URLSearchParams,
+  key: string,
+  value: string | string[] | undefined,
+) {
+  if (!value) return;
+  const list = Array.isArray(value) ? value : [value];
+  list.forEach((v) => {
+    if (v) params.append(key, v);
+  });
 }

@@ -5,6 +5,8 @@ import { useState, useTransition } from 'react';
 import { BombaFilter, type BombaFilterValue } from './bomba-filter';
 import { FilterBottomSheet } from './filter-bottom-sheet';
 import { FilterActiveChips, type ActiveFilter } from './filter-active-chips';
+import { FilterPicker } from './filter-picker';
+import { DecadeFilterPicker } from './decade-filter-picker';
 import type { FacetCount } from '@/lib/queries/collection';
 
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
@@ -17,6 +19,17 @@ export type FilterBarProps = {
   styles: string[];
   availableStyles: FacetCount[];
   bomba: BombaFilterValue;
+  // Inc 8 (032): 5 filtros novos + suas listas disponíveis (cached via user_vocab Inc 33).
+  formats: string[];
+  availableFormats: string[];
+  shelves: string[];
+  availableShelves: string[];
+  decades: number[];
+  availableDecades: number[];
+  countries: string[];
+  availableCountries: string[];
+  labels: string[];
+  availableLabels: string[];
   counts: {
     total: number;
     ativos: number;
@@ -25,15 +38,41 @@ export type FilterBarProps = {
   };
 };
 
-const COLLAPSED_COUNT = 10;
-
 export function FilterBar(props: FilterBarProps) {
-  const { status, text, genres, styles, bomba } = props;
+  const {
+    status,
+    text,
+    genres,
+    availableGenres,
+    styles,
+    availableStyles,
+    bomba,
+    formats,
+    availableFormats,
+    shelves,
+    availableShelves,
+    decades,
+    availableDecades,
+    countries,
+    availableCountries,
+    labels,
+    availableLabels,
+  } = props;
+
   const router = useRouter();
   const params = useSearchParams();
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Pickers individuais (Q2=A — picker buttons + overlay).
+  const [genrePickerOpen, setGenrePickerOpen] = useState(false);
+  const [stylePickerOpen, setStylePickerOpen] = useState(false);
+  const [formatPickerOpen, setFormatPickerOpen] = useState(false);
+  const [shelfPickerOpen, setShelfPickerOpen] = useState(false);
+  const [decadePickerOpen, setDecadePickerOpen] = useState(false);
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
   function setParam(key: string, value: string | null) {
     startTransition(() => {
@@ -48,7 +87,7 @@ export function FilterBar(props: FilterBarProps) {
     });
   }
 
-  function setMulti(paramKey: 'genre' | 'style', list: string[]) {
+  function setMulti(paramKey: string, list: string[]) {
     startTransition(() => {
       const next = new URLSearchParams(params);
       next.delete(paramKey);
@@ -58,15 +97,29 @@ export function FilterBar(props: FilterBarProps) {
     });
   }
 
-  function toggleGenre(g: string) {
-    const set = new Set(genres);
-    set.has(g) ? set.delete(g) : set.add(g);
-    setMulti('genre', Array.from(set));
+  function setMultiInt(paramKey: string, list: number[]) {
+    startTransition(() => {
+      const next = new URLSearchParams(params);
+      next.delete(paramKey);
+      for (const x of list) next.append(paramKey, String(x));
+      const qs = next.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    });
   }
-  function toggleStyle(s: string) {
-    const set = new Set(styles);
-    set.has(s) ? set.delete(s) : set.add(s);
-    setMulti('style', Array.from(set));
+
+  // Handlers genéricos pra toggle multi-select.
+  function makeToggle(paramKey: string, current: string[]) {
+    return (value: string) => {
+      const set = new Set(current);
+      set.has(value) ? set.delete(value) : set.add(value);
+      setMulti(paramKey, Array.from(set));
+    };
+  }
+
+  function toggleDecade(decade: number) {
+    const set = new Set(decades);
+    set.has(decade) ? set.delete(decade) : set.add(decade);
+    setMultiInt('decade', Array.from(set));
   }
 
   function clearAll() {
@@ -80,6 +133,11 @@ export function FilterBar(props: FilterBarProps) {
     (text.length > 0 ? 1 : 0) +
     genres.length +
     styles.length +
+    formats.length +
+    shelves.length +
+    decades.length +
+    countries.length +
+    labels.length +
     (bomba !== 'any' ? 1 : 0);
 
   const activeChips: ActiveFilter[] = [
@@ -105,6 +163,31 @@ export function FilterBar(props: FilterBarProps) {
       label: s,
       onRemove: () => setMulti('style', styles.filter((x) => x !== s)),
     })),
+    ...formats.map((f) => ({
+      id: `fmt-${f}`,
+      label: f,
+      onRemove: () => setMulti('format', formats.filter((x) => x !== f)),
+    })),
+    ...shelves.map((sh) => ({
+      id: `sh-${sh}`,
+      label: sh,
+      onRemove: () => setMulti('shelf', shelves.filter((x) => x !== sh)),
+    })),
+    ...decades.map((d) => ({
+      id: `dec-${d}`,
+      label: `${String(d % 100).padStart(2, '0')}s`,
+      onRemove: () => setMultiInt('decade', decades.filter((x) => x !== d)),
+    })),
+    ...countries.map((c) => ({
+      id: `ctry-${c}`,
+      label: c,
+      onRemove: () => setMulti('country', countries.filter((x) => x !== c)),
+    })),
+    ...labels.map((l) => ({
+      id: `lbl-${l}`,
+      label: l,
+      onRemove: () => setMulti('label', labels.filter((x) => x !== l)),
+    })),
   ];
 
   const innerContent = (
@@ -112,11 +195,22 @@ export function FilterBar(props: FilterBarProps) {
       {...props}
       isPending={isPending}
       onSetParam={setParam}
-      onToggleGenre={toggleGenre}
-      onToggleStyle={toggleStyle}
       onClearAll={clearAll}
+      onOpenPicker={{
+        genre: () => setGenrePickerOpen(true),
+        style: () => setStylePickerOpen(true),
+        format: () => setFormatPickerOpen(true),
+        shelf: () => setShelfPickerOpen(true),
+        decade: () => setDecadePickerOpen(true),
+        country: () => setCountryPickerOpen(true),
+        label: () => setLabelPickerOpen(true),
+      }}
     />
   );
+
+  // Listas pra pickers genéricos (string[] em vez de FacetCount[]).
+  const availableGenresStr = availableGenres.map((g) => g.value);
+  const availableStylesStr = availableStyles.map((s) => s.value);
 
   return (
     <>
@@ -168,6 +262,63 @@ export function FilterBar(props: FilterBarProps) {
       >
         {innerContent}
       </FilterBottomSheet>
+
+      {/* Pickers — renderizados sempre via portal-aware components, abrem condicionalmente */}
+      <FilterPicker
+        label="Gênero"
+        available={availableGenresStr}
+        selected={genres}
+        onToggle={makeToggle('genre', genres)}
+        onClose={() => setGenrePickerOpen(false)}
+        open={genrePickerOpen}
+      />
+      <FilterPicker
+        label="Estilo"
+        available={availableStylesStr}
+        selected={styles}
+        onToggle={makeToggle('style', styles)}
+        onClose={() => setStylePickerOpen(false)}
+        open={stylePickerOpen}
+      />
+      <FilterPicker
+        label="Formato"
+        available={availableFormats}
+        selected={formats}
+        onToggle={makeToggle('format', formats)}
+        onClose={() => setFormatPickerOpen(false)}
+        open={formatPickerOpen}
+      />
+      <FilterPicker
+        label="Prateleira"
+        available={availableShelves}
+        selected={shelves}
+        onToggle={makeToggle('shelf', shelves)}
+        onClose={() => setShelfPickerOpen(false)}
+        open={shelfPickerOpen}
+      />
+      <DecadeFilterPicker
+        availableDecades={availableDecades}
+        selectedDecades={decades}
+        onToggle={toggleDecade}
+        onClose={() => setDecadePickerOpen(false)}
+        open={decadePickerOpen}
+      />
+      <FilterPicker
+        label="País"
+        available={availableCountries}
+        selected={countries}
+        onToggle={makeToggle('country', countries)}
+        onClose={() => setCountryPickerOpen(false)}
+        open={countryPickerOpen}
+      />
+      <FilterPicker
+        label="Selo"
+        available={availableLabels}
+        selected={labels}
+        onToggle={makeToggle('label', labels)}
+        onClose={() => setLabelPickerOpen(false)}
+        open={labelPickerOpen}
+      />
     </>
   );
 }
@@ -175,30 +326,44 @@ export function FilterBar(props: FilterBarProps) {
 type FilterContentProps = FilterBarProps & {
   isPending: boolean;
   onSetParam: (key: string, value: string | null) => void;
-  onToggleGenre: (g: string) => void;
-  onToggleStyle: (s: string) => void;
   onClearAll: () => void;
+  onOpenPicker: {
+    genre: () => void;
+    style: () => void;
+    format: () => void;
+    shelf: () => void;
+    decade: () => void;
+    country: () => void;
+    label: () => void;
+  };
 };
 
 function FilterContent({
   status,
   text,
   genres,
-  availableGenres,
   styles,
-  availableStyles,
   bomba,
   counts,
+  formats,
+  shelves,
+  decades,
+  countries,
+  labels,
   onSetParam,
-  onToggleGenre,
-  onToggleStyle,
   onClearAll,
+  onOpenPicker,
 }: FilterContentProps) {
   const hasAnyFilter =
     status !== 'all' ||
     text.length > 0 ||
     genres.length > 0 ||
     styles.length > 0 ||
+    formats.length > 0 ||
+    shelves.length > 0 ||
+    decades.length > 0 ||
+    countries.length > 0 ||
+    labels.length > 0 ||
     bomba !== 'any';
 
   return (
@@ -242,88 +407,18 @@ function FilterContent({
         </div>
       </div>
 
-      <FacetRow
-        label="gêneros (OU)"
-        available={availableGenres}
-        selected={genres}
-        onToggle={onToggleGenre}
-        activeCls="bg-accent/10 border-accent text-ink"
-      />
-
-      <FacetRow
-        label="estilos (OU)"
-        available={availableStyles}
-        selected={styles}
-        onToggle={onToggleStyle}
-        activeCls="bg-ok/10 border-ok text-ink"
-      />
-    </div>
-  );
-}
-
-function FacetRow({
-  label,
-  available,
-  selected,
-  onToggle,
-  activeCls,
-}: {
-  label: string;
-  available: FacetCount[];
-  selected: string[];
-  onToggle: (value: string) => void;
-  activeCls: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (available.length === 0) return null;
-
-  // Mantém selecionados sempre visíveis (mesmo se caem fora do top-N).
-  const selectedSet = new Set(selected);
-  const selectedFacets = available.filter((f) => selectedSet.has(f.value));
-  const unselected = available.filter((f) => !selectedSet.has(f.value));
-  const visibleUnselected = expanded
-    ? unselected
-    : unselected.slice(0, Math.max(0, COLLAPSED_COUNT - selectedFacets.length));
-  const visible = [...selectedFacets, ...visibleUnselected];
-  const hidden = available.length - visible.length;
-
-  return (
-    <div
-      className={`flex gap-2 items-start md:items-center flex-col md:flex-row ${expanded ? '' : ''}`}
-    >
-      <span className="label-tech text-ink-mute mr-1 shrink-0">{label}</span>
-      <div
-        className={`flex gap-2 ${expanded ? 'flex-wrap' : 'flex-wrap md:flex-nowrap md:overflow-hidden'}`}
-      >
-        {visible.map((f) => {
-          const active = selectedSet.has(f.value);
-          return (
-            <button
-              key={f.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onToggle(f.value)}
-              title={`${f.count} ${f.count === 1 ? 'disco' : 'discos'}`}
-              className={`font-mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1.5 min-h-[36px] border rounded-full transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
-                active ? activeCls : 'border-line text-ink-soft hover:border-ink hover:text-ink active:border-ink active:text-ink'
-              }`}
-            >
-              <span>{f.value}</span>
-              <span className="text-ink-mute">{f.count}</span>
-            </button>
-          );
-        })}
+      {/* Inc 8 (032): picker buttons (Q2=A) — substituem lista expandida.
+          Cada botão abre overlay/sheet com chips clicáveis. */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="label-tech text-ink-mute mr-1 shrink-0 hidden md:inline">filtrar por</span>
+        <PickerButton label="Gênero" count={genres.length} onClick={onOpenPicker.genre} />
+        <PickerButton label="Estilo" count={styles.length} onClick={onOpenPicker.style} />
+        <PickerButton label="Formato" count={formats.length} onClick={onOpenPicker.format} />
+        <PickerButton label="Prateleira" count={shelves.length} onClick={onOpenPicker.shelf} />
+        <PickerButton label="Ano" count={decades.length} onClick={onOpenPicker.decade} />
+        <PickerButton label="País" count={countries.length} onClick={onOpenPicker.country} />
+        <PickerButton label="Selo" count={labels.length} onClick={onOpenPicker.label} />
       </div>
-      {hidden > 0 || expanded ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="label-tech text-ink-mute hover:text-accent underline shrink-0 ml-1"
-        >
-          {expanded ? 'recolher' : `+${hidden} mais`}
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -349,6 +444,36 @@ function Chip({
       }`}
     >
       {children}
+    </button>
+  );
+}
+
+function PickerButton({
+  label,
+  count,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  const active = count > 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`font-mono text-[11px] uppercase tracking-[0.12em] px-3 py-2 min-h-[40px] border rounded-sm transition-colors inline-flex items-center gap-1.5 ${
+        active
+          ? 'border-accent text-accent bg-accent/5'
+          : 'border-line text-ink-soft hover:border-ink hover:text-ink'
+      }`}
+    >
+      <span>{label}</span>
+      {active ? (
+        <span className="bg-accent text-paper rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px]">
+          {count}
+        </span>
+      ) : null}
     </button>
   );
 }

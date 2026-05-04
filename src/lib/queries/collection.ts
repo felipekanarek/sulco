@@ -1,5 +1,6 @@
 import 'server-only';
-import { and, desc, eq, exists, inArray, sql, type SQL } from 'drizzle-orm';
+import { cache } from 'react';
+import { and, desc, eq, exists, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
 import type { Record as RecordRow } from '@/db/schema';
@@ -15,9 +16,16 @@ export type CollectionQuery = {
   userId: number;
   status: StatusFilter;
   text: string;
-  genres: string[]; // AND entre termos (FR-006)
-  styles: string[]; // AND entre estilos (FR-006)
+  genres: string[]; // OR dentro de gêneros (FR-006)
+  styles: string[]; // OR dentro de estilos (FR-006)
   bomba: BombaFilter; // tri-estado (FR-006)
+  // Inc 8 (032): 5 filtros novos multi-select (opcionais — default [] quando omitido).
+  // OR dentro de cada kind, AND entre kinds.
+  formats?: string[];
+  shelves?: string[];
+  decades?: number[];
+  countries?: string[];
+  labels?: string[];
   // Inc 22 (paginação): default page=1, pageSize=50 quando omitido
   page?: number;
   pageSize?: number;
@@ -71,6 +79,13 @@ export function buildCollectionFilters(q: {
   genres: string[];
   styles: string[];
   bomba: BombaFilter;
+  // Inc 8 (032): 5 filtros novos. Opcionais — callers existing (ex: pickRandomUnratedRecord)
+  // continuam funcionando sem passar.
+  formats?: string[];
+  shelves?: string[];
+  decades?: number[];
+  countries?: string[];
+  labels?: string[];
 }): SQL[] {
   const conds: SQL[] = [];
 
@@ -112,6 +127,28 @@ export function buildCollectionFilters(q: {
     conds.push(
       sql`NOT EXISTS (SELECT 1 FROM ${tracks} WHERE ${tracks.recordId} = ${records.id} AND ${tracks.isBomb} = 1)`,
     );
+  }
+
+  // Inc 8 (032): 5 filtros novos single-column, OR dentro de cada kind.
+  // Pickers populam via user_vocab (Inc 33 estendido). Filtros usam coluna direta.
+  if (q.formats && q.formats.length > 0) {
+    conds.push(sql`${records.format} IN ${q.formats}`);
+  }
+  if (q.shelves && q.shelves.length > 0) {
+    conds.push(sql`${records.shelfLocation} IN ${q.shelves}`);
+  }
+  if (q.countries && q.countries.length > 0) {
+    conds.push(sql`${records.country} IN ${q.countries}`);
+  }
+  if (q.labels && q.labels.length > 0) {
+    conds.push(sql`${records.label} IN ${q.labels}`);
+  }
+  if (q.decades && q.decades.length > 0) {
+    // OR entre décadas: (year BETWEEN 1970 AND 1979) OR (year BETWEEN 1980 AND 1989) ...
+    const decadeRanges = q.decades.map(
+      (start) => sql`(${records.year} BETWEEN ${start} AND ${start + 9})`,
+    );
+    conds.push(sql`(${sql.join(decadeRanges, sql` OR `)})`);
   }
 
   return conds;
@@ -249,3 +286,64 @@ export async function listUserShelves(userId: number): Promise<string[]> {
   const entries = await listVocab(userId, 'shelves');
   return entries.map((e) => e.term);
 }
+
+/* ============================================================
+   Inc 8 (032): wrappers para os 3 kinds novos materializados
+   em user_vocab (formats/countries/labels) + helper de range
+   de ano pra derivar décadas.
+   ============================================================ */
+
+/**
+ * Lista distinct de formatos em uso pelo user (~5-150 entries dependendo
+ * de quão verboso o Discogs traz a string composta).
+ */
+export async function listUserFormats(userId: number): Promise<string[]> {
+  const entries = await listVocab(userId, 'formats');
+  return entries.map((e) => e.term);
+}
+
+/**
+ * Lista distinct de países em uso pelo user (~10-50 entries típicos).
+ */
+export async function listUserCountries(userId: number): Promise<string[]> {
+  const entries = await listVocab(userId, 'countries');
+  return entries.map((e) => e.term);
+}
+
+/**
+ * Lista distinct de selos em uso pelo user (~centenas de entries em
+ * coleções grandes). Picker terá busca interna ativa (>20).
+ */
+export async function listUserLabels(userId: number): Promise<string[]> {
+  const entries = await listVocab(userId, 'labels');
+  return entries.map((e) => e.term);
+}
+
+/**
+ * Range de anos da coleção pra derivar chips de décadas no frontend.
+ * Cached via react.cache. 1 query agregada com filtro archived=false.
+ *
+ * Para uma coleção com years 1965-2024, frontend deriva chips:
+ * 60s, 70s, 80s, 90s, 00s, 10s, 20s.
+ */
+export const getYearRange = cache(
+  async (userId: number): Promise<{ min: number | null; max: number | null }> => {
+    const [row] = await db
+      .select({
+        min: sql<number>`MIN(${records.year})`,
+        max: sql<number>`MAX(${records.year})`,
+      })
+      .from(records)
+      .where(
+        and(
+          eq(records.userId, userId),
+          eq(records.archived, false),
+          isNotNull(records.year),
+        ),
+      );
+    return {
+      min: row?.min ?? null,
+      max: row?.max ?? null,
+    };
+  },
+);

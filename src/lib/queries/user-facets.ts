@@ -1,6 +1,6 @@
 import 'server-only';
 import { cache } from 'react';
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks, userFacets, userVocab } from '@/db/schema';
 
@@ -261,7 +261,88 @@ async function _repopulateVocab(userId: number): Promise<void> {
     );
   }
 
+  // Inc 8 (032): 3 kinds novos materializados — formats/countries/labels.
+  // Single-value columns (records.format/country/label) — Q5=A filtra strings vazias.
+  const [formatCounts, countryCounts, labelCounts] = await Promise.all([
+    _aggregateRecordColumnCounts(userId, records.format),
+    _aggregateRecordColumnCounts(userId, records.country),
+    _aggregateRecordColumnCounts(userId, records.label),
+  ]);
+
+  for (const [term, count] of formatCounts) {
+    if (count <= 0) continue;
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'formats',
+        term,
+        refCount: count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+  for (const [term, count] of countryCounts) {
+    if (count <= 0) continue;
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'countries',
+        term,
+        refCount: count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+  for (const [term, count] of labelCounts) {
+    if (count <= 0) continue;
+    inserts.push(
+      db.insert(userVocab).values({
+        userId,
+        kind: 'labels',
+        term,
+        refCount: count,
+        updatedAt: sql`(unixepoch())` as unknown as Date,
+      }),
+    );
+  }
+
   await Promise.all(inserts);
+}
+
+/**
+ * Inc 8 (032) helper privado: re-agrega valores distintos de uma coluna
+ * single-value (format/country/label) com count. Filtra strings vazias
+ * (Q5=A) e NULL. Usado por `_repopulateVocab` pra alimentar 3 novos
+ * kinds em `user_vocab` (formats/countries/labels).
+ */
+async function _aggregateRecordColumnCounts(
+  userId: number,
+  column: typeof records.format | typeof records.country | typeof records.label,
+): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      value: column,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(records)
+    .where(
+      and(
+        eq(records.userId, userId),
+        eq(records.archived, false),
+        isNotNull(column),
+        ne(column, ''),
+      ),
+    )
+    .groupBy(column);
+
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const term = r.value?.trim();
+    if (term && term.length > 0) {
+      map.set(term, Number(r.count));
+    }
+  }
+  return map;
 }
 
 /**
