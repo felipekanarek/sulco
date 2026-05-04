@@ -262,11 +262,26 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: nenhuma — última release shipped foi Inc 34
-(029-drop-user-facets-json) em 2026-05-03. Inc 34 fechou o ciclo de
-cleanup pós-otimizações de reads (Inc 22-33). Próximas candidatas
-no BACKLOG: Inc 30 (excluir set), Inc 31 (UX bag física), Inc 29
-(UX rework filtros montar) — todas UX puras, zero relação com reads.
+Current active feature: **030-filter-pivots-and-sort-indexes** (BACKLOG: Inc 35)
+
+Authoritative planning artifacts (read these before making changes
+ao schema (4 tabelas pivot novas: `record_genres`, `record_styles`,
+`track_moods`, `track_contexts` + 2 indexes ORDER BY:
+`records_user_archived_imported_idx`,
+`records_user_archived_archivedat_idx`), helper novo
+`applyPivotDelta` em `src/lib/pivot-helpers.ts`, hooks em
+`src/lib/discogs/apply-update.ts` (genres/styles via diff) e
+`src/lib/actions.ts::updateTrackCuration` (moods/contexts via diff),
+ou refator de `buildCollectionFilters` (collection.ts) e
+`queryCandidates` (montar.ts) substituindo `EXISTS json_each` por
+`IN (subquery)`):
+
+- Plan: [specs/030-filter-pivots-and-sort-indexes/plan.md](specs/030-filter-pivots-and-sort-indexes/plan.md)
+- Spec: [specs/030-filter-pivots-and-sort-indexes/spec.md](specs/030-filter-pivots-and-sort-indexes/spec.md)
+- Research: [specs/030-filter-pivots-and-sort-indexes/research.md](specs/030-filter-pivots-and-sort-indexes/research.md)
+- Data Model: [specs/030-filter-pivots-and-sort-indexes/data-model.md](specs/030-filter-pivots-and-sort-indexes/data-model.md)
+- Contracts: [specs/030-filter-pivots-and-sort-indexes/contracts/](specs/030-filter-pivots-and-sort-indexes/contracts/)
+- Quickstart: [specs/030-filter-pivots-and-sort-indexes/quickstart.md](specs/030-filter-pivots-and-sort-indexes/quickstart.md)
 
 Prior active (now legacy):
 
