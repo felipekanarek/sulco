@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-05-04 (Inc 36 entregue — pivot record_formats + composite year_imported)
+**Última atualização**: 2026-05-04 (Inc 36 entregue + Inc 37 registrado — cobertura retroativa de testes)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -11,6 +11,66 @@ Convenção:
 ## Roadmap
 
 ### 🟢 Próximos (semanas)
+
+#### Incremento 37 — Cobertura de testes retroativa (Inc 23-32)
+
+Princípio VI da Constituição (1.3.0) formaliza cobertura obrigatória
+por camada, mas vale daqui pra frente. **10 features shippadas
+(Inc 23-32) não têm testes específicos** — risco de regressão
+silenciosa em paths críticos.
+
+**Auditoria pós-Inc 36** confirmou: arquivos críticos com 0 cobertura
+direta — `src/lib/text.ts`, `src/lib/queries/{collection,user-vocab,
+user-facets,montar}.ts`, `src/lib/pivot-helpers.ts`, `src/lib/cache.ts`,
+`src/lib/discogs/{apply-update,archive}.ts`, `src/lib/actions.ts`.
+(Cobertura indireta existe via `sync-preserves-author-fields` mas é
+parcial.)
+
+**3 tiers prioritizados** (cada tier pode virar sub-feature 37a/37b/37c
+se quiser progresso incremental):
+
+**Tier 1 — CRÍTICO (Princípio I + IV)** — risco de perda de curadoria:
+1. Estender `sync-preserves-author-fields.test.ts` cobrindo record_genres
+   / record_styles / track_moods / track_contexts (Inc 35) populados
+   consistentemente em INSERT/UPDATE/REAPARIÇÃO.
+2. `archiveRecord` — teste verificando AUTHOR preservado pós-archive.
+3. `deleteSet` (Inc 30) — ownership + verificar que `tracks` NÃO são
+   deletadas (FK CASCADE só limpa set_tracks).
+4. Server Actions AUTHOR-write (`updateRecordStatus`,
+   `updateRecordAuthorFields`, `updateTrackCuration`) — ownership +
+   validação Zod + Princípio I.
+
+**Tier 2 — PERFORMANCE EQUIVALENCE (Princípio VI bullet 4)** — risco
+de regressão silenciosa em otimizações:
+5. `buildCollectionFilters` — 1 integration test por filtro (genres
+   pivot Inc 35, styles pivot Inc 35, search_text LIKE Inc 32, format
+   pivot Inc 36, year, country, label, shelf, bomba) assertando
+   **resultado idêntico** ao baseline pré-otimização.
+6. `applyVocabDelta` (Inc 33) — UPSERT increment + DELETE clamp +
+   idempotência (já tem cobertura indireta via Inc 36 integration).
+7. `applyPivotDelta` (Inc 35) — INSERT onConflictDoNothing + DELETE
+   seletivo (idem cobertura indireta).
+8. `cacheUser` / `revalidateUserCache` (Inc 23) — cache key composto +
+   invalidação por tag `user:N`.
+
+**Tier 3 — HELPERS PUROS** — testes baratos, alto valor:
+9. `normalizeText` (Inc 18) — diacríticos pt-BR + Unicode universal +
+   bidirecional (digitar normalizado acha não-normalizado e vice-versa).
+10. `computeRecordSearchText` (Inc 32) — concatenação artist + title +
+    label normalizada.
+11. `diffVocabArrays` (Inc 33) — added/removed disjuntos, edge cases
+    de duplicação e empty.
+
+**Estimativa**: ~30-40 testes, ~6-8h total. Schema delta zero. Pode ser
+dividido em sub-features (Inc 37a/b/c) ou rodada única.
+
+**Recomendação de ordem**: Tier 3 (mais barato, valida pattern) → Tier 1
+(mais crítico, garante Princípio I) → Tier 2 (mais trabalhoso,
+equivalence assertions exigem baseline calibrado).
+
+Sem schema delta. Sem mudança de UI ou Server Actions. Apenas testes.
+
+---
 
 #### Incremento 31 — UX da Bag física: capa + organização por prateleira
 
