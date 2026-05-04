@@ -27,6 +27,10 @@ async function applyDdl(client: Client) {
       discogs_token_encrypted TEXT,
       discogs_credential_status TEXT DEFAULT 'valid' NOT NULL,
       last_status_visit_at INTEGER,
+      import_acknowledged_at INTEGER,
+      ai_provider TEXT,
+      ai_model TEXT,
+      ai_api_key_encrypted TEXT,
       is_owner INTEGER DEFAULT 0 NOT NULL,
       allowlisted INTEGER DEFAULT 0 NOT NULL,
       created_at INTEGER DEFAULT (unixepoch()),
@@ -60,6 +64,7 @@ async function applyDdl(client: Client) {
       status TEXT DEFAULT 'unrated' NOT NULL,
       shelf_location TEXT,
       notes TEXT,
+      search_text TEXT DEFAULT '' NOT NULL,
       archived INTEGER DEFAULT 0 NOT NULL,
       archived_at INTEGER,
       archived_acknowledged_at INTEGER,
@@ -87,6 +92,7 @@ async function applyDdl(client: Client) {
       fine_genre TEXT,
       "references" TEXT,
       comment TEXT,
+      ai_analysis TEXT,
       is_bomb INTEGER DEFAULT 0 NOT NULL,
       mbid TEXT,
       audio_features_source TEXT,
@@ -156,6 +162,61 @@ async function applyDdl(client: Client) {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       "order" INTEGER DEFAULT 0 NOT NULL,
       PRIMARY KEY (playlist_id, track_id)
+    )`,
+
+    // Inc 35 (030) — pivots pra filtros multi-select
+    `CREATE TABLE record_genres (
+      record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+      genre TEXT NOT NULL,
+      PRIMARY KEY (record_id, genre)
+    )`,
+    `CREATE INDEX record_genres_genre_idx ON record_genres (genre, record_id)`,
+    `CREATE TABLE record_styles (
+      record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+      style TEXT NOT NULL,
+      PRIMARY KEY (record_id, style)
+    )`,
+    `CREATE INDEX record_styles_style_idx ON record_styles (style, record_id)`,
+    `CREATE TABLE track_moods (
+      track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+      mood TEXT NOT NULL,
+      PRIMARY KEY (track_id, mood)
+    )`,
+    `CREATE INDEX track_moods_mood_idx ON track_moods (mood, track_id)`,
+    `CREATE TABLE track_contexts (
+      track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+      context TEXT NOT NULL,
+      PRIMARY KEY (track_id, context)
+    )`,
+    `CREATE INDEX track_contexts_context_idx ON track_contexts (context, track_id)`,
+
+    // Inc 36 (033) — pivot record_formats
+    `CREATE TABLE record_formats (
+      record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+      token TEXT NOT NULL,
+      PRIMARY KEY (record_id, token)
+    )`,
+    `CREATE INDEX record_formats_token_idx ON record_formats (token, record_id)`,
+
+    // Inc 33 (028) — user_vocab + Inc 23 (022) user_facets (dependências
+    // dos hooks de write em apply-update.ts)
+    `CREATE TABLE user_vocab (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      term TEXT NOT NULL,
+      ref_count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      PRIMARY KEY (user_id, kind, term)
+    )`,
+    `CREATE INDEX user_vocab_user_kind_idx ON user_vocab (user_id, kind)`,
+    `CREATE TABLE user_facets (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      records_total INTEGER NOT NULL DEFAULT 0,
+      records_active INTEGER NOT NULL DEFAULT 0,
+      records_unrated INTEGER NOT NULL DEFAULT 0,
+      records_discarded INTEGER NOT NULL DEFAULT 0,
+      tracks_selected_total INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
     )`,
   ];
   for (const stmt of stmts) await client.execute(stmt);

@@ -5,6 +5,7 @@ import { records, tracks, recordGenres, recordStyles, recordFormats, trackMoods,
 import { computeRecordSearchText } from '@/lib/text';
 import { applyVocabDelta, diffVocabArrays } from '@/lib/queries/user-vocab';
 import { applyPivotDelta } from '@/lib/pivot-helpers';
+import { tokenizeFormat } from '@/lib/format-tokens';
 import type { DiscogsRelease } from './client';
 
 /**
@@ -301,17 +302,8 @@ function singleTerm(value: string | null | undefined): string[] {
   return t.length > 0 ? [t] : [];
 }
 
-/**
- * Inc 8 follow-up: format do Discogs vem composto ("Vinyl, LP, Album, Stereo").
- * Tokeniza em base components pra picker mostrar apenas "LP", "7\"", etc.
- */
-function tokenizeFormat(value: string | null | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-}
+// Inc 36 (033): `tokenizeFormat` movido para `src/lib/format-tokens.ts`
+// (Princípio III — single source). Importado no topo deste arquivo.
 
 /**
  * Inc 8 (032): diff per-field para colunas single-value (format, country, label).

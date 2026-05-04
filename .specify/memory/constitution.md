@@ -1,35 +1,41 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 1.2.0
-Bump rationale (MINOR): adição do Princípio V — Mobile-Native por
-Padrão. Motivado por falha de UX no modal de edição de set
-(Inc 016 EditSetModal): modal centrado com overlay funciona
-tecnicamente em mobile mas com navegação estranha — sintoma de
-adaptação tardia em vez de design mobile-first. Princípio formaliza
-a obrigação de pensar mobile desde a spec, não como adaptação
-posterior.
+Version change: 1.2.0 → 1.3.0
+Bump rationale (MINOR): adição do Princípio VI — Cobertura de Testes
+por Camada. Motivado por 6 features consecutivas (Inc 27-36) que
+pularam testes automatizados e dependeram apenas de smoke manual via
+quickstart. Inc 8 mostrou consequência concreta: 2 bugs de UX
+(década ruim, format composto não-tokenizado) só pegos quando Felipe
+testou em prod. Princípio formaliza a obrigação de cobrir lógica que
+pode regredir, alinhando com infraestrutura de teste já existente
+(Vitest + Playwright em `tests/unit/`, `tests/integration/`,
+`tests/e2e/`, `playwright.config.ts`, `vitest.config.ts`).
 
 Histórico:
 - 1.0.0 (initial ratification): 4 princípios + Restrições Técnicas.
 - 1.1.0 (Inc 013): `tracks.aiAnalysis` incluído em Princípio I.
 - 1.2.0 (Inc 016 follow-up): adiciona Princípio V — Mobile-Native
   por Padrão.
+- 1.3.0 (Inc 036 follow-up): adiciona Princípio VI — Cobertura de
+  Testes por Camada.
 
 Modified principles:
 - (nenhum existente alterado)
 
 Added principles:
-- V. Mobile-Native por Padrão
+- VI. Cobertura de Testes por Camada
 
 Templates requiring updates:
 - ✅ .specify/templates/plan-template.md — sem mudança estrutural
-  necessária (Constitution Check é genérico e referencia princípios
-  por construção; novo princípio é checado automaticamente em PRs
-  com UI).
+  (Constitution Check é genérico; novo princípio é checado
+  automaticamente em PRs adicionando lógica/UI).
 - ✅ .specify/templates/spec-template.md — sem mudança estrutural
-  (princípio orienta CONTEÚDO de FR/Edge/SC, não seções).
-- ✅ .specify/templates/tasks-template.md — sem mudança.
+  (princípio orienta o conteúdo de FR/Edge/SC quando há lógica
+  testável).
+- ✅ .specify/templates/tasks-template.md — sem mudança estrutural
+  (tasks de teste já existem como categoria opcional; princípio
+  promove a obrigatoriedade quando aplicável).
 - ✅ .specify/templates/checklist-template.md — sem mudança.
 
 Follow-up TODOs:
@@ -119,6 +125,44 @@ mas com navegação estranha em mobile — sintoma de adaptação tardia em vez 
 mobile-first. Princípio garante que mobile seja considerado desde a especificação, não
 como retrofit pós-implementação.
 
+### VI. Cobertura de Testes por Camada
+
+Toda feature shipped MUST incluir cobertura automatizada apropriada à natureza da
+mudança. Smoke manual via quickstart NÃO substitui teste automatizado para lógica que
+pode regredir silenciosamente.
+
+- **Lógica de domínio em função pura ou helper** (ex: `tokenizeFormat`, `normalizeText`,
+  `diffVocabArrays`, `computeRecordSearchText`) MUST ter teste unitário em `tests/unit/`
+  (Vitest). Cada caso edge mencionado na spec ou data-model MUST ter assert
+  correspondente.
+- **Server Action ou query Drizzle nova** (ex: `deleteSet`, `acknowledgeAllArchived`,
+  `buildCollectionFilters`) MUST ter teste de integração em `tests/integration/`
+  (Vitest + DB de teste) cobrindo: caminho feliz, ownership/auth, validação Zod,
+  Princípios I (sem AUTHOR overwrite) e IV (sem delete silencioso).
+- **Fluxo UI novo ou alterado** (ex: filtro novo na home, picker novo, modal novo)
+  MUST ter pelo menos 1 teste E2E em `tests/e2e/` (Playwright) cobrindo o caminho
+  dourado: usuário interage, vê resultado esperado, URL reflete estado.
+- **Otimização sem mudança comportamental** (ex: pivot table substitui OR-de-LIKE,
+  novo index composite) MUST ter teste de integração assertando que o **resultado da
+  query é idêntico** ao comportamento prévio para mesmas entradas. Ganho de
+  performance é validado por EXPLAIN no quickstart, mas correção é validada por
+  teste.
+- **Bug fixes** MUST incluir teste que falharia antes do fix (regression test). Sem
+  teste = não faz fix.
+- Tasks.md de cada feature MUST listar tasks de teste explicitamente em phase própria
+  (não enterradas em "smoke") com IDs separados do código de produção.
+- Suite de testes MUST passar verde antes de merge na main. `npm run test` e
+  `npm run test:e2e` são gates.
+
+**Rationale**: O Sulco já tinha rede de testes substancial (8 unit + 17 integration +
+13 E2E) ANTES das otimizações de reads (Inc 22-36), mas as últimas 6 features pularam
+testes novos e dependeram apenas de smoke manual. Resultado concreto: Inc 8 (032)
+shippou com 2 bugs de UX (década confusa, format composto sem tokenização) só
+detectados quando Felipe testou em prod — teste unitário em `tokenizeFormat` + E2E em
+filtro de format teriam pego o segundo. Princípio formaliza a obrigação de cobrir o
+que pode regredir, aproveitando a infraestrutura de teste já configurada
+(Vitest + Playwright).
+
 ## Restrições Técnicas
 
 Stack fixa enquanto esta constituição vigorar:
@@ -129,6 +173,8 @@ Stack fixa enquanto esta constituição vigorar:
 - Validação: Zod em todos os inputs de Server Actions.
 - Estilo: Tailwind CSS v3 + CSS variables.
 - Runtime: Node.js 20+.
+- Testes: Vitest (unit + integration) + Playwright (E2E). Configurados em
+  `vitest.config.ts` e `playwright.config.ts`.
 
 Proibido enquanto esta constituição vigorar:
 
@@ -159,4 +205,4 @@ Procedimento de emenda:
 Revisão de conformidade: qualquer complexidade adicionada MUST ser justificada contra os
 princípios. Guia de runtime para desenvolvimento operacional vive em `CLAUDE.md`.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-04-28
+**Version**: 1.3.0 | **Ratified**: 2026-04-22 | **Last Amended**: 2026-05-04
