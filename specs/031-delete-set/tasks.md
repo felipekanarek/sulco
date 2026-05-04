@@ -106,18 +106,18 @@
 
 - [X] T008 Smoke local: rodar dev server, criar set, deletar via UI, confirmar redirect + lista atualizada.
 
-- [ ] T009 Commit em branch `031-delete-set` com mensagem `feat(031): excluir set (Inc 30)`. Push branch.
+- [X] T009 Commit em branch `031-delete-set` com mensagem `feat(031): excluir set (Inc 30)`. Push branch.
 
-- [ ] T010 Merge `031-delete-set` → `main` com `--no-ff`. Push main.
+- [X] T010 Merge `031-delete-set` → `main` com `--no-ff`. Push main.
 
-- [ ] T011 Deploy prod manual:
+- [X] T011 Deploy prod manual:
   ```bash
   vercel --prod --yes
   ```
 
-- [ ] T012 Smoke test pós-deploy: rodar cenários 1, 2, 3, 8 do quickstart.
+- [X] T012 Smoke test pós-deploy: rodar cenários 1, 2, 3, 8 do quickstart.
 
-- [ ] T013 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar `- **031** — Excluir set (Inc 30) · 2026-05-XX · specs/031-delete-set/ · ...`. Remover Inc 30 de "Próximos". Atualizar header. Atualizar CLAUDE.md SPECKIT marker promovendo Inc 30 → "Prior active".
+- [X] T013 BACKLOG release entry em [BACKLOG.md](../../BACKLOG.md): adicionar `- **031** — Excluir set (Inc 30) · 2026-05-XX · specs/031-delete-set/ · ...`. Remover Inc 30 de "Próximos". Atualizar header. Atualizar CLAUDE.md SPECKIT marker promovendo Inc 30 → "Prior active".
 
 ## Dependencies
 

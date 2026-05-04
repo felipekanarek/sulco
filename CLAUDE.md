@@ -262,7 +262,15 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **031-delete-set** (BACKLOG: Inc 30)
+Current active feature: nenhuma — última release shipped foi Inc 30
+(031-delete-set) em 2026-05-03. Próximas candidatas no BACKLOG:
+Inc 8 (refatoração UX filtros multi-facet — Felipe sinalizou prioridade
+máxima pós-Inc 30), Inc 31 (UX bag física), Inc 29 (UX rework filtros
+montar).
+
+Prior active (now legacy):
+
+**031-delete-set** (BACKLOG: Inc 30)
 
 Authoritative planning artifacts (read these before making changes
 à Server Action `deleteSet` em `src/lib/actions.ts`, ao client
@@ -278,7 +286,7 @@ ou ao posicionamento em `/sets/[id]/page.tsx` e
 
 Prior active (now legacy):
 
-**030-filter-pivots-and-sort-indexes** (BACKLOG: Inc 35) — última release shipped pré-Inc 30. Inc 35 fechou o
+**030-filter-pivots-and-sort-indexes** (BACKLOG: Inc 35) Inc 35 fechou o
 ciclo de otimização de reads com **redução acumulada -99.4% vs baseline
 pré-Inc 27** (curadoria completa de 1 faixa: 2.8M rows → 17.8k rows
 medidos em prod). Cota Turso cabe folgado escalando 5-10 amigos.
