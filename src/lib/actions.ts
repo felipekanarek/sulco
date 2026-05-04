@@ -14,6 +14,8 @@ import {
   applyDeltaForWrite,
 } from '@/lib/queries/user-facets';
 import { applyVocabDelta, diffVocabArrays, listVocab } from '@/lib/queries/user-vocab';
+import { applyPivotDelta } from '@/lib/pivot-helpers';
+import { trackMoods, trackContexts } from '@/db/schema';
 import { cacheUser, revalidateUserCache } from '@/lib/cache';
 import { encryptSecret } from '@/lib/crypto';
 import { enrichTrackComment, getAdapter } from '@/lib/ai';
@@ -832,13 +834,17 @@ export async function updateTrackCuration(
         : undefined,
     });
     // Inc 33: delta direcionado em user_vocab para moods/contexts.
+    // Inc 35 (030): + delta em track_moods/track_contexts pivot pra
+    // filtros multi-select via index.
     if (moodsChanged) {
       const { added, removed } = diffVocabArrays(prev.moods ?? [], payload.moods ?? []);
       await applyVocabDelta(user.id, 'moods', added, removed);
+      await applyPivotDelta(trackMoods, 'trackId', 'mood', parsed.data.trackId, added, removed);
     }
     if (contextsChanged) {
       const { added, removed } = diffVocabArrays(prev.contexts ?? [], payload.contexts ?? []);
       await applyVocabDelta(user.id, 'contexts', added, removed);
+      await applyPivotDelta(trackContexts, 'trackId', 'context', parsed.data.trackId, added, removed);
     }
   } catch (err) {
     console.error('[applyDelta] erro pós-write (updateTrackCuration):', err);

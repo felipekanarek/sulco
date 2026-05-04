@@ -92,14 +92,22 @@ export async function queryCandidates(
   }
 
   // moods/contexts: AND dentro do campo (FR-024)
+  // Inc 35 (030): substitui `EXISTS json_each(...)` por subquery contra
+  // `track_moods_mood_idx`/`track_contexts_context_idx`. Cada termo vira
+  // 1 cláusula separada (preserva semântica AND). Antes: ~10k rows
+  // lidas por filtro (json_each scan). Agora: ~30 rows por termo.
   if (filters.moods && filters.moods.length > 0) {
     for (const m of filters.moods) {
-      conds.push(sql`EXISTS (SELECT 1 FROM json_each(${tracks.moods}) WHERE value = ${m})`);
+      conds.push(
+        sql`${tracks.id} IN (SELECT track_id FROM track_moods WHERE mood = ${m})`,
+      );
     }
   }
   if (filters.contexts && filters.contexts.length > 0) {
     for (const c of filters.contexts) {
-      conds.push(sql`EXISTS (SELECT 1 FROM json_each(${tracks.contexts}) WHERE value = ${c})`);
+      conds.push(
+        sql`${tracks.id} IN (SELECT track_id FROM track_contexts WHERE context = ${c})`,
+      );
     }
   }
 

@@ -83,15 +83,19 @@ export function buildCollectionFilters(q: {
 
   // OR dentro de gêneros (FR-006): disco aparece se tiver QUALQUER um dos gêneros selecionados
   if (q.genres.length > 0) {
+    // Inc 35 (030): substitui `EXISTS json_each(records.genres)` por
+    // subquery contra `record_genres_genre_idx`. Antes: ~10-15k rows
+    // lidas (json_each scan). Agora: ~30 rows.
     conds.push(
-      sql`EXISTS (SELECT 1 FROM json_each(${records.genres}) WHERE value IN ${q.genres})`,
+      sql`${records.id} IN (SELECT record_id FROM record_genres WHERE genre IN ${q.genres})`,
     );
   }
 
   // OR dentro de estilos (FR-006): mesma lógica, mais granular
   if (q.styles.length > 0) {
+    // Inc 35: idem styles via `record_styles_style_idx`.
     conds.push(
-      sql`EXISTS (SELECT 1 FROM json_each(${records.styles}) WHERE value IN ${q.styles})`,
+      sql`${records.id} IN (SELECT record_id FROM record_styles WHERE style IN ${q.styles})`,
     );
   }
 

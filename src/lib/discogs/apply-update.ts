@@ -1,9 +1,10 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { records, tracks } from '@/db/schema';
+import { records, tracks, recordGenres, recordStyles, trackMoods, trackContexts } from '@/db/schema';
 import { computeRecordSearchText } from '@/lib/text';
 import { applyVocabDelta, diffVocabArrays } from '@/lib/queries/user-vocab';
+import { applyPivotDelta } from '@/lib/pivot-helpers';
 import type { DiscogsRelease } from './client';
 
 /**
@@ -80,6 +81,13 @@ export async function applyDiscogsUpdate(
       } catch (err) {
         console.error('[applyVocabDelta] erro pós-INSERT (sync):', err);
       }
+      // Inc 35 (030): popula record_genres/record_styles pivot pra filtros.
+      try {
+        await applyPivotDelta(recordGenres, 'recordId', 'genre', recordId, release.genres ?? [], []);
+        await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, release.styles ?? [], []);
+      } catch (err) {
+        console.error('[applyPivotDelta] erro pós-INSERT (sync):', err);
+      }
     } else {
       // Race: outro worker inseriu primeiro. Re-seleciona para continuar
       // idempotentemente para a atualização de tracks.
@@ -124,6 +132,8 @@ export async function applyDiscogsUpdate(
       .where(eq(records.id, recordId));
 
     // Inc 33: vocab delta para genres/styles do record.
+    // Inc 35 (030): + pivot delta em record_genres/record_styles +
+    // re-popula track_moods/track_contexts em reaparição.
     try {
       if (wasArchived) {
         // Reaparição: re-incrementa todo o vocab do record.
@@ -131,16 +141,30 @@ export async function applyDiscogsUpdate(
         // shelf são re-incrementados aqui pra restaurar estado.
         await applyVocabDelta(userId, 'genres', release.genres ?? [], []);
         await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
+        // Inc 35: pivot record-level (idempotente via onConflictDoNothing).
+        await applyPivotDelta(recordGenres, 'recordId', 'genre', recordId, release.genres ?? [], []);
+        await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, release.styles ?? [], []);
 
         // moods/contexts e shelf: ler do estado atual no banco.
         const trackRows = await db
-          .select({ moods: tracks.moods, contexts: tracks.contexts })
+          .select({ id: tracks.id, moods: tracks.moods, contexts: tracks.contexts })
           .from(tracks)
           .where(eq(tracks.recordId, recordId));
         const allMoods = trackRows.flatMap((t) => (t.moods ?? []) as string[]);
         const allContexts = trackRows.flatMap((t) => (t.contexts ?? []) as string[]);
         if (allMoods.length > 0) await applyVocabDelta(userId, 'moods', allMoods, []);
         if (allContexts.length > 0) await applyVocabDelta(userId, 'contexts', allContexts, []);
+        // Inc 35: pivot track-level por track (idempotente).
+        for (const t of trackRows) {
+          const ms = (t.moods ?? []) as string[];
+          const cs = (t.contexts ?? []) as string[];
+          if (ms.length > 0) {
+            await applyPivotDelta(trackMoods, 'trackId', 'mood', t.id, ms, []);
+          }
+          if (cs.length > 0) {
+            await applyPivotDelta(trackContexts, 'trackId', 'context', t.id, cs, []);
+          }
+        }
 
         const [shelfRow] = await db
           .select({ shelf: records.shelfLocation })
@@ -156,13 +180,16 @@ export async function applyDiscogsUpdate(
         const sDiff = diffVocabArrays(oldStyles, release.styles ?? []);
         if (gDiff.added.length > 0 || gDiff.removed.length > 0) {
           await applyVocabDelta(userId, 'genres', gDiff.added, gDiff.removed);
+          // Inc 35: pivot delta paralelo ao vocab delta.
+          await applyPivotDelta(recordGenres, 'recordId', 'genre', recordId, gDiff.added, gDiff.removed);
         }
         if (sDiff.added.length > 0 || sDiff.removed.length > 0) {
           await applyVocabDelta(userId, 'styles', sDiff.added, sDiff.removed);
+          await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, sDiff.added, sDiff.removed);
         }
       }
     } catch (err) {
-      console.error('[applyVocabDelta] erro pós-UPDATE (sync):', err);
+      console.error('[applyVocabDelta/applyPivotDelta] erro pós-UPDATE (sync):', err);
     }
   }
 

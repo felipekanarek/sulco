@@ -114,6 +114,20 @@ export const records = sqliteTable(
     // user_id reduz scan; LIKE com %prefix% não usa index pra prefix-match
     // mas full-scan dentro do user (~2588 records) é trivial.
     userSearchTextIdx: index('records_user_search_text_idx').on(t.userId, t.searchText),
+    // Inc 35 (030): elimina TEMP B-TREE sort em listagem default da home
+    // (`ORDER BY imported_at DESC`). DESC explícito.
+    userArchivedImportedIdx: index('records_user_archived_imported_idx').on(
+      t.userId,
+      t.archived,
+      sql`${t.importedAt} DESC`,
+    ),
+    // Inc 35 (030): elimina TEMP B-TREE sort em listagem de archived em /status
+    // (`ORDER BY archived_at DESC`).
+    userArchivedArchivedatIdx: index('records_user_archived_archivedat_idx').on(
+      t.userId,
+      t.archived,
+      sql`${t.archivedAt} DESC`,
+    ),
   }),
 );
 
@@ -300,6 +314,71 @@ export const userVocab = sqliteTable(
 
 export type UserVocabRow = typeof userVocab.$inferSelect;
 export type NewUserVocabRow = typeof userVocab.$inferInsert;
+
+/* ============================================================
+   PIVOTS de filtros multi-select (Inc 35 / 030)
+   Substituem `EXISTS json_each(...)` por `IN (subquery WHERE value IN ?)`
+   contra index direto. PK composta `(fk_id, value)` + index reverso
+   `(value, fk_id)` cobre ambos lados. ON DELETE CASCADE garante limpeza
+   automática quando record/track é fisicamente deletado (raríssimo).
+   Archive não toca pivot — filtros base já têm `WHERE archived=0`.
+   ============================================================ */
+
+export const recordGenres = sqliteTable(
+  'record_genres',
+  {
+    recordId: integer('record_id')
+      .notNull()
+      .references(() => records.id, { onDelete: 'cascade' }),
+    genre: text('genre').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordId, t.genre] }),
+    genreIdx: index('record_genres_genre_idx').on(t.genre, t.recordId),
+  }),
+);
+
+export const recordStyles = sqliteTable(
+  'record_styles',
+  {
+    recordId: integer('record_id')
+      .notNull()
+      .references(() => records.id, { onDelete: 'cascade' }),
+    style: text('style').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordId, t.style] }),
+    styleIdx: index('record_styles_style_idx').on(t.style, t.recordId),
+  }),
+);
+
+export const trackMoods = sqliteTable(
+  'track_moods',
+  {
+    trackId: integer('track_id')
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    mood: text('mood').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.trackId, t.mood] }),
+    moodIdx: index('track_moods_mood_idx').on(t.mood, t.trackId),
+  }),
+);
+
+export const trackContexts = sqliteTable(
+  'track_contexts',
+  {
+    trackId: integer('track_id')
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    context: text('context').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.trackId, t.context] }),
+    contextIdx: index('track_contexts_context_idx').on(t.context, t.trackId),
+  }),
+);
 
 /* ============================================================
    PLAYLIST — bloco reutilizável de faixas
