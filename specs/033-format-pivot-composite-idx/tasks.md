@@ -110,11 +110,11 @@ description: "Task list — Inc 36 (033) Otimizar filtros pesados — pivot reco
 **Purpose**: cleanup, documentação, deploy final.
 
 - [x] T022 Build final `npm run build` (deve passar verde — TypeScript strict)
-- [ ] T023 Commit + push branch `033-format-pivot-composite-idx` + merge `--no-ff` em `main` + push main (mesmo pattern dos releases anteriores)
-- [ ] T024 Vercel `vercel --prod --yes` + confirmar `Ready` em [vercel ls --prod](https://vercel.com/felipekanarek-5052s-projects/sulco)
+- [x] T023 Commit + push branch `033-format-pivot-composite-idx` + merge `--no-ff` em `main` + push main (mesmo pattern dos releases anteriores)
+- [x] T024 Vercel `vercel --prod --yes` + confirmar `Ready` em [vercel ls --prod](https://vercel.com/felipekanarek-5052s-projects/sulco)
 - [ ] T025 Smoke prod completo via [quickstart.md](./quickstart.md) — 8 cenários
-- [ ] T026 Atualizar [BACKLOG.md](../../BACKLOG.md): mover Inc 36 da seção "🟢 Próximos" pra "Releases (entregues, em prod)" com sumário detalhado (mesmo pattern Inc 35); atualizar header `**Última atualização**` pra 2026-05-04
-- [ ] T027 Atualizar [CLAUDE.md](../../CLAUDE.md) SPECKIT marker: descrever Inc 36 como deployado (key points: pivot record_formats + composite year_imported, redução esperada ≥97% em filtros pesados); marcar 033-format-pivot-composite-idx como "Prior active (now legacy)"
+- [x] T026 Atualizar [BACKLOG.md](../../BACKLOG.md): mover Inc 36 da seção "🟢 Próximos" pra "Releases (entregues, em prod)" com sumário detalhado (mesmo pattern Inc 35); atualizar header `**Última atualização**` pra 2026-05-04
+- [x] T027 Atualizar [CLAUDE.md](../../CLAUDE.md) SPECKIT marker: descrever Inc 36 como deployado (key points: pivot record_formats + composite year_imported, redução esperada ≥97% em filtros pesados); marcar 033-format-pivot-composite-idx como "Prior active (now legacy)"
 - [ ] T028 Commit final docs + push main
 
 ---
