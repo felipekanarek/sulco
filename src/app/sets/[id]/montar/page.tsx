@@ -13,6 +13,7 @@ import { MontarFiltersForm } from '@/components/montar-filters';
 import { MontarCandidates } from '@/components/montar-candidates';
 import { SetSidePanel } from '@/components/set-side-panel';
 import { EditSetModal } from '@/components/edit-set-modal';
+import { DeleteSetButton } from '@/components/delete-set-button';
 
 type SearchParams = Promise<{
   bpmMin?: string;
@@ -100,6 +101,7 @@ export default async function MontarSetPage({
               briefing: set.briefing,
             }}
           />
+          <DeleteSetButton setId={set.id} setName={set.name} />
           <Link
             href={`/sets/${set.id}`}
             prefetch={false}
