@@ -128,6 +128,31 @@ export const records = sqliteTable(
       t.archived,
       sql`${t.archivedAt} DESC`,
     ),
+    // Inc 8 (032) follow-up: indexes single-column pros 4 filtros novos.
+    // Planner pode picking quando filtro é seletivo (year=1985, country='BR',
+    // etc). Caso ORDER BY imported_at DESC dominar, fallback fica no index
+    // imported_idx — não machucam. Format fica de fora (composto Discogs;
+    // OR-de-LIKE não usa index — Inc 36 trata via pivot table).
+    userArchivedYearIdx: index('records_user_archived_year_idx').on(
+      t.userId,
+      t.archived,
+      t.year,
+    ),
+    userArchivedCountryIdx: index('records_user_archived_country_idx').on(
+      t.userId,
+      t.archived,
+      t.country,
+    ),
+    userArchivedLabelIdx: index('records_user_archived_label_idx').on(
+      t.userId,
+      t.archived,
+      t.label,
+    ),
+    userArchivedShelfIdx: index('records_user_archived_shelf_idx').on(
+      t.userId,
+      t.archived,
+      t.shelfLocation,
+    ),
   }),
 );
 

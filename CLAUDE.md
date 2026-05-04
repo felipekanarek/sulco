@@ -262,20 +262,36 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Current active feature: **032-filter-rework-and-new-fields** (BACKLOG: Inc 8)
+Inc 8 (032) deployado em 2026-05-04. Felipe testou em prod e
+identificou problema de cota: ~3k rows/navegação com filtros
+aplicados, devido a ORDER BY imported_at DESC + LIMIT 50 forçar
+planner a varrer todo o index quando filtros restritivos retornam
+< 50 matches. **4 indexes single-column** em `records` aplicados
+em prod (year/country/label/shelf_location) como mitigação parcial,
+mas planner ainda prefere `imported_idx` por causa do ORDER BY
+natural. **Inc 36 (BACKLOG, 🟢 Próximos)** trata o que sobrou —
+pivot `record_formats` análoga a Inc 35 + index composite
+`(user_id, archived, year, imported_at)` pra forçar uso do filtro
+seletivo como driver. Próxima feature: Inc 36 ou Inc 31 (UX bag
+física) — Felipe decide.
+
+Prior active (now legacy):
+
+**032-filter-rework-and-new-fields** (BACKLOG: Inc 8)
 
 Authoritative planning artifacts (read these before making changes
 ao tipo `CollectionQuery` em `src/lib/queries/collection.ts` (5 campos
-novos: formats, shelves, decades, countries, labels), `buildCollectionFilters`
-(5 conditions WHERE single-column novas), helpers novos
-`listUserFormats`/`listUserCountries`/`listUserLabels`/`getYearRange`
-(SELECT DISTINCT cached via react.cache), refator de `<FilterBar>`
-em `src/components/filter-bar.tsx` (FilterContent vira layout de picker
-buttons compactos — Q2=A), componentes novos
+novos: formats, shelves, years, countries, labels), `buildCollectionFilters`
+(5 conditions WHERE single-column — format usa OR posicional de 4
+LIKE patterns; year IN (?); country/label/shelf IN (?)), helpers novos
+`listUserFormats`/`listUserCountries`/`listUserLabels`/`listUserYears`
+(todos cacheados cross-request via `cacheUser` Inc 23 pattern),
+refator de `<FilterBar>` em `src/components/filter-bar.tsx` (FilterContent
+vira layout de picker buttons compactos — Q2=A), componentes novos
 `<FilterPicker>` (genérico chip-based, busca interna condicional >20
-— Q3=B) e `<DecadeFilterPicker>` (variante específica pra ano com
-chips de década — Q1=B), ou `src/app/page.tsx` (5 search params
-novos: format/shelf/decade/country/label)):
+— Q3=B) e `<YearFilterPicker>` (variante específica pra ano com
+chips de anos individuais), ou `src/app/page.tsx` (5 search params
+novos: format/shelf/year/country/label)):
 
 - Plan: [specs/032-filter-rework-and-new-fields/plan.md](specs/032-filter-rework-and-new-fields/plan.md)
 - Spec: [specs/032-filter-rework-and-new-fields/spec.md](specs/032-filter-rework-and-new-fields/spec.md)
@@ -533,6 +549,17 @@ Prior features (completed, frozen). Detalhes em `BACKLOG.md > Releases`:
   `omitText`; queries fazem post-filter JS via `matchesNormalizedText`;
   `pickRandomUnratedRecord` re-estruturado com JS random; bidirecional;
   cobertura universal Unicode; zero schema delta)
+- 031 delete-set (Inc 30 — Server Action `deleteSet` com ownership
+  + cascade FK existing; `<DeleteSetButton>` com window.confirm;
+  hard-delete sets preservando tracks/records intactos; Princípio IV
+  exceção justificada)
+- 032 filter-rework-and-new-fields (Inc 8 — UX rework genres/styles
+  pra picker buttons + 5 filtros novos: format/shelf/year/country/
+  label; format tokenizado pra base components com OR posicional de
+  4 LIKE patterns; year multi-select; user_vocab estendido pra 8
+  kinds via recreate atomic sem CHECK; 7 listUser* cacheados via
+  cacheUser; 4 indexes single-column em records pra mitigação
+  parcial; Inc 36 endereça gargalo restante via pivot record_formats)
 
 Key points of 022 (Inc 23 — Otimização de leituras Turso / cota estourada):
 - **3 frentes em 1 release**: revert parcial Inc 21 + cache layer
