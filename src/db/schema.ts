@@ -297,8 +297,11 @@ export const userVocab = sqliteTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    // Inc 33 (5 kinds originais) + Inc 8 (3 kinds novos: formats/countries/labels).
+    // CHECK constraint REMOVIDO em prod via recriação da tabela (Inc 8 — Q4=C).
+    // Validação migra pra TS via Drizzle enum.
     kind: text('kind', {
-      enum: ['genres', 'styles', 'moods', 'contexts', 'shelves'],
+      enum: ['genres', 'styles', 'moods', 'contexts', 'shelves', 'formats', 'countries', 'labels'],
     }).notNull(),
     term: text('term').notNull(),
     refCount: integer('ref_count').notNull().default(0),

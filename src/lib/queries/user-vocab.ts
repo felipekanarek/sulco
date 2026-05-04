@@ -15,7 +15,16 @@ import { userVocab } from '@/db/schema';
  * - contract: specs/028-user-vocab-table/contracts/user-vocab-helpers.md
  */
 
-export type VocabKind = 'genres' | 'styles' | 'moods' | 'contexts' | 'shelves';
+// Inc 33 (5 kinds originais) + Inc 8 (3 kinds novos materializados: formats/countries/labels).
+export type VocabKind =
+  | 'genres'
+  | 'styles'
+  | 'moods'
+  | 'contexts'
+  | 'shelves'
+  | 'formats'
+  | 'countries'
+  | 'labels';
 export type VocabEntry = { term: string; count: number };
 
 /**

@@ -34,6 +34,9 @@ export async function applyDiscogsUpdate(
       archived: records.archived,
       oldGenres: records.genres,
       oldStyles: records.styles,
+      oldFormat: records.format,
+      oldCountry: records.country,
+      oldLabel: records.label,
     })
     .from(records)
     .where(and(eq(records.userId, userId), eq(records.discogsId, release.id)))
@@ -78,6 +81,10 @@ export async function applyDiscogsUpdate(
       try {
         await applyVocabDelta(userId, 'genres', release.genres ?? [], []);
         await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
+        // Inc 8 (032): single-value cols → array com no máximo 1 termo válido.
+        await applyVocabDelta(userId, 'formats', singleTerm(release.format), []);
+        await applyVocabDelta(userId, 'countries', singleTerm(release.country), []);
+        await applyVocabDelta(userId, 'labels', singleTerm(release.label), []);
       } catch (err) {
         console.error('[applyVocabDelta] erro pós-INSERT (sync):', err);
       }
@@ -110,6 +117,9 @@ export async function applyDiscogsUpdate(
     const wasArchived = existing[0].archived;
     const oldGenres = (existing[0].oldGenres ?? []) as string[];
     const oldStyles = (existing[0].oldStyles ?? []) as string[];
+    const oldFormat = existing[0].oldFormat ?? null;
+    const oldCountry = existing[0].oldCountry ?? null;
+    const oldLabel = existing[0].oldLabel ?? null;
     await db
       .update(records)
       .set({
@@ -141,6 +151,11 @@ export async function applyDiscogsUpdate(
         // shelf são re-incrementados aqui pra restaurar estado.
         await applyVocabDelta(userId, 'genres', release.genres ?? [], []);
         await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
+        // Inc 8 (032): re-incrementa format/country/label do release atual
+        // (mesmos valores já estão no DB pós-UPDATE acima).
+        await applyVocabDelta(userId, 'formats', singleTerm(release.format), []);
+        await applyVocabDelta(userId, 'countries', singleTerm(release.country), []);
+        await applyVocabDelta(userId, 'labels', singleTerm(release.label), []);
         // Inc 35: pivot record-level (idempotente via onConflictDoNothing).
         await applyPivotDelta(recordGenres, 'recordId', 'genre', recordId, release.genres ?? [], []);
         await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, release.styles ?? [], []);
@@ -187,6 +202,10 @@ export async function applyDiscogsUpdate(
           await applyVocabDelta(userId, 'styles', sDiff.added, sDiff.removed);
           await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, sDiff.added, sDiff.removed);
         }
+        // Inc 8 (032): diff per-field para format/country/label (single-value).
+        await applySingleValueVocabDiff(userId, 'formats', oldFormat, release.format);
+        await applySingleValueVocabDiff(userId, 'countries', oldCountry, release.country);
+        await applySingleValueVocabDiff(userId, 'labels', oldLabel, release.label);
       }
     } catch (err) {
       console.error('[applyVocabDelta/applyPivotDelta] erro pós-UPDATE (sync):', err);
@@ -259,4 +278,29 @@ export async function applyDiscogsUpdate(
   }
 
   return { recordId, created };
+}
+
+/**
+ * Inc 8 (032): single-value column → array com 0 ou 1 termo.
+ * Ignora vazios/whitespace (Q5=A — string vazia conta como NULL).
+ */
+function singleTerm(value: string | null | undefined): string[] {
+  const t = (value ?? '').trim();
+  return t.length > 0 ? [t] : [];
+}
+
+/**
+ * Inc 8 (032): diff per-field para colunas single-value (format, country, label).
+ * Trata empty/whitespace como NULL. No-op se old === new normalizado.
+ */
+async function applySingleValueVocabDiff(
+  userId: number,
+  kind: 'formats' | 'countries' | 'labels',
+  oldValue: string | null,
+  newValue: string | null,
+): Promise<void> {
+  const oldArr = singleTerm(oldValue);
+  const newArr = singleTerm(newValue);
+  if (oldArr[0] === newArr[0]) return;
+  await applyVocabDelta(userId, kind, newArr, oldArr);
 }

@@ -22,6 +22,9 @@ export async function archiveRecord(userId: number, recordId: number): Promise<{
       genres: records.genres,
       styles: records.styles,
       shelf: records.shelfLocation,
+      format: records.format,
+      country: records.country,
+      label: records.label,
       archived: records.archived,
     })
     .from(records)
@@ -62,6 +65,13 @@ export async function archiveRecord(userId: number, recordId: number): Promise<{
     if (genres.length > 0) await applyVocabDelta(userId, 'genres', [], genres);
     if (styles.length > 0) await applyVocabDelta(userId, 'styles', [], styles);
     if (recordRow.shelf) await applyVocabDelta(userId, 'shelves', [], [recordRow.shelf]);
+    // Inc 8 (032): decrementa format/country/label do record arquivado.
+    const fmt = (recordRow.format ?? '').trim();
+    const ctry = (recordRow.country ?? '').trim();
+    const lbl = (recordRow.label ?? '').trim();
+    if (fmt.length > 0) await applyVocabDelta(userId, 'formats', [], [fmt]);
+    if (ctry.length > 0) await applyVocabDelta(userId, 'countries', [], [ctry]);
+    if (lbl.length > 0) await applyVocabDelta(userId, 'labels', [], [lbl]);
 
     const allMoods = trackRows.flatMap((t) => (t.moods ?? []) as string[]);
     const allContexts = trackRows.flatMap((t) => (t.contexts ?? []) as string[]);
