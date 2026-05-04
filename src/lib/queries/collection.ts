@@ -1,5 +1,4 @@
 import 'server-only';
-import { cache } from 'react';
 import { and, desc, eq, exists, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db';
 import { records, tracks } from '@/db/schema';
@@ -274,24 +273,27 @@ export type FacetCount = { value: string; count: number };
 
 // Inc 33: derivado de user_vocab (1 SELECT contra index).
 // Wrapper preservando assinatura externa (FacetCount = {value, count}).
-export async function listUserGenres(userId: number): Promise<FacetCount[]> {
-  const entries = await listVocab(userId, 'genres');
-  return entries.map((e) => ({ value: e.term, count: e.count }));
-}
+export const listUserGenres = (userId: number): Promise<FacetCount[]> =>
+  cacheUser(async (uid: number) => {
+    const entries = await listVocab(uid, 'genres');
+    return entries.map((e) => ({ value: e.term, count: e.count }));
+  }, 'listUserGenres')(userId);
 
-export async function listUserStyles(userId: number): Promise<FacetCount[]> {
-  const entries = await listVocab(userId, 'styles');
-  return entries.map((e) => ({ value: e.term, count: e.count }));
-}
+export const listUserStyles = (userId: number): Promise<FacetCount[]> =>
+  cacheUser(async (uid: number) => {
+    const entries = await listVocab(uid, 'styles');
+    return entries.map((e) => ({ value: e.term, count: e.count }));
+  }, 'listUserStyles')(userId);
 
 /**
  * Lista distinct de prateleiras (`shelfLocation`) em uso pelo user.
  * Inc 33: derivado de user_vocab kind='shelves'.
  */
-export async function listUserShelves(userId: number): Promise<string[]> {
-  const entries = await listVocab(userId, 'shelves');
-  return entries.map((e) => e.term);
-}
+export const listUserShelves = (userId: number): Promise<string[]> =>
+  cacheUser(async (uid: number) => {
+    const entries = await listVocab(uid, 'shelves');
+    return entries.map((e) => e.term);
+  }, 'listUserShelves')(userId);
 
 /* ============================================================
    Inc 8 (032): wrappers para os 3 kinds novos materializados
@@ -303,44 +305,49 @@ export async function listUserShelves(userId: number): Promise<string[]> {
  * Lista distinct de formatos em uso pelo user (~5-150 entries dependendo
  * de quão verboso o Discogs traz a string composta).
  */
-export async function listUserFormats(userId: number): Promise<string[]> {
-  const entries = await listVocab(userId, 'formats');
-  return entries.map((e) => e.term);
-}
+export const listUserFormats = (userId: number): Promise<string[]> =>
+  cacheUser(async (uid: number) => {
+    const entries = await listVocab(uid, 'formats');
+    return entries.map((e) => e.term);
+  }, 'listUserFormats')(userId);
 
 /**
  * Lista distinct de países em uso pelo user (~10-50 entries típicos).
  */
-export async function listUserCountries(userId: number): Promise<string[]> {
-  const entries = await listVocab(userId, 'countries');
-  return entries.map((e) => e.term);
-}
+export const listUserCountries = (userId: number): Promise<string[]> =>
+  cacheUser(async (uid: number) => {
+    const entries = await listVocab(uid, 'countries');
+    return entries.map((e) => e.term);
+  }, 'listUserCountries')(userId);
 
 /**
  * Lista distinct de selos em uso pelo user (~centenas de entries em
  * coleções grandes). Picker terá busca interna ativa (>20).
  */
-export async function listUserLabels(userId: number): Promise<string[]> {
-  const entries = await listVocab(userId, 'labels');
-  return entries.map((e) => e.term);
-}
+export const listUserLabels = (userId: number): Promise<string[]> =>
+  cacheUser(async (uid: number) => {
+    const entries = await listVocab(uid, 'labels');
+    return entries.map((e) => e.term);
+  }, 'listUserLabels')(userId);
 
 /**
  * Inc 8 follow-up: lista distinct de anos da coleção (DESC).
- * Cached via react.cache. Frontend mostra como chips multi-select.
- * Tipicamente 40-80 entries — picker ativa busca interna (>20).
+ * Cached cross-request via cacheUser (Inc 23) — invalidado em writes.
+ * SELECT DISTINCT scaneia ~2.6k records por user; cache evita re-scan
+ * em cada navegação.
  */
-export const listUserYears = cache(async (userId: number): Promise<number[]> => {
-  const rows = await db
-    .selectDistinct({ year: records.year })
-    .from(records)
-    .where(
-      and(
-        eq(records.userId, userId),
-        eq(records.archived, false),
-        isNotNull(records.year),
-      ),
-    )
-    .orderBy(desc(records.year));
-  return rows.map((r) => r.year as number).filter((y) => y != null);
-});
+export const listUserYears = (userId: number): Promise<number[]> =>
+  cacheUser(async (uid: number) => {
+    const rows = await db
+      .selectDistinct({ year: records.year })
+      .from(records)
+      .where(
+        and(
+          eq(records.userId, uid),
+          eq(records.archived, false),
+          isNotNull(records.year),
+        ),
+      )
+      .orderBy(desc(records.year));
+    return rows.map((r) => r.year as number).filter((y) => y != null);
+  }, 'listUserYears')(userId);
