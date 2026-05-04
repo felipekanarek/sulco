@@ -6,7 +6,7 @@ import { BombaFilter, type BombaFilterValue } from './bomba-filter';
 import { FilterBottomSheet } from './filter-bottom-sheet';
 import { FilterActiveChips, type ActiveFilter } from './filter-active-chips';
 import { FilterPicker } from './filter-picker';
-import { DecadeFilterPicker } from './decade-filter-picker';
+import { YearFilterPicker } from './year-filter-picker';
 import type { FacetCount } from '@/lib/queries/collection';
 
 export type StatusFilter = 'all' | 'unrated' | 'active' | 'discarded';
@@ -24,8 +24,8 @@ export type FilterBarProps = {
   availableFormats: string[];
   shelves: string[];
   availableShelves: string[];
-  decades: number[];
-  availableDecades: number[];
+  years: number[];
+  availableYears: number[];
   countries: string[];
   availableCountries: string[];
   labels: string[];
@@ -51,8 +51,8 @@ export function FilterBar(props: FilterBarProps) {
     availableFormats,
     shelves,
     availableShelves,
-    decades,
-    availableDecades,
+    years,
+    availableYears,
     countries,
     availableCountries,
     labels,
@@ -70,7 +70,7 @@ export function FilterBar(props: FilterBarProps) {
   const [stylePickerOpen, setStylePickerOpen] = useState(false);
   const [formatPickerOpen, setFormatPickerOpen] = useState(false);
   const [shelfPickerOpen, setShelfPickerOpen] = useState(false);
-  const [decadePickerOpen, setDecadePickerOpen] = useState(false);
+  const [yearPickerOpen, setYearPickerOpen] = useState(false);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
@@ -116,10 +116,10 @@ export function FilterBar(props: FilterBarProps) {
     };
   }
 
-  function toggleDecade(decade: number) {
-    const set = new Set(decades);
-    set.has(decade) ? set.delete(decade) : set.add(decade);
-    setMultiInt('decade', Array.from(set));
+  function toggleYear(year: number) {
+    const set = new Set(years);
+    set.has(year) ? set.delete(year) : set.add(year);
+    setMultiInt('year', Array.from(set));
   }
 
   function clearAll() {
@@ -135,7 +135,7 @@ export function FilterBar(props: FilterBarProps) {
     styles.length +
     formats.length +
     shelves.length +
-    decades.length +
+    years.length +
     countries.length +
     labels.length +
     (bomba !== 'any' ? 1 : 0);
@@ -173,10 +173,10 @@ export function FilterBar(props: FilterBarProps) {
       label: sh,
       onRemove: () => setMulti('shelf', shelves.filter((x) => x !== sh)),
     })),
-    ...decades.map((d) => ({
-      id: `dec-${d}`,
-      label: `${String(d % 100).padStart(2, '0')}s`,
-      onRemove: () => setMultiInt('decade', decades.filter((x) => x !== d)),
+    ...years.map((y) => ({
+      id: `yr-${y}`,
+      label: String(y),
+      onRemove: () => setMultiInt('year', years.filter((x) => x !== y)),
     })),
     ...countries.map((c) => ({
       id: `ctry-${c}`,
@@ -201,7 +201,7 @@ export function FilterBar(props: FilterBarProps) {
         style: () => setStylePickerOpen(true),
         format: () => setFormatPickerOpen(true),
         shelf: () => setShelfPickerOpen(true),
-        decade: () => setDecadePickerOpen(true),
+        year: () => setYearPickerOpen(true),
         country: () => setCountryPickerOpen(true),
         label: () => setLabelPickerOpen(true),
       }}
@@ -296,12 +296,12 @@ export function FilterBar(props: FilterBarProps) {
         onClose={() => setShelfPickerOpen(false)}
         open={shelfPickerOpen}
       />
-      <DecadeFilterPicker
-        availableDecades={availableDecades}
-        selectedDecades={decades}
-        onToggle={toggleDecade}
-        onClose={() => setDecadePickerOpen(false)}
-        open={decadePickerOpen}
+      <YearFilterPicker
+        availableYears={availableYears}
+        selectedYears={years}
+        onToggle={toggleYear}
+        onClose={() => setYearPickerOpen(false)}
+        open={yearPickerOpen}
       />
       <FilterPicker
         label="País"
@@ -332,7 +332,7 @@ type FilterContentProps = FilterBarProps & {
     style: () => void;
     format: () => void;
     shelf: () => void;
-    decade: () => void;
+    year: () => void;
     country: () => void;
     label: () => void;
   };
@@ -347,7 +347,7 @@ function FilterContent({
   counts,
   formats,
   shelves,
-  decades,
+  years,
   countries,
   labels,
   onSetParam,
@@ -361,7 +361,7 @@ function FilterContent({
     styles.length > 0 ||
     formats.length > 0 ||
     shelves.length > 0 ||
-    decades.length > 0 ||
+    years.length > 0 ||
     countries.length > 0 ||
     labels.length > 0 ||
     bomba !== 'any';
@@ -415,7 +415,7 @@ function FilterContent({
         <PickerButton label="Estilo" count={styles.length} onClick={onOpenPicker.style} />
         <PickerButton label="Formato" count={formats.length} onClick={onOpenPicker.format} />
         <PickerButton label="Prateleira" count={shelves.length} onClick={onOpenPicker.shelf} />
-        <PickerButton label="Ano" count={decades.length} onClick={onOpenPicker.decade} />
+        <PickerButton label="Ano" count={years.length} onClick={onOpenPicker.year} />
         <PickerButton label="País" count={countries.length} onClick={onOpenPicker.country} />
         <PickerButton label="Selo" count={labels.length} onClick={onOpenPicker.label} />
       </div>

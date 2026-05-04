@@ -81,8 +81,9 @@ export async function applyDiscogsUpdate(
       try {
         await applyVocabDelta(userId, 'genres', release.genres ?? [], []);
         await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
-        // Inc 8 (032): single-value cols → array com no máximo 1 termo válido.
-        await applyVocabDelta(userId, 'formats', singleTerm(release.format), []);
+        // Inc 8 (032): format vem composto do Discogs ("Vinyl, LP, Album");
+        // tokeniza pra picker mostrar bases. country/label permanecem singulares.
+        await applyVocabDelta(userId, 'formats', tokenizeFormat(release.format), []);
         await applyVocabDelta(userId, 'countries', singleTerm(release.country), []);
         await applyVocabDelta(userId, 'labels', singleTerm(release.label), []);
       } catch (err) {
@@ -153,7 +154,7 @@ export async function applyDiscogsUpdate(
         await applyVocabDelta(userId, 'styles', release.styles ?? [], []);
         // Inc 8 (032): re-incrementa format/country/label do release atual
         // (mesmos valores já estão no DB pós-UPDATE acima).
-        await applyVocabDelta(userId, 'formats', singleTerm(release.format), []);
+        await applyVocabDelta(userId, 'formats', tokenizeFormat(release.format), []);
         await applyVocabDelta(userId, 'countries', singleTerm(release.country), []);
         await applyVocabDelta(userId, 'labels', singleTerm(release.label), []);
         // Inc 35: pivot record-level (idempotente via onConflictDoNothing).
@@ -202,8 +203,12 @@ export async function applyDiscogsUpdate(
           await applyVocabDelta(userId, 'styles', sDiff.added, sDiff.removed);
           await applyPivotDelta(recordStyles, 'recordId', 'style', recordId, sDiff.added, sDiff.removed);
         }
-        // Inc 8 (032): diff per-field para format/country/label (single-value).
-        await applySingleValueVocabDiff(userId, 'formats', oldFormat, release.format);
+        // Inc 8 (032): diff per-field. format é tokenizado (composto Discogs);
+        // country/label permanecem single-value.
+        const fmtDiff = diffVocabArrays(tokenizeFormat(oldFormat), tokenizeFormat(release.format));
+        if (fmtDiff.added.length > 0 || fmtDiff.removed.length > 0) {
+          await applyVocabDelta(userId, 'formats', fmtDiff.added, fmtDiff.removed);
+        }
         await applySingleValueVocabDiff(userId, 'countries', oldCountry, release.country);
         await applySingleValueVocabDiff(userId, 'labels', oldLabel, release.label);
       }
@@ -287,6 +292,18 @@ export async function applyDiscogsUpdate(
 function singleTerm(value: string | null | undefined): string[] {
   const t = (value ?? '').trim();
   return t.length > 0 ? [t] : [];
+}
+
+/**
+ * Inc 8 follow-up: format do Discogs vem composto ("Vinyl, LP, Album, Stereo").
+ * Tokeniza em base components pra picker mostrar apenas "LP", "7\"", etc.
+ */
+function tokenizeFormat(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /**

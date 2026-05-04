@@ -18,13 +18,13 @@ import { runInitialImport } from '@/lib/discogs/import';
 import {
   collectionCounts,
   countSelectedTracks,
-  getYearRange,
   listUserCountries,
   listUserFormats,
   listUserGenres,
   listUserLabels,
   listUserShelves,
   listUserStyles,
+  listUserYears,
   queryCollection,
 } from '@/lib/queries/collection';
 
@@ -37,7 +37,7 @@ type SearchParams = Promise<{
   style?: string | string[];
   format?: string | string[];
   shelf?: string | string[];
-  decade?: string | string[];
+  year?: string | string[];
   country?: string | string[];
   label?: string | string[];
   page?: string;
@@ -60,7 +60,7 @@ export default async function CollectionPage({
   const styles = parseMultiList(sp.style);
   const formats = parseMultiList(sp.format);
   const shelves = parseMultiList(sp.shelf);
-  const decades = parseMultiInt(sp.decade);
+  const years = parseMultiInt(sp.year);
   const countries = parseMultiList(sp.country);
   const labels = parseMultiList(sp.label);
   // Inc 22 (paginação): page=1 default; pageSize fixo 50.
@@ -79,7 +79,7 @@ export default async function CollectionPage({
     availableShelves,
     availableCountries,
     availableLabels,
-    yearRange,
+    availableYears,
     counts,
     selectedTotal,
   ] = await Promise.all([
@@ -93,7 +93,7 @@ export default async function CollectionPage({
       bomba,
       formats,
       shelves,
-      decades,
+      years,
       countries,
       labels,
       page,
@@ -104,12 +104,10 @@ export default async function CollectionPage({
     listUserShelves(user.id),
     listUserCountries(user.id),
     listUserLabels(user.id),
-    getYearRange(user.id),
+    listUserYears(user.id),
     collectionCounts(user.id),
     countSelectedTracks(user.id),
   ]);
-
-  const availableDecades = deriveDecades(yearRange);
 
   if (importLight.shouldShow) {
     const progress = importLight.progress;
@@ -132,7 +130,7 @@ export default async function CollectionPage({
     styles.length > 0 ||
     formats.length > 0 ||
     shelves.length > 0 ||
-    decades.length > 0 ||
+    years.length > 0 ||
     countries.length > 0 ||
     labels.length > 0;
 
@@ -166,8 +164,8 @@ export default async function CollectionPage({
         availableFormats={availableFormats}
         shelves={shelves}
         availableShelves={availableShelves}
-        decades={decades}
-        availableDecades={availableDecades}
+        years={years}
+        availableYears={availableYears}
         countries={countries}
         availableCountries={availableCountries}
         labels={labels}
@@ -230,7 +228,7 @@ type PaginatorSearchParams = {
   style?: string | string[];
   format?: string | string[];
   shelf?: string | string[];
-  decade?: string | string[];
+  year?: string | string[];
   country?: string | string[];
   label?: string | string[];
   page?: string;
@@ -265,7 +263,7 @@ function Paginator({
     }
     appendMulti(params, 'format', searchParams.format);
     appendMulti(params, 'shelf', searchParams.shelf);
-    appendMulti(params, 'decade', searchParams.decade);
+    appendMulti(params, 'year', searchParams.year);
     appendMulti(params, 'country', searchParams.country);
     appendMulti(params, 'label', searchParams.label);
     if (target > 1) params.set('page', String(target));
@@ -366,17 +364,9 @@ function parseMultiInt(v: string | string[] | undefined): number[] {
   const nums: number[] = [];
   for (const s of list) {
     const n = Number(s);
-    if (Number.isInteger(n) && n >= 1900 && n <= 2100) nums.push(n);
+    if (Number.isInteger(n) && n >= 1850 && n <= 2200) nums.push(n);
   }
   return nums;
-}
-function deriveDecades(range: { min: number | null; max: number | null }): number[] {
-  if (range.min == null || range.max == null) return [];
-  const start = Math.floor(range.min / 10) * 10;
-  const end = Math.floor(range.max / 10) * 10;
-  const out: number[] = [];
-  for (let d = start; d <= end; d += 10) out.push(d);
-  return out;
 }
 function appendMulti(
   params: URLSearchParams,

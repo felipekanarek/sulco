@@ -38,6 +38,16 @@ function bumpCount(map, term) {
   map.set(t, (map.get(t) ?? 0) + 1);
 }
 
+// Inc 8 follow-up: formato Discogs vem composto ("Vinyl, LP, Album, Stereo").
+// Tokeniza pra picker mostrar bases (LP, 7", CD, etc.).
+function tokenizeFormat(value) {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 const usersRes = await db.execute('SELECT id FROM users ORDER BY id');
 const userIds = usersRes.rows.map((r) => Number(r.id));
 console.log(`[backfill-ext] ${userIds.length} usuários encontrados`);
@@ -74,7 +84,7 @@ for (const userId of userIds) {
     try { styles = JSON.parse(r.styles ?? '[]'); } catch { /* ignore */ }
     for (const g of genres) bumpCount(counts.genres, g);
     for (const s of styles) bumpCount(counts.styles, s);
-    bumpCount(counts.formats, r.format);
+    for (const f of tokenizeFormat(r.format)) bumpCount(counts.formats, f);
     bumpCount(counts.countries, r.country);
     bumpCount(counts.labels, r.label);
     bumpCount(counts.shelves, r.shelf_location);

@@ -23,7 +23,7 @@ export type CollectionQuery = {
   // OR dentro de cada kind, AND entre kinds.
   formats?: string[];
   shelves?: string[];
-  decades?: number[];
+  years?: number[];
   countries?: string[];
   labels?: string[];
   // Inc 22 (paginação): default page=1, pageSize=50 quando omitido
@@ -83,7 +83,7 @@ export function buildCollectionFilters(q: {
   // continuam funcionando sem passar.
   formats?: string[];
   shelves?: string[];
-  decades?: number[];
+  years?: number[];
   countries?: string[];
   labels?: string[];
 }): SQL[] {
@@ -132,7 +132,16 @@ export function buildCollectionFilters(q: {
   // Inc 8 (032): 5 filtros novos single-column, OR dentro de cada kind.
   // Pickers populam via user_vocab (Inc 33 estendido). Filtros usam coluna direta.
   if (q.formats && q.formats.length > 0) {
-    conds.push(sql`${records.format} IN ${q.formats}`);
+    // Inc 8 follow-up: format vem composto ("Vinyl, LP, Album, Stereo").
+    // Match posicional pra evitar falsos positivos ("LP" ≠ "Maxi-LP"):
+    // exato OU início "X, %" OU fim "%, X" OU meio "%, X, %".
+    const fmtClauses = q.formats.flatMap((f) => [
+      sql`${records.format} = ${f}`,
+      sql`${records.format} LIKE ${`${f}, %`}`,
+      sql`${records.format} LIKE ${`%, ${f}`}`,
+      sql`${records.format} LIKE ${`%, ${f}, %`}`,
+    ]);
+    conds.push(sql`(${sql.join(fmtClauses, sql` OR `)})`);
   }
   if (q.shelves && q.shelves.length > 0) {
     conds.push(sql`${records.shelfLocation} IN ${q.shelves}`);
@@ -143,12 +152,9 @@ export function buildCollectionFilters(q: {
   if (q.labels && q.labels.length > 0) {
     conds.push(sql`${records.label} IN ${q.labels}`);
   }
-  if (q.decades && q.decades.length > 0) {
-    // OR entre décadas: (year BETWEEN 1970 AND 1979) OR (year BETWEEN 1980 AND 1989) ...
-    const decadeRanges = q.decades.map(
-      (start) => sql`(${records.year} BETWEEN ${start} AND ${start + 9})`,
-    );
-    conds.push(sql`(${sql.join(decadeRanges, sql` OR `)})`);
+  if (q.years && q.years.length > 0) {
+    // Inc 8 follow-up: multi-select de anos individuais (substitui décadas).
+    conds.push(sql`${records.year} IN ${q.years}`);
   }
 
   return conds;
@@ -320,30 +326,21 @@ export async function listUserLabels(userId: number): Promise<string[]> {
 }
 
 /**
- * Range de anos da coleção pra derivar chips de décadas no frontend.
- * Cached via react.cache. 1 query agregada com filtro archived=false.
- *
- * Para uma coleção com years 1965-2024, frontend deriva chips:
- * 60s, 70s, 80s, 90s, 00s, 10s, 20s.
+ * Inc 8 follow-up: lista distinct de anos da coleção (DESC).
+ * Cached via react.cache. Frontend mostra como chips multi-select.
+ * Tipicamente 40-80 entries — picker ativa busca interna (>20).
  */
-export const getYearRange = cache(
-  async (userId: number): Promise<{ min: number | null; max: number | null }> => {
-    const [row] = await db
-      .select({
-        min: sql<number>`MIN(${records.year})`,
-        max: sql<number>`MAX(${records.year})`,
-      })
-      .from(records)
-      .where(
-        and(
-          eq(records.userId, userId),
-          eq(records.archived, false),
-          isNotNull(records.year),
-        ),
-      );
-    return {
-      min: row?.min ?? null,
-      max: row?.max ?? null,
-    };
-  },
-);
+export const listUserYears = cache(async (userId: number): Promise<number[]> => {
+  const rows = await db
+    .selectDistinct({ year: records.year })
+    .from(records)
+    .where(
+      and(
+        eq(records.userId, userId),
+        eq(records.archived, false),
+        isNotNull(records.year),
+      ),
+    )
+    .orderBy(desc(records.year));
+  return rows.map((r) => r.year as number).filter((y) => y != null);
+});

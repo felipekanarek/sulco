@@ -66,10 +66,14 @@ export async function archiveRecord(userId: number, recordId: number): Promise<{
     if (styles.length > 0) await applyVocabDelta(userId, 'styles', [], styles);
     if (recordRow.shelf) await applyVocabDelta(userId, 'shelves', [], [recordRow.shelf]);
     // Inc 8 (032): decrementa format/country/label do record arquivado.
-    const fmt = (recordRow.format ?? '').trim();
+    // format é tokenizado (composto Discogs).
+    const fmtTokens = (recordRow.format ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const ctry = (recordRow.country ?? '').trim();
     const lbl = (recordRow.label ?? '').trim();
-    if (fmt.length > 0) await applyVocabDelta(userId, 'formats', [], [fmt]);
+    if (fmtTokens.length > 0) await applyVocabDelta(userId, 'formats', [], fmtTokens);
     if (ctry.length > 0) await applyVocabDelta(userId, 'countries', [], [ctry]);
     if (lbl.length > 0) await applyVocabDelta(userId, 'labels', [], [lbl]);
 

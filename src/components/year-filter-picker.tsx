@@ -1,38 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MobileDrawer } from './mobile-drawer';
 
 /**
- * Inc 8 (032) — picker específico para filtro de Ano.
+ * Inc 8 follow-up — picker específico para filtro de Ano (multi-select).
  *
- * Q1=B (multi-select de décadas): chips com labels "60s", "70s", ..., "20s".
- * Apenas décadas com ≥1 record na coleção aparecem (passadas via prop).
- * Sem busca interna (~6-8 décadas no máximo).
- *
- * Mesmo padrão visual de `<FilterPicker>` mas estrutura simplificada.
+ * Substitui DecadeFilterPicker. Chips com anos individuais (4 dígitos).
+ * Apenas anos com ≥1 record na coleção aparecem (passados via prop).
+ * Busca interna ativa quando ≥20 anos (DJ pode digitar "198" pra filtrar).
  */
-type DecadeFilterPickerProps = {
-  availableDecades: number[]; // ex: [1960, 1970, 1980, 1990, 2000, 2010, 2020]
-  selectedDecades: number[];
-  onToggle: (decade: number) => void;
+type YearFilterPickerProps = {
+  availableYears: number[];
+  selectedYears: number[];
+  onToggle: (year: number) => void;
   onClose: () => void;
   open: boolean;
 };
 
-function decadeLabel(decade: number): string {
-  // 1960 → "60s", 2020 → "20s"
-  return `${String(decade % 100).padStart(2, '0')}s`;
-}
+const SEARCH_THRESHOLD = 20;
 
-export function DecadeFilterPicker({
-  availableDecades,
-  selectedDecades,
+export function YearFilterPicker({
+  availableYears,
+  selectedYears,
   onToggle,
   onClose,
   open,
-}: DecadeFilterPickerProps) {
+}: YearFilterPickerProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -52,9 +48,18 @@ export function DecadeFilterPicker({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, isMobile, onClose]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (open) setQuery('');
+  }, [open]);
 
-  const sortedDecades = [...availableDecades].sort((a, b) => a - b);
+  const showSearch = availableYears.length > SEARCH_THRESHOLD;
+  const filtered = useMemo(() => {
+    if (!showSearch || query.trim().length === 0) return availableYears;
+    const q = query.trim();
+    return availableYears.filter((y) => String(y).includes(q));
+  }, [availableYears, query, showSearch]);
+
+  if (!open) return null;
 
   const content = (
     <div className="flex flex-col gap-3 p-4">
@@ -72,38 +77,48 @@ export function DecadeFilterPicker({
         </button>
       </div>
 
-      <p className="label-tech text-ink-mute">selecione 1+ décadas</p>
+      {showSearch ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="Buscar ano…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full font-mono text-[13px] border border-line bg-paper px-3 py-2 min-h-[44px] focus:outline-none focus:border-accent"
+          autoFocus
+        />
+      ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {sortedDecades.length === 0 ? (
+      <div className="flex flex-wrap gap-2 max-h-[60vh] overflow-y-auto">
+        {filtered.length === 0 ? (
           <p className="font-mono text-[12px] text-ink-mute italic">
-            Nenhuma década com discos.
+            Nenhum ano encontrado.
           </p>
         ) : (
-          sortedDecades.map((decade) => {
-            const isSelected = selectedDecades.includes(decade);
+          filtered.map((year) => {
+            const isSelected = selectedYears.includes(year);
             return (
               <button
-                key={decade}
+                key={year}
                 type="button"
-                onClick={() => onToggle(decade)}
-                className={`font-mono text-[12px] px-4 py-2 min-h-[44px] border rounded-sm transition-colors ${
+                onClick={() => onToggle(year)}
+                className={`font-mono text-[12px] px-3 py-2 min-h-[44px] border rounded-sm transition-colors ${
                   isSelected
                     ? 'bg-accent text-paper border-accent'
                     : 'bg-paper text-ink-soft border-line hover:border-accent hover:text-accent'
                 }`}
                 aria-pressed={isSelected}
               >
-                {decadeLabel(decade)}
+                {year}
               </button>
             );
           })
         )}
       </div>
 
-      {selectedDecades.length > 0 ? (
+      {selectedYears.length > 0 ? (
         <p className="label-tech text-ink-mute">
-          {selectedDecades.length} {selectedDecades.length === 1 ? 'selecionada' : 'selecionadas'}
+          {selectedYears.length} {selectedYears.length === 1 ? 'selecionado' : 'selecionados'}
         </p>
       ) : null}
     </div>

@@ -263,8 +263,9 @@ async function _repopulateVocab(userId: number): Promise<void> {
 
   // Inc 8 (032): 3 kinds novos materializados — formats/countries/labels.
   // Single-value columns (records.format/country/label) — Q5=A filtra strings vazias.
+  // Inc 8 follow-up: format vem composto do Discogs; tokeniza pra picker.
   const [formatCounts, countryCounts, labelCounts] = await Promise.all([
-    _aggregateRecordColumnCounts(userId, records.format),
+    _aggregateFormatTokenCounts(userId),
     _aggregateRecordColumnCounts(userId, records.country),
     _aggregateRecordColumnCounts(userId, records.label),
   ]);
@@ -315,6 +316,37 @@ async function _repopulateVocab(userId: number): Promise<void> {
  * (Q5=A) e NULL. Usado por `_repopulateVocab` pra alimentar 3 novos
  * kinds em `user_vocab` (formats/countries/labels).
  */
+/**
+ * Inc 8 follow-up: agrega tokens de `records.format` (Discogs traz composto:
+ * "Vinyl, LP, Album, Stereo"). Cada token (LP, 7", CD, etc.) vira entry
+ * separado em user_vocab com count = nº de records que contém o token.
+ */
+async function _aggregateFormatTokenCounts(userId: number): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ format: records.format })
+    .from(records)
+    .where(
+      and(
+        eq(records.userId, userId),
+        eq(records.archived, false),
+        isNotNull(records.format),
+        ne(records.format, ''),
+      ),
+    );
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.format) continue;
+    const tokens = r.format
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    for (const t of tokens) {
+      map.set(t, (map.get(t) ?? 0) + 1);
+    }
+  }
+  return map;
+}
+
 async function _aggregateRecordColumnCounts(
   userId: number,
   column: typeof records.format | typeof records.country | typeof records.label,
