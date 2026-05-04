@@ -42,55 +42,77 @@ function parseJsonArray(s) {
   }
 }
 
+// Helper: chunked batch inserts. db.batch() agrupa N statements em
+// 1 round-trip — crítica pra performance em libsql remoto.
+async function execBatch(stmts) {
+  if (stmts.length === 0) return;
+  await db.batch(stmts, 'write');
+}
+
+// Optimização: 1 DELETE global por tabela em vez de DELETE por entity.
+// Idempotente: re-execução produz mesmo estado.
+console.log(`[backfill] limpando pivots existentes...`);
+await db.batch(
+  [
+    'DELETE FROM record_genres',
+    'DELETE FROM record_styles',
+    'DELETE FROM track_moods',
+    'DELETE FROM track_contexts',
+  ],
+  'write',
+);
+console.log(`[backfill] pivots limpos`);
+
 // 1. Records → record_genres + record_styles
 const recordRows = (
   await db.execute('SELECT id, genres, styles FROM records')
 ).rows;
 console.log(`[backfill] ${recordRows.length} records encontrados`);
 
-let recordGenresInserted = 0;
-let recordStylesInserted = 0;
-let processedRecords = 0;
-
+const recordGenresStmts = [];
+const recordStylesStmts = [];
 for (const r of recordRows) {
   const recordId = Number(r.id);
   const genres = parseJsonArray(r.genres).filter(isValidTerm);
   const styles = parseJsonArray(r.styles).filter(isValidTerm);
 
-  await db.execute({
-    sql: 'DELETE FROM record_genres WHERE record_id = ?',
-    args: [recordId],
-  });
-  await db.execute({
-    sql: 'DELETE FROM record_styles WHERE record_id = ?',
-    args: [recordId],
-  });
-
   for (const g of genres) {
-    await db.execute({
+    recordGenresStmts.push({
       sql: 'INSERT INTO record_genres (record_id, genre) VALUES (?, ?)',
       args: [recordId, g],
     });
-    recordGenresInserted += 1;
   }
   for (const s of styles) {
-    await db.execute({
+    recordStylesStmts.push({
       sql: 'INSERT INTO record_styles (record_id, style) VALUES (?, ?)',
       args: [recordId, s],
     });
-    recordStylesInserted += 1;
-  }
-
-  processedRecords += 1;
-  if (processedRecords % 500 === 0) {
-    console.log(
-      `✓ ${processedRecords}/${recordRows.length} records (${recordGenresInserted} genres, ${recordStylesInserted} styles)`,
-    );
   }
 }
 
 console.log(
-  `[backfill] records done: ${processedRecords} processed, ${recordGenresInserted} genres + ${recordStylesInserted} styles inseridas`,
+  `[backfill] preparados ${recordGenresStmts.length} genres + ${recordStylesStmts.length} styles inserts. Aplicando em batches de 500...`,
+);
+
+// Aplicar em chunks de 500 (libsql tem limite por batch)
+const BATCH_SIZE = 500;
+let recordGenresInserted = 0;
+for (let i = 0; i < recordGenresStmts.length; i += BATCH_SIZE) {
+  const chunk = recordGenresStmts.slice(i, i + BATCH_SIZE);
+  await execBatch(chunk);
+  recordGenresInserted += chunk.length;
+  console.log(`✓ record_genres: ${recordGenresInserted}/${recordGenresStmts.length}`);
+}
+let recordStylesInserted = 0;
+for (let i = 0; i < recordStylesStmts.length; i += BATCH_SIZE) {
+  const chunk = recordStylesStmts.slice(i, i + BATCH_SIZE);
+  await execBatch(chunk);
+  recordStylesInserted += chunk.length;
+  console.log(`✓ record_styles: ${recordStylesInserted}/${recordStylesStmts.length}`);
+}
+
+console.log(
+  `[backfill] records done: ${recordGenresInserted} genres + ${recordStylesInserted} styles inseridas`,
 );
 
 // 2. Tracks → track_moods + track_contexts
@@ -99,49 +121,48 @@ const trackRows = (
 ).rows;
 console.log(`[backfill] ${trackRows.length} tracks encontradas`);
 
-let trackMoodsInserted = 0;
-let trackContextsInserted = 0;
-let processedTracks = 0;
-
+const trackMoodsStmts = [];
+const trackContextsStmts = [];
 for (const t of trackRows) {
   const trackId = Number(t.id);
   const moods = parseJsonArray(t.moods).filter(isValidTerm);
   const contexts = parseJsonArray(t.contexts).filter(isValidTerm);
 
-  await db.execute({
-    sql: 'DELETE FROM track_moods WHERE track_id = ?',
-    args: [trackId],
-  });
-  await db.execute({
-    sql: 'DELETE FROM track_contexts WHERE track_id = ?',
-    args: [trackId],
-  });
-
   for (const m of moods) {
-    await db.execute({
+    trackMoodsStmts.push({
       sql: 'INSERT INTO track_moods (track_id, mood) VALUES (?, ?)',
       args: [trackId, m],
     });
-    trackMoodsInserted += 1;
   }
   for (const c of contexts) {
-    await db.execute({
+    trackContextsStmts.push({
       sql: 'INSERT INTO track_contexts (track_id, context) VALUES (?, ?)',
       args: [trackId, c],
     });
-    trackContextsInserted += 1;
-  }
-
-  processedTracks += 1;
-  if (processedTracks % 1000 === 0) {
-    console.log(
-      `✓ ${processedTracks}/${trackRows.length} tracks (${trackMoodsInserted} moods, ${trackContextsInserted} contexts)`,
-    );
   }
 }
 
 console.log(
-  `[backfill] tracks done: ${processedTracks} processed, ${trackMoodsInserted} moods + ${trackContextsInserted} contexts inseridas`,
+  `[backfill] preparados ${trackMoodsStmts.length} moods + ${trackContextsStmts.length} contexts inserts. Aplicando em batches...`,
+);
+
+let trackMoodsInserted = 0;
+for (let i = 0; i < trackMoodsStmts.length; i += BATCH_SIZE) {
+  const chunk = trackMoodsStmts.slice(i, i + BATCH_SIZE);
+  await execBatch(chunk);
+  trackMoodsInserted += chunk.length;
+  console.log(`✓ track_moods: ${trackMoodsInserted}/${trackMoodsStmts.length}`);
+}
+let trackContextsInserted = 0;
+for (let i = 0; i < trackContextsStmts.length; i += BATCH_SIZE) {
+  const chunk = trackContextsStmts.slice(i, i + BATCH_SIZE);
+  await execBatch(chunk);
+  trackContextsInserted += chunk.length;
+  console.log(`✓ track_contexts: ${trackContextsInserted}/${trackContextsStmts.length}`);
+}
+
+console.log(
+  `[backfill] tracks done: ${trackMoodsInserted} moods + ${trackContextsInserted} contexts inseridas`,
 );
 
 console.log(
