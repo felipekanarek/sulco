@@ -115,7 +115,7 @@ description: "Task list — Inc 36 (033) Otimizar filtros pesados — pivot reco
 - [ ] T025 Smoke prod completo via [quickstart.md](./quickstart.md) — 8 cenários
 - [x] T026 Atualizar [BACKLOG.md](../../BACKLOG.md): mover Inc 36 da seção "🟢 Próximos" pra "Releases (entregues, em prod)" com sumário detalhado (mesmo pattern Inc 35); atualizar header `**Última atualização**` pra 2026-05-04
 - [x] T027 Atualizar [CLAUDE.md](../../CLAUDE.md) SPECKIT marker: descrever Inc 36 como deployado (key points: pivot record_formats + composite year_imported, redução esperada ≥97% em filtros pesados); marcar 033-format-pivot-composite-idx como "Prior active (now legacy)"
-- [ ] T028 Commit final docs + push main
+- [x] T028 Commit final docs + push main
 
 ---
 

@@ -12,6 +12,19 @@ export default defineConfig({
     ],
     exclude: ['tests/e2e/**', 'node_modules/**', '.next/**'],
     globals: true,
+    // Inc 37 (034): coverage tooling baseline. Threshold gate fica como
+    // Inc 38 — esta feature apenas mede.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/db/seed.ts',
+        'src/app/**', // UI fora de escopo (cobertura via E2E Playwright)
+        'src/components/**', // idem
+      ],
+    },
   },
   esbuild: {
     jsx: 'automatic',
