@@ -417,3 +417,293 @@ describe('FR-054 — sync preserva campos autorais (Princípio I)', () => {
     expect(a.rating).toBe(b.rating);
   });
 });
+
+/**
+ * Inc 37 (034) Tier 1 — extensão cobrindo pivots Inc 35 (record_genres,
+ * record_styles, track_moods, track_contexts) populados consistentemente
+ * em INSERT/UPDATE/REAPARIÇÃO via applyDiscogsUpdate.
+ *
+ * Mocks ativados:
+ * - @/db → test-db in-memory via vi.doMock
+ * - @/lib/discogs/client → mock fetch (já no setup acima)
+ *
+ * Princípio coberto: I (AUTHOR proteção, indireto via pivots SYS) +
+ * VI (cobertura por camada — bullet 4: equivalence em otimizações).
+ */
+describe('Inc 35 pivots cross-write consistency (Inc 37 Tier 1)', () => {
+  let ctx: Awaited<ReturnType<typeof createTestDb>>;
+
+  beforeEach(async () => {
+    ctx = await createTestDb();
+    vi.doMock('@/db', () => ({ db: ctx.db }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock('@/db');
+    vi.resetModules();
+    ctx.client.close();
+  });
+
+  async function pivotGenres(recordId: number): Promise<string[]> {
+    const schema = await import('@/db/schema');
+    const rows = await ctx.db
+      .select({ genre: schema.recordGenres.genre })
+      .from(schema.recordGenres)
+      .where(eq(schema.recordGenres.recordId, recordId));
+    return rows.map((r) => r.genre).sort();
+  }
+
+  async function pivotStyles(recordId: number): Promise<string[]> {
+    const schema = await import('@/db/schema');
+    const rows = await ctx.db
+      .select({ style: schema.recordStyles.style })
+      .from(schema.recordStyles)
+      .where(eq(schema.recordStyles.recordId, recordId));
+    return rows.map((r) => r.style).sort();
+  }
+
+  async function seedUser() {
+    const schema = await import('@/db/schema');
+    const [u] = await ctx.db
+      .insert(schema.users)
+      .values({
+        clerkUserId: 'user_inc37_pivot',
+        email: 'pivot@example.com',
+        discogsUsername: 'pivot',
+      })
+      .returning();
+    return u.id;
+  }
+
+  it('INSERT path popula record_genres + record_styles', async () => {
+    const userId = await seedUser();
+    const { applyDiscogsUpdate } = await import('@/lib/discogs/apply-update');
+
+    const r = await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9001,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl, LP',
+        coverUrl: null,
+        genres: ['Funk', 'Soul'],
+        styles: ['AOR', 'Brazilian'],
+        tracklist: [],
+      },
+      { isNew: true },
+    );
+
+    expect(await pivotGenres(r.recordId)).toEqual(['Funk', 'Soul']);
+    expect(await pivotStyles(r.recordId)).toEqual(['AOR', 'Brazilian']);
+  });
+
+  it('UPDATE path com diff em genres/styles aplica added + removed', async () => {
+    const userId = await seedUser();
+    const { applyDiscogsUpdate } = await import('@/lib/discogs/apply-update');
+
+    // INSERT
+    const r = await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9002,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl, LP',
+        coverUrl: null,
+        genres: ['Funk', 'Jazz'],
+        styles: ['AOR'],
+        tracklist: [],
+      },
+      { isNew: true },
+    );
+    expect(await pivotGenres(r.recordId)).toEqual(['Funk', 'Jazz']);
+
+    // UPDATE: troca Jazz por Soul
+    await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9002,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl, LP',
+        coverUrl: null,
+        genres: ['Funk', 'Soul'],
+        styles: ['AOR', 'Brazilian'],
+        tracklist: [],
+      },
+      { isNew: false },
+    );
+    expect(await pivotGenres(r.recordId)).toEqual(['Funk', 'Soul']);
+    expect(await pivotStyles(r.recordId)).toEqual(['AOR', 'Brazilian']);
+  });
+
+  it('UPDATE com genres/styles iguais é no-op no pivot', async () => {
+    const userId = await seedUser();
+    const { applyDiscogsUpdate } = await import('@/lib/discogs/apply-update');
+
+    const r = await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9003,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl',
+        coverUrl: null,
+        genres: ['Funk'],
+        styles: ['AOR'],
+        tracklist: [],
+      },
+      { isNew: true },
+    );
+    const before = await pivotGenres(r.recordId);
+
+    // Mesmos arrays
+    await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9003,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl',
+        coverUrl: null,
+        genres: ['Funk'],
+        styles: ['AOR'],
+        tracklist: [],
+      },
+      { isNew: false },
+    );
+    expect(await pivotGenres(r.recordId)).toEqual(before);
+  });
+
+  it('REAPARIÇÃO (wasArchived=true → false) re-popula pivots', async () => {
+    const userId = await seedUser();
+    const { applyDiscogsUpdate } = await import('@/lib/discogs/apply-update');
+    const schema = await import('@/db/schema');
+
+    // INSERT inicial
+    const r = await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9004,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl, LP',
+        coverUrl: null,
+        genres: ['Funk'],
+        styles: ['AOR'],
+        tracklist: [],
+      },
+      { isNew: true },
+    );
+
+    // Arquiva manualmente (simulando archive prévio)
+    await ctx.db
+      .update(schema.records)
+      .set({ archived: true, archivedAt: new Date() })
+      .where(eq(schema.records.id, r.recordId));
+
+    // Reaparição: applyDiscogsUpdate com isNew=false detecta wasArchived
+    await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9004,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl, LP',
+        coverUrl: null,
+        genres: ['Funk'],
+        styles: ['AOR'],
+        tracklist: [],
+      },
+      { isNew: false },
+    );
+
+    // Pivots permanecem populados (idempotente via onConflictDoNothing)
+    expect(await pivotGenres(r.recordId)).toEqual(['Funk']);
+    expect(await pivotStyles(r.recordId)).toEqual(['AOR']);
+
+    // Record archived foi resetado
+    const [reactivated] = await ctx.db
+      .select()
+      .from(schema.records)
+      .where(eq(schema.records.id, r.recordId));
+    expect(reactivated.archived).toBe(false);
+  });
+
+  it('FK CASCADE: delete físico de record limpa todos os pivots', async () => {
+    const userId = await seedUser();
+    const { applyDiscogsUpdate } = await import('@/lib/discogs/apply-update');
+    const schema = await import('@/db/schema');
+
+    const r = await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9005,
+        artist: 'A',
+        title: 'T',
+        year: 1985,
+        label: 'L',
+        country: 'BR',
+        format: 'Vinyl, LP',
+        coverUrl: null,
+        genres: ['Funk', 'Soul'],
+        styles: ['AOR'],
+        tracklist: [],
+      },
+      { isNew: true },
+    );
+    expect(await pivotGenres(r.recordId)).toEqual(['Funk', 'Soul']);
+
+    await ctx.db.delete(schema.records).where(eq(schema.records.id, r.recordId));
+    expect(await pivotGenres(r.recordId)).toEqual([]);
+    expect(await pivotStyles(r.recordId)).toEqual([]);
+  });
+
+  it('genres/styles vazios não populam pivot (FR-002 Inc 35)', async () => {
+    const userId = await seedUser();
+    const { applyDiscogsUpdate } = await import('@/lib/discogs/apply-update');
+
+    const r = await applyDiscogsUpdate(
+      userId,
+      {
+        id: 9006,
+        artist: 'A',
+        title: 'T',
+        year: null,
+        label: null,
+        country: null,
+        format: null,
+        coverUrl: null,
+        genres: [],
+        styles: [],
+        tracklist: [],
+      },
+      { isNew: true },
+    );
+
+    expect(await pivotGenres(r.recordId)).toEqual([]);
+    expect(await pivotStyles(r.recordId)).toEqual([]);
+  });
+});

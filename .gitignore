@@ -7,3 +7,6 @@ sulco.db
 # agent workspace — pode conter tokens/credenciais locais
 .claude/
 .vercel
+
+# Inc 37 (034) — coverage raw output (baseline versionado em specs/)
+coverage/

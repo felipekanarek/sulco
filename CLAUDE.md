@@ -262,20 +262,34 @@ algo é fechado. Cada release detalhada vive em `specs/NNN-feature-name/`.
 | Compact/Expand per-candidato (003) | Estado local `useState` por card, reset no reload | Sem persistência (DB/localStorage/cookie) — tradeoff consciente pra simplicidade, já que é UX transiente |
 
 <!-- SPECKIT START -->
-Inc 36 (033) deployado em 2026-05-04. Pivot `record_formats(record_id, token)`
-substitui OR-de-LIKE × 4 patterns (Inc 8 follow-up) — EXPLAIN prod
-confirma `SEARCH record_formats USING COVERING INDEX
-record_formats_token_idx + BLOOM FILTER`. Index composite
-`records_user_archived_year_imported_idx (user_id, archived, year,
-imported_at DESC)` força planner a usar year como driver mantendo
-ORDER BY natural (EXPLAIN prod confirmado). 8661 entries / 39 tokens
-distintos populados em prod (Vinyl=2575, LP=2243, 7"=235, 12"=37, etc).
-Hooks de write paralelos a Inc 35: `applyDiscogsUpdate` 3 paths
-(insert/update diff/reaparição) via `applyPivotDelta`; `archiveRecord`
-NÃO toca pivot (filter archived=0 cobre). Schema delta: 1 tabela + 1
-index. Princípios I-V todos OK. Próximas features candidatas: Inc 31
-(UX bag física) ou Inc 36b (composite indexes adicionais pra
-country/label/shelf se monitoring revelar gargalo).
+Inc 37 (034) deployado em 2026-05-05. Aplicação retroativa do Princípio
+VI sobre Inc 23-32. **+122 testes novos** (164→286 total) em 12 arquivos:
+3 unit (Tier 3 helpers puros — normalize-text, compute-record-search-text,
+diff-vocab-arrays), 6 integration Tier 1 (AUTHOR proteção em sync +
+archive + delete-set + 3 update Server Actions), 4 integration Tier 2
+(equivalence em buildCollectionFilters + applyVocabDelta + applyPivotDelta
++ cacheUser). `@vitest/coverage-v8` instalado, baseline registrado em
+[coverage-baseline.md](specs/034-retroactive-test-coverage/coverage-baseline.md):
+text.ts/format-tokens.ts/cache.ts/pivot-helpers.ts a 100%, archive.ts
+96.72%, user-vocab.ts 90.66%, apply-update.ts 87.33%, collection.ts 72.43%.
+Mock pattern uniforme `vi.doMock('@/db' + '@/lib/auth' + 'next/cache' +
+'@/lib/cache')`. Helper compartilhado `tests/helpers/seed-collection.ts`
+(2 users + 5 records + 5 tracks + 1 set + pivots + facets/vocab). Zero
+touch em src/. **Inc 38 candidatos**: threshold gate em CI, cobertura
+montar.ts + user-facets.ts + Server Actions secundárias.
+
+Prior active (now legacy):
+
+**034-retroactive-test-coverage** (BACKLOG: Inc 37)
+
+Authoritative planning artifacts:
+
+- Plan: [specs/034-retroactive-test-coverage/plan.md](specs/034-retroactive-test-coverage/plan.md)
+- Spec: [specs/034-retroactive-test-coverage/spec.md](specs/034-retroactive-test-coverage/spec.md)
+- Research: [specs/034-retroactive-test-coverage/research.md](specs/034-retroactive-test-coverage/research.md)
+- Data Model: [specs/034-retroactive-test-coverage/data-model.md](specs/034-retroactive-test-coverage/data-model.md)
+- Quickstart: [specs/034-retroactive-test-coverage/quickstart.md](specs/034-retroactive-test-coverage/quickstart.md)
+- Coverage Baseline: [specs/034-retroactive-test-coverage/coverage-baseline.md](specs/034-retroactive-test-coverage/coverage-baseline.md)
 
 Prior active (now legacy):
 
