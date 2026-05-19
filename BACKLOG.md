@@ -1,6 +1,6 @@
 # Backlog — Sulco
 
-**Última atualização**: 2026-05-05 (Inc 37 entregue — cobertura retroativa Tier 1+2+3 + baseline)
+**Última atualização**: 2026-05-19 (Inc 38 registrado — expansão de cobertura + threshold gate)
 
 Convenção:
 - **IDs preservam histórico** (Incremento N, Bug N) — não renumerar quando algo é fechado.
@@ -11,6 +11,63 @@ Convenção:
 ## Roadmap
 
 ### 🟢 Próximos (semanas)
+
+#### Incremento 38 — Expansão de cobertura de testes + threshold gate
+
+Inc 37 entregou cobertura retroativa para Tier 1 (AUTHOR proteção) +
+Tier 2 (equivalence em otimizações) + Tier 3 (helpers puros). Baseline
+em [coverage-baseline.md](specs/034-retroactive-test-coverage/coverage-baseline.md)
+mostra arquivos críticos a 100% (text.ts, format-tokens.ts, cache.ts,
+pivot-helpers.ts) mas ainda restam 3 arquivos com cobertura quase-zero:
+
+- `src/lib/queries/montar.ts` — **0.72%** (Inc 26 perf refactor, sem
+  testes). Toca o fluxo mais usado do produto: `/sets/[id]/montar`.
+- `src/lib/queries/user-facets.ts` — **7.44%** (Inc 23/25/27/29
+  denormalização). `recomputeFacets` + `applyDeltaForWrite` sem teste.
+- `src/lib/actions.ts` — **27.74%** (5 actions cobertas pelo Inc 37,
+  ~30 secundárias sem cobertura: `acknowledge*`, `enrich*`, `pickRandom*`,
+  `addTrackToSet`/`removeTrackFromSet`/`reorderSetTracks`, `createSet`/
+  `updateSet`, `analyzeTrackWithAI`, `suggestSetTracks`,
+  `acknowledgeImportProgress`, `runIncrementalSync`, etc.).
+
+Também falta **threshold gate** em CI — hoje cobertura não falha o
+build (Princípio VI bullet 7 está satisfeito apenas pelo gate de
+`npm run test` retornar 0).
+
+**3 opções de escopo** (decidir no spec/plan baseado em apetite):
+
+**Opção A — Quick win (~2-3h)**:
+- `montar.ts` 0.72% → ~85% (equivalence test pra `queryCandidates`
+  cobrindo filtros BPM/key/energy/moods/contexts/text/rating/bomba +
+  `listSelectedVocab`).
+- `user-facets.ts` 7.44% → ~80% (`recomputeFacets` + `applyDeltaForWrite`
+  cobrindo 5 caminhos de delta).
+- ~20-25 testes novos. Total src/lib: ~50%.
+
+**Opção B — Completa (~5-6h)**:
+- A + Server Actions secundárias em `actions.ts` (27.74% → ~70%).
+- + Threshold gate em [vitest.config.ts](vitest.config.ts):
+  `coverage.thresholds.lines: 70` em `src/lib/queries/**` e
+  `src/lib/discogs/**`. CI passa a falhar se regredir.
+- ~50-60 testes novos. Total src/lib: ~65-70%.
+
+**Opção C — Cirúrgica branch% (~1h)**:
+- Fechar branches faltantes nos arquivos já cobertos pelo Inc 37
+  (archive.ts 57.89% branch, apply-update.ts 59.32% branch).
+- Paths defensivos (error logs, early returns).
+- Valor moderado, custo baixo. Adequada como entry-point se houver
+  só 1h livre.
+
+**Recomendação**: Opção A é o sweet spot — fecha gargalo real
+(`montar.ts` é o caminho mais hot do produto sem cobertura). Opção B
+fica como Inc 39 dependendo do apetite pós-A.
+
+**Princípios**: I/IV (Tier 1 AUTHOR já coberto), II (mocks Inc 37
+preservados), III (zero schema delta), V (sem UI), VI (esta feature
+**É** aplicação do princípio). Mesmo pattern Inc 37: zero touch em
+src/, helper compartilhado `seed-collection.ts` reutilizável.
+
+---
 
 #### Incremento 31 — UX da Bag física: capa + organização por prateleira
 
